@@ -74,6 +74,10 @@ func (p *Pipeline) Volume() *VolumeHelper
 - `internal/audio/fade.go`
 - Unit tests for `VolumeHelper.Cycle` convergence and fade envelope math
 
+## Bot wiring (required)
+
+Milestone 1-03 left a `// TODO(1-04): register audio event handler` comment in `internal/bot/connect.go`. This milestone must replace that stub with the real handler — wiring the audio pipeline into the gumble event loop and assigning `b.audio` in `bot.New` or at connect time.
+
 ## Acceptance criteria
 
 - Bot streams a radio URL continuously without audio stuttering

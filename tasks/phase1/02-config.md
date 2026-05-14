@@ -28,12 +28,13 @@ Load a `configuration.ini` user file (next to the binary) merged over embedded d
 
 ```ini
 [server]
-host     = 127.0.0.1
-port     = 64738
-password =
-channel  =
-certificate =
-tokens   =
+host            = 127.0.0.1
+port            = 64738
+password        =
+channel         =
+certificate     =
+tokens          =
+tls_skip_verify = True
 
 [bot]
 username  = gotamusique
@@ -76,6 +77,16 @@ type Config struct {
     Commands CommandsConfig
     Radio    map[string]RadioPreset
     Debug    DebugConfig
+}
+
+type ServerConfig struct {
+    Host          string
+    Port          int
+    Password      string
+    Channel       string
+    Certificate   string
+    Tokens        []string
+    TLSSkipVerify bool   // default true — allows self-signed Mumble server certs
 }
 
 type CommandsConfig struct {
@@ -123,3 +134,4 @@ apply(cfg)
 - `Load` with a non-existent path succeeds with embedded defaults
 - CLI flag `-s myhost` overrides `config.Server.Host`
 - `config.Radio["jazz"].URL` returns the preset URL
+- `config.Server.TLSSkipVerify` defaults to `true` when not set in user file

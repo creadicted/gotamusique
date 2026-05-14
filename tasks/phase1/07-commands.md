@@ -80,6 +80,10 @@ Truncate to 5000 chars (Mumble message limit). If still too long, drop codec/cou
 - `internal/command/registry.go` — `RegisterAll(bot *Bot, d *Dispatcher)`
 - Unit tests: exact match, prefix match, ambiguous prefix, admin guard, unknown command
 
+## Bot wiring (required)
+
+Milestone 1-03 left a `// TODO(1-07): register TextMessageEvent handler` comment in `internal/bot/connect.go`. This milestone must replace that stub — registering the `Dispatcher.Dispatch` method as the gumble `TextMessageEvent` handler and calling `command.RegisterAll` during bot initialisation.
+
 ## i18n
 
 Phase 1 uses hardcoded English strings. No JSON lang file loading yet (that moves to Phase 2).
