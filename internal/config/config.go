@@ -22,12 +22,13 @@ type Config struct {
 }
 
 type ServerConfig struct {
-	Host        string
-	Port        int
-	Password    string
-	Channel     string
-	Certificate string
-	Tokens      []string
+	Host          string
+	Port          int
+	Password      string
+	Channel       string
+	Certificate   string
+	Tokens        []string
+	TLSSkipVerify bool
 }
 
 type BotConfig struct {
@@ -62,6 +63,7 @@ var sectionAllowlists = map[string]map[string]bool{
 	"server": {
 		"host": true, "port": true, "password": true,
 		"channel": true, "certificate": true, "tokens": true,
+		"tls_skip_verify": true,
 	},
 	"bot": {
 		"username": true, "volume": true, "max_volume": true,
@@ -139,12 +141,13 @@ func build(f *ini.File) (*Config, error) {
 
 	cfg := &Config{
 		Server: ServerConfig{
-			Host:        s.Key("host").String(),
-			Port:        s.Key("port").MustInt(64738),
-			Password:    s.Key("password").String(),
-			Channel:     s.Key("channel").String(),
-			Certificate: s.Key("certificate").String(),
-			Tokens:      splitComma(s.Key("tokens").String()),
+			Host:          s.Key("host").String(),
+			Port:          s.Key("port").MustInt(64738),
+			Password:      s.Key("password").String(),
+			Channel:       s.Key("channel").String(),
+			Certificate:   s.Key("certificate").String(),
+			Tokens:        splitComma(s.Key("tokens").String()),
+			TLSSkipVerify: s.Key("tls_skip_verify").MustBool(true),
 		},
 		Bot: BotConfig{
 			Username:             b.Key("username").String(),

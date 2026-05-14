@@ -57,4 +57,7 @@ func TestLoad_MissingUserFile(t *testing.T) {
 	if cfg.Bot.Username != "gotamusique" {
 		t.Errorf("Bot.Username = %q, want default gotamusique", cfg.Bot.Username)
 	}
+	if !cfg.Server.TLSSkipVerify {
+		t.Errorf("Server.TLSSkipVerify = false, want default true")
+	}
 }

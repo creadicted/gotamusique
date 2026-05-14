@@ -1,6 +1,6 @@
 BIN := bin/gotamusique
 
-.PHONY: build test run clean
+.PHONY: build test run clean fmt lint docs
 
 build:
 	go build -o $(BIN) ./cmd/gotamusique
@@ -13,3 +13,12 @@ run: build
 
 clean:
 	rm -rf bin/
+
+fmt:
+	gofmt -w .
+
+lint:
+	go vet ./...
+
+docs:
+	go doc ./...
