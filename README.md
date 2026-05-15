@@ -4,7 +4,7 @@ A Go rewrite of [botamusique](https://github.com/azlux/botamusique), a Mumble mu
 binary, no Python runtime required.
 
 > **Work in progress — Phase 1 (radio-only) nearing completion.**
-> Milestones 1-01 through 1-07 are done. Docker packaging (1-08) is the remaining step.
+> Milestones 1-01 through 1-08 are done. GHCR publishing (1-09) is the remaining step.
 
 ## Download
 
@@ -51,6 +51,51 @@ EOF
 ```
 
 The bot connects, joins the configured channel, and waits for commands in Mumble chat.
+
+## Docker
+
+The image is published to GHCR on every release. No Go toolchain or `ffmpeg` installation needed on the host — `ffmpeg` is bundled in the image.
+
+```sh
+# 1. Create a configuration.ini with your overrides (see Configuration below)
+cat > configuration.ini <<'EOF'
+[server]
+host = mumble.example.com
+port = 64738
+
+[bot]
+username = gotamusique
+admin = YourMumbleUsername
+EOF
+
+# 2. Create docker-compose.yml
+cat > docker-compose.yml <<'EOF'
+services:
+  gotamusique:
+    image: ghcr.io/konradk/gotamusique:latest
+    volumes:
+      - ./configuration.ini:/app/configuration.ini:ro
+    restart: unless-stopped
+EOF
+
+# 3. Run
+docker compose up -d
+```
+
+Only put keys you want to override in `configuration.ini` — the image ships with `configuration.default.ini` baked in, so missing keys fall back to their defaults automatically.
+
+**Using a custom config path:**
+
+```sh
+docker run -v /path/to/myconfig.ini:/app/myconfig.ini ghcr.io/konradk/gotamusique:latest --config myconfig.ini
+```
+
+**Building locally:**
+
+```sh
+make docker-build   # docker build -t gotamusique .
+make docker-run     # docker compose up
+```
 
 ## Configuration
 
@@ -288,10 +333,10 @@ internal/
   queue/            thread-safe play queue  [milestone 1-06]
   command/          dispatcher and chat command handlers  [milestone 1-07]
 tasks/              milestone specs (see tasks/README.md)
-source/             original Python bot (reference only, do not modify)
+ref/                original Python bot Dockerfiles (reference only, do not modify)
 ```
 
 ## Roadmap
 
-See [`tasks/README.md`](tasks/README.md). Phase 1 delivers a deployable radio bot (milestones 1-01 through 1-08).
+See [`tasks/README.md`](tasks/README.md). Phase 1 delivers a deployable radio bot (milestones 1-01 through 1-09).
 Phase 2 adds local file playback, yt-dlp, a web UI, and full parity with the original Python bot.

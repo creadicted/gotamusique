@@ -1,0 +1,6 @@
+services:
+  gotamusique:
+    build: .
+    volumes:
+      - ./configuration.ini:/app/configuration.ini:ro
+    restart: unless-stopped

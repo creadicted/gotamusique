@@ -4,8 +4,8 @@
 
 Rewrite of botamusique in Go, delivered in two phases.
 
-> The original Python codebase (botamusique) has been preserved in [`source/`](../source/) for reference.
-> All new Go code lives at the repo root. Do not modify files under `source/`.
+> The original Python codebase is not included in this repository snapshot.
+> All new Go code lives at the repo root.
 
 ## Phase 1 — Online Radio (MVP)
 
@@ -23,6 +23,7 @@ After milestone 1-08 the bot is deployable and useful.
 | 1-06 | [phase1/06-queue.md](phase1/06-queue.md)                         | done   | Simple in-memory queue + play/stop/skip  |
 | 1-07 | [phase1/07-commands.md](phase1/07-commands.md)                   | done   | Chat command dispatcher + radio commands |
 | 1-08 | [phase1/08-docker.md](phase1/08-docker.md)                       | todo   | Dockerfile + docker-compose              |
+| 1-09 | [phase1/09-ghcr.md](phase1/09-ghcr.md)                          | todo   | Publish image to GHCR on release tag     |
 
 ## Phase 2 — Full Bot
 
