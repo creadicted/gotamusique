@@ -146,12 +146,6 @@ func TestDispatch_PrefixMatch_Ambiguous(t *testing.T) {
 	bot := defaultBot()
 	var replies []string
 
-	// Capture reply by overriding channels
-	msg := makeMsg("!s")
-	captured := &capturingChannel{ch: msg.Channels[0]}
-	msg.Channels[0] = (*gumble.Channel)(captured.ch) // keep same pointer
-	_ = captured
-
 	d.Register([]string{"stop"}, func(b BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
 		replies = append(replies, "stop")
 	}, false, "test")

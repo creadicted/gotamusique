@@ -135,19 +135,11 @@ func TestHandleJoinMe_NilSender_NoJoin(t *testing.T) {
 }
 
 func TestHandleJoinMe_SenderNoChannel_NoJoin(t *testing.T) {
-	bot := defaultBot()
 	msg := makeMsg("!joinme")
 	msg.Sender.Channel = nil
-	joined := false
-	bot.cfg.Bot.Admin = nil
-	// Override JoinChannel by using a fresh mock that tracks the call.
-	type trackBot struct {
-		*mockBot
-		joined bool
-	}
-	// We can't override methods on mockBot easily; just verify via the nil-channel guard.
-	handleJoinMe(bot, "testuser", msg, "joinme", "")
-	if joined {
+	m := &joinTrackBot{mockBot: defaultBot()}
+	handleJoinMe(m, "testuser", msg, "joinme", "")
+	if m.joinedChannel != nil {
 		t.Error("JoinChannel should not be called when sender has no channel")
 	}
 }

@@ -108,7 +108,7 @@ func playPreset(bot BotAPI, cfg *config.Config, msg *gumble.TextMessage, cmd, na
 func handleRBQuery(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
 	cfg := bot.Config()
 	if arg == "" {
-		sendToChannel(msg, "Usage: "+symbol(cfg)+"rbquery <name>")
+		sendToChannel(msg, "Usage: "+symbol(cfg)+cmd+" <name>")
 		return
 	}
 
@@ -138,7 +138,7 @@ func handleRBQuery(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg st
 func handleRBPlay(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
 	cfg := bot.Config()
 	if arg == "" {
-		sendToChannel(msg, "Usage: "+symbol(cfg)+"rbplay <uuid>")
+		sendToChannel(msg, "Usage: "+symbol(cfg)+cmd+" <uuid>")
 		return
 	}
 
@@ -236,7 +236,7 @@ func handleVolume(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg str
 
 	pct, err := strconv.Atoi(strings.TrimSpace(arg))
 	if err != nil || pct < 0 || pct > 100 {
-		sendToChannel(msg, "Usage: "+symbol(cfg)+"volume [0-100]")
+		sendToChannel(msg, "Usage: "+symbol(cfg)+cmd+" [0-100]")
 		return
 	}
 
