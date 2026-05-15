@@ -25,3 +25,9 @@ lint:
 
 docs:
 	go doc ./...
+
+docker-build:
+	docker build -t gotamusique .
+
+docker-run:
+	docker compose up

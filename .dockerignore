@@ -1,0 +1,9 @@
+.git
+bin/
+ref/
+tasks/
+web/
+static/
+media/
+lang/
+.idea/

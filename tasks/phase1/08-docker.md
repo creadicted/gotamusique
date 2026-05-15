@@ -2,7 +2,7 @@
 
 **Status:** todo  
 **Depends on:** 1-01 through 1-07  
-**Unlocks:** deployment
+**Unlocks:** 1-09 (GHCR publish), deployment
 
 ## Objective
 
@@ -12,23 +12,29 @@ A minimal multi-stage Docker image that ships the Phase 1 bot. No Python, no pip
 
 ```dockerfile
 # Stage 1 — build
-FROM golang:1.21-alpine AS builder
+FROM golang:1.25-alpine AS builder
 WORKDIR /src
+RUN apk add --no-cache gcc musl-dev opus-dev
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN go build -ldflags="-s -w" -o /bin/gotamusique ./cmd/gotamusique
+RUN CGO_ENABLED=1 go build -ldflags="-s -w -extldflags '-static'" -o /bin/gotamusique ./cmd/gotamusique
 
 # Stage 2 — runtime
 FROM alpine:3.19
 RUN apk add --no-cache ffmpeg ca-certificates
 COPY --from=builder /bin/gotamusique /usr/local/bin/gotamusique
-COPY configuration.default.ini /app/
+COPY internal/config/configuration.default.ini /app/configuration.default.ini
 WORKDIR /app
-ENTRYPOINT ["gotamusique", "--config", "configuration.ini"]
+ENTRYPOINT ["gotamusique"]
+CMD ["--config", "configuration.ini"]
 ```
 
-No yt-dlp, no libopus-dev, no Python. ffmpeg only (handles Opus encoding internally).
+- Static linking (`-extldflags '-static'` + `musl-dev`) means the runtime image needs no `libopus.so`.
+- `gcc` and `libopus-dev` are build-time only; they do not appear in the runtime image.
+- `ffmpeg` handles Opus encoding; `ca-certificates` is needed for TLS to the Mumble server.
+- `configuration.default.ini` is baked in as the base config. Users mount `configuration.ini` on top.
+- Splitting `ENTRYPOINT`/`CMD` allows `docker run gotamusique --config /other.ini` without `--entrypoint`.
 
 ## docker-compose.yml
 
@@ -45,15 +51,13 @@ services:
 
 ```
 .git
+bin/
+ref/
 tasks/
 web/
 static/
 media/
 lang/
-*.py
-*.sh
-venv/
-__pycache__/
 .idea/
 ```
 
@@ -61,19 +65,20 @@ __pycache__/
 
 ```makefile
 docker-build:
-    docker build -t gotamusique .
+	docker build -t gotamusique .
 
 docker-run:
-    docker compose up
+	docker compose up
 ```
 
 ## Image size target
 
-< 60 MB (Alpine + ffmpeg binary, no Python, no Node.js).
+Under 200 MB.
 
 ## Acceptance criteria
 
 - `docker build .` succeeds from a clean checkout
 - `docker run` with a mounted `configuration.ini` connects to Mumble and plays radio
-- Image is under 100 MB
+- Image is under 200 MB
 - Container restarts automatically on crash (`restart: unless-stopped`)
+- `docker stop` triggers a clean shutdown (SIGTERM handled — verified in `main.go`)
