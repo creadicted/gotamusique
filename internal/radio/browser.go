@@ -22,14 +22,15 @@ var browserMirrors = []string{
 
 // Station holds station data returned by the radio-browser.info API.
 type Station struct {
-	UUID     string `json:"stationuuid"`
-	Name     string `json:"name"`
-	URL      string `json:"url"`
-	Codec    string `json:"codec"`
-	Bitrate  int    `json:"bitrate"`
-	Country  string `json:"countrycode"`
-	Tags     string `json:"tags"`
-	Homepage string `json:"homepage"`
+	UUID        string `json:"stationuuid"`
+	Name        string `json:"name"`
+	URL         string `json:"url"`
+	URLResolved string `json:"url_resolved"`
+	Codec       string `json:"codec"`
+	Bitrate     int    `json:"bitrate"`
+	Country     string `json:"countrycode"`
+	Tags        string `json:"tags"`
+	Homepage    string `json:"homepage"`
 }
 
 // RadioBrowser is a client for the radio-browser.info API.

@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 
 	"github.com/konradk/gotamusique/internal/audio"
+	"github.com/konradk/gotamusique/internal/command"
 	"github.com/konradk/gotamusique/internal/config"
 	"github.com/konradk/gotamusique/internal/queue"
 	"layeh.com/gumble/gumble"
@@ -15,8 +16,8 @@ import (
 
 // Bot holds the gumble client and all shared state for the bot's lifetime.
 type Bot struct {
-	cfg  *config.Config
-	log  *slog.Logger
+	cfg *config.Config
+	log *slog.Logger
 
 	mu         sync.Mutex
 	client     *gumble.Client
@@ -27,8 +28,9 @@ type Bot struct {
 
 	queue         *queue.Queue
 	wakeCh        chan struct{} // buffered(1): non-blocking wake for the loop goroutine
-	launchVersion atomic.Int64 // incremented by Play() to suppress onTrackEnd's queue.Next()
-	cancel        func()       // cancels the top-level Run context (set by main)
+	launchVersion atomic.Int64  // incremented by Play() to suppress onTrackEnd's queue.Next()
+	cancel        func()        // cancels the top-level Run context (set by main)
+	dispatcher    *command.Dispatcher
 }
 
 // New creates a Bot from cfg. The logger writes to stderr unless cfg.Bot.Logfile
@@ -51,12 +53,16 @@ func New(cfg *config.Config) (*Bot, error) {
 
 	log := slog.New(slog.NewTextHandler(w, &slog.HandlerOptions{Level: level}))
 
-	return &Bot{
+	b := &Bot{
 		cfg:    cfg,
 		log:    log,
 		queue:  queue.NewQueue(),
 		wakeCh: make(chan struct{}, 1),
-	}, nil
+	}
+	d := command.NewDispatcher(cfg.Commands.Symbol)
+	command.RegisterAll(b, d)
+	b.dispatcher = d
+	return b, nil
 }
 
 // Queue returns the bot's play queue.

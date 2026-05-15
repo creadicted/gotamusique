@@ -132,13 +132,18 @@ func (p *Pipeline) loop(cmd *exec.Cmd, stdout io.ReadCloser, interruptCh <-chan 
 	buf := make([]byte, frameSize*2) // 2 bytes per int16 sample
 	lastTime := time.Now()
 
+	ticker := time.NewTicker(gumble.AudioDefaultInterval)
+	defer ticker.Stop()
+
 	for frameIdx := 0; ; frameIdx++ {
+		// Block until the next 10 ms tick or an interrupt signal. Pacing here
+		// prevents ffmpeg output bursts from flooding gumble with frames.
 		select {
 		case <-interruptCh:
 			p.doFadeOut(cmd, stdout, audioCh, buf)
 			onEnd(nil)
 			return
-		default:
+		case <-ticker.C:
 		}
 
 		now := time.Now()

@@ -10,9 +10,10 @@ import (
 
 	"github.com/konradk/gotamusique/internal/bot"
 	"github.com/konradk/gotamusique/internal/config"
+	_ "layeh.com/gumble/opus" // registers Opus encoder/decoder with gumble
 )
-
-const version = "0.1.6"
+ 
+const version = "0.1.7" 
 
 func main() {
 	os.Exit(run())

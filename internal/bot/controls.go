@@ -1,6 +1,14 @@
 package bot
 
-import "fmt"
+import (
+	"fmt"
+	"math"
+	"os"
+
+	"github.com/konradk/gotamusique/internal/audio"
+	"github.com/konradk/gotamusique/internal/config"
+	"layeh.com/gumble/gumble"
+)
 
 // Play interrupts the current track, jumps to the item at index, and wakes
 // the loop to start it. Returns an error if index is out of range.
@@ -102,4 +110,72 @@ func (b *Bot) wakeLoop() {
 	case b.wakeCh <- struct{}{}:
 	default:
 	}
+}
+
+// --- BotAPI implementation ---
+
+// Config returns the bot's configuration.
+func (b *Bot) Config() *config.Config { return b.cfg }
+
+// Enqueue appends item to the play queue and wakes the loop.
+func (b *Bot) Enqueue(item audio.MediaItem) {
+	b.queue.Append(item)
+	b.wakeLoop()
+}
+
+// QueueItems returns a snapshot of the current queue contents.
+func (b *Bot) QueueItems() []audio.MediaItem { return b.queue.Items() }
+
+// QueueCurrentIndex returns the index of the currently playing item.
+func (b *Bot) QueueCurrentIndex() int { return b.queue.Index() }
+
+// CurrentItem returns the item at the current queue position, or nil if idle.
+func (b *Bot) CurrentItem() audio.MediaItem { return b.queue.Current() }
+
+// TargetVolume returns the current target volume in [0, 1].
+// When the pipeline has not started yet, returns cfg.Bot.Volume.
+func (b *Bot) TargetVolume() float64 {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.audio != nil {
+		return b.audio.Volume().TargetVolume
+	}
+	return b.cfg.Bot.Volume
+}
+
+// SetVolume converts pct (0–100) to a float and applies it, clamped to MaxVolume.
+// Also clears the muted state so the change is immediately audible.
+func (b *Bot) SetVolume(pct int) {
+	vol := math.Max(0, math.Min(1, float64(pct)/100.0))
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.isMuted = false
+	if b.audio != nil {
+		b.audio.Volume().SetTargetVolume(vol)
+		b.cfg.Bot.Volume = b.audio.Volume().TargetVolume
+	} else {
+		if vol > b.cfg.Bot.MaxVolume {
+			vol = b.cfg.Bot.MaxVolume
+		}
+		b.cfg.Bot.Volume = vol
+	}
+}
+
+// JoinChannel moves the bot to ch. No-op when not connected or ch is nil.
+func (b *Bot) JoinChannel(ch *gumble.Channel) {
+	if ch == nil {
+		return
+	}
+	b.mu.Lock()
+	client := b.client
+	b.mu.Unlock()
+	if client != nil {
+		client.Self.Move(ch)
+	}
+}
+
+// Kill shuts down the bot and exits the process.
+func (b *Bot) Kill() {
+	b.Shutdown()
+	os.Exit(0)
 }
