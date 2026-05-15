@@ -73,10 +73,16 @@ func NewRadioItemFromPreset(_ string, preset config.RadioPreset) *RadioItem {
 }
 
 // NewRadioItemFromStation constructs a RadioItem from a radio-browser Station.
+// url_resolved is preferred over url when available; it is already dereferenced
+// by radio-browser and avoids ICY/redirect issues that confuse the Go HTTP client.
 func NewRadioItemFromStation(s Station) *RadioItem {
 	name := s.Name
 	if name == "" {
 		name = s.URL
 	}
-	return &RadioItem{URL: s.URL, Name: name}
+	streamURL := s.URLResolved
+	if streamURL == "" {
+		streamURL = s.URL
+	}
+	return &RadioItem{URL: streamURL, Name: name}
 }

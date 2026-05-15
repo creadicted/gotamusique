@@ -158,11 +158,8 @@ func describeConnErr(err error) error {
 // connect performs a single connection attempt and stores the client on success.
 func (b *Bot) connect(cfg *gumble.Config) error {
 	tlsCfg := &tls.Config{
-		InsecureSkipVerify: b.cfg.Server.TLSSkipVerify, //nolint:gosec
-		// Many Mumble servers (murmur built against older OpenSSL/Qt) RST
-		// connections when they receive a TLS 1.3 ClientHello instead of
-		// negotiating down to 1.2. Cap at 1.2 for compatibility.
-		MaxVersion: tls.VersionTLS13,
+		InsecureSkipVerify: b.cfg.Server.TLSSkipVerify, //nolint:gose
+		MaxVersion:         tls.VersionTLS13,
 	}
 
 	if b.cfg.Server.Certificate != "" {
