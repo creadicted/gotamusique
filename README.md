@@ -3,7 +3,7 @@
 A Go rewrite of [botamusique](https://github.com/azlux/botamusique), a Mumble music bot. Single statically-linked
 binary, no Python runtime required.
 
-> **Phase 1 (radio-only) complete.** Phase 2 (file library, yt-dlp, web UI) is in planning — see [`tasks/README.md`](tasks/README.md).
+> **Phase 1 currently focuses on radio-only support and remains in progress.** Phase 2 (file library, yt-dlp, web UI) is in planning — see [`tasks/README.md`](tasks/README.md) for current milestone status.
 
 ## Download
 
