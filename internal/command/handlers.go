@@ -141,7 +141,10 @@ func handleRBPlay(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg str
 	rb := radio.NewRadioBrowser()
 	station, err := rb.ByUUID(arg)
 	if err != nil {
-		sendToChannel(msg, "Station not found: "+err.Error())
+		sendToChannel(msg, format(cfg.Bot.FormattedReplies,
+			"Station not found: "+esc(err.Error()),
+			"Station not found: "+err.Error(),
+		))
 		return
 	}
 
