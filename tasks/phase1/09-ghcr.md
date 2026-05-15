@@ -10,10 +10,10 @@ Publish the Docker image to GitHub Container Registry (GHCR) automatically on ev
 
 ## GitHub Actions workflow
 
-`.github/workflows/release.yml`:
+`.github/workflows/ghcr-publish.yml`:
 
 ```yaml
-name: Release
+name: GHCR Publish
 
 on:
   push:
