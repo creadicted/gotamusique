@@ -23,6 +23,19 @@ A Go rewrite of [botamusique](https://github.com/azlux/botamusique), a Mumble mu
 - Radio-browser.info search (`!rbquery`)
 - Docker image
 
+## Download
+
+Pre-built static binaries are published automatically on every commit to `master`:
+
+| Platform | Binary |
+|---|---|
+| Linux x86-64 | `gotamusique-linux-amd64` |
+| Linux ARM64 | `gotamusique-linux-arm64` |
+
+Download from the [latest release](../../releases/tag/latest) — no Go toolchain or Python runtime needed.
+
+> These are rolling pre-release builds. Tagged releases (e.g. `v1.0.0`) will follow once Phase 1 is complete.
+
 ## Requirements
 
 - Go 1.21+

@@ -1,5 +1,7 @@
 # Go Migration Tasks
 
+**Version: 0.1.0** — Phase 1 in progress (milestones 1-01 through 1-04 complete)
+
 Rewrite of botamusique in Go, delivered in two phases.
 
 > The original Python codebase (botamusique) has been preserved in [`source/`](../source/) for reference.
@@ -15,7 +17,7 @@ After milestone 1-08 the bot is deployable and useful.
 |------|------------------------------------------------------------------|--------|------------------------------------------|
 | 1-01 | [phase1/01-scaffold.md](phase1/01-scaffold.md)                   | done   | Go module, layout, Makefile              |
 | 1-02 | [phase1/02-config.md](phase1/02-config.md)                       | done   | INI config (server + radio presets only) |
-| 1-03 | [phase1/03-mumble-connection.md](phase1/03-mumble-connection.md) | done      | Connect, join channel, SIGINT shutdown   |
+| 1-03 | [phase1/03-mumble-connection.md](phase1/03-mumble-connection.md) | done   | Connect, join channel, SIGINT shutdown   |
 | 1-04 | [phase1/04-audio-pipeline.md](phase1/04-audio-pipeline.md)       | done   | ffmpeg → PCM → Mumble audio output       |
 | 1-05 | [phase1/05-radio-media.md](phase1/05-radio-media.md)             | todo   | HTTP stream item, radio-browser.info API |
 | 1-06 | [phase1/06-queue.md](phase1/06-queue.md)                         | todo   | Simple in-memory queue + play/stop/skip  |
