@@ -158,7 +158,7 @@ func (b *Bot) connect(cfg *gumble.Config) error {
 		// Many Mumble servers (murmur built against older OpenSSL/Qt) RST
 		// connections when they receive a TLS 1.3 ClientHello instead of
 		// negotiating down to 1.2. Cap at 1.2 for compatibility.
-		MaxVersion: tls.VersionTLS12,
+		MaxVersion: tls.VersionTLS13,
 	}
 
 	if b.cfg.Server.Certificate != "" {
