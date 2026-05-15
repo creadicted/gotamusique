@@ -1,6 +1,6 @@
 # 1-06 — Simple Queue
 
-**Status:** todo  
+**Status:** done  
 **Depends on:** 1-04, 1-05  
 **Unlocks:** 1-07
 

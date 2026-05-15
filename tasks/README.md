@@ -1,7 +1,6 @@
 # Go Migration Tasks
 
-**Version: 0.1.4** — Phase 1 in progress (milestones 1-01 through 1-04 complete)
-**Version: 0.1.5** — Phase 1 in progress (milestones 1-01 through 1-05 complete)
+**Version: 0.1.6** — Phase 1 in progress (milestones 1-01 through 1-06 complete)
 
 Rewrite of botamusique in Go, delivered in two phases.
 
@@ -21,7 +20,7 @@ After milestone 1-08 the bot is deployable and useful.
 | 1-03 | [phase1/03-mumble-connection.md](phase1/03-mumble-connection.md) | done   | Connect, join channel, SIGINT shutdown   |
 | 1-04 | [phase1/04-audio-pipeline.md](phase1/04-audio-pipeline.md)       | done   | ffmpeg → PCM → Mumble audio output       |
 | 1-05 | [phase1/05-radio-media.md](phase1/05-radio-media.md)             | done   | HTTP stream item, radio-browser.info API |
-| 1-06 | [phase1/06-queue.md](phase1/06-queue.md)                         | todo   | Simple in-memory queue + play/stop/skip  |
+| 1-06 | [phase1/06-queue.md](phase1/06-queue.md)                         | done   | Simple in-memory queue + play/stop/skip  |
 | 1-07 | [phase1/07-commands.md](phase1/07-commands.md)                   | todo   | Chat command dispatcher + radio commands |
 | 1-08 | [phase1/08-docker.md](phase1/08-docker.md)                       | todo   | Dockerfile + docker-compose              |
 

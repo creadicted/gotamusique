@@ -91,6 +91,17 @@ Milestone 1-03 left a `// TODO(1-07): register TextMessageEvent handler` comment
 `Dispatcher.Dispatch` as the gumble `TextMessageEvent` handler and calling
 `command.RegisterAll` during bot initialisation.
 
+## Reply format
+
+Controlled by `cfg.Bot.FormattedReplies` (default `True`).
+
+- `true` — replies use HTML: `<b>`, `<br>`, `<pre>` for tables, etc.
+- `false` — replies are plain text with newlines only.
+
+All handler helpers that build reply strings must check this flag. A single
+`format(cfg, template, args...)` helper (or equivalent) in `handlers.go`
+centralises the switch.
+
 ## i18n
 
 Phase 1 uses hardcoded English strings. No JSON lang file loading yet (that moves to Phase 2).
