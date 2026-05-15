@@ -152,14 +152,6 @@ func handleRBPlay(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg str
 	}
 
 	item := radio.NewRadioItemFromStation(*station)
-	if err := item.Validate(); err != nil {
-		sendToChannel(msg, format(cfg.Bot.FormattedReplies,
-			"Could not reach stream: "+esc(err.Error()),
-			"Could not reach stream: "+err.Error(),
-		))
-		return
-	}
-
 	bot.Enqueue(item)
 	sendToChannel(msg, format(cfg.Bot.FormattedReplies,
 		"Queued: <b>"+esc(item.Name)+"</b>",
