@@ -31,7 +31,7 @@ CMD ["--config", "configuration.ini"]
 ```
 
 - Static linking (`-extldflags '-static'` + `musl-dev`) means the runtime image needs no `libopus.so`.
-- `gcc` and `libopus-dev` are build-time only; they do not appear in the runtime image.
+- `gcc` and `opus-dev` are build-time only; they do not appear in the runtime image.
 - `ffmpeg` handles Opus encoding; `ca-certificates` is needed for TLS to the Mumble server.
 - `configuration.default.ini` is baked in as the base config. Users mount `configuration.ini` on top.
 - Splitting `ENTRYPOINT`/`CMD` allows `docker run gotamusique --config /other.ini` without `--entrypoint`.
