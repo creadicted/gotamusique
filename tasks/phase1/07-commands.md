@@ -50,17 +50,21 @@ func (d *Dispatcher) Dispatch(bot *Bot, msg *gumble.TextMessage)
 | `!radio [name\|url]` | No arg: list presets. Name: play preset. URL: play stream URL. |
 | `!rbquery <name>` | Search radio-browser.info, display table of results |
 | `!rbplay <uuid>` | Play station by radio-browser UUID |
-| `!stop` | Stop playback, reset queue index |
-| `!pause` | Pause (keep queue position) |
-| `!play` / `!p` | Resume if paused; otherwise show current station |
+| `!stop` | Stop playback and reset queue |
+| `!mute` | Set volume to 0 — ffmpeg keeps running, stream stays connected |
+| `!unmute` | Restore volume after `!mute` |
 | `!skip` | Skip to next queued station |
 | `!clear` | Stop and empty the queue |
-| `!queue` | List queued stations |
+| `!queue` | List queued stations with their index |
 | `!np` / `!now` | Show currently playing station |
-| `!volume [0-100]` | Get or set volume |
+| `!volume [0-100]` | Get or set volume percentage |
 | `!joinme` | Bot moves to caller's channel |
 | `!kill` | Disconnect and exit (admin only) |
 | `!help` | List available commands |
+
+> **Note:** there is no `!pause` / `!resume`. Radio streams are live and cannot be seeked.
+> `!mute` / `!unmute` are the equivalent operations — they silence the bot without
+> reconnecting to the stream.
 
 ## `!rbquery` response format
 
@@ -82,7 +86,10 @@ Truncate to 5000 chars (Mumble message limit). If still too long, drop codec/cou
 
 ## Bot wiring (required)
 
-Milestone 1-03 left a `// TODO(1-07): register TextMessageEvent handler` comment in `internal/bot/connect.go`. This milestone must replace that stub — registering the `Dispatcher.Dispatch` method as the gumble `TextMessageEvent` handler and calling `command.RegisterAll` during bot initialisation.
+Milestone 1-03 left a `// TODO(1-07): register TextMessageEvent handler` comment in
+`internal/bot/connect.go`. This milestone must replace that stub — registering
+`Dispatcher.Dispatch` as the gumble `TextMessageEvent` handler and calling
+`command.RegisterAll` during bot initialisation.
 
 ## i18n
 
@@ -91,9 +98,10 @@ Phase 1 uses hardcoded English strings. No JSON lang file loading yet (that move
 ## Acceptance criteria
 
 - `!radio jazz` plays the jazz preset
-- `!radio http://stream.somafm.com/groovesalad-128-mp3` plays the direct URL
+- `!radio http://stream.somafm.com/groovesalad-128-mp3` plays a direct URL
 - `!rbquery soma` returns a table of SomaFM stations
 - `!rbplay <uuid>` plays the station
+- `!mute` silences the bot; `!unmute` restores volume; ffmpeg never restarts
 - `!queue` shows all queued stations with their index
 - `!volume 60` sets volume to 60%
 - `!hel` (partial match) dispatches to `!help`
