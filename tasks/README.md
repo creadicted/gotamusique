@@ -4,8 +4,8 @@
 
 Rewrite of botamusique in Go, delivered in two phases.
 
-> The original Python codebase (botamusique) has been preserved in [`ref/`](../ref/) for reference.
-> All new Go code lives at the repo root. Do not modify files under `ref/`.
+> The original Python codebase is not included in this repository snapshot.
+> All new Go code lives at the repo root.
 
 ## Phase 1 — Online Radio (MVP)
 
