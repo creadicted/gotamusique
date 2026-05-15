@@ -53,7 +53,8 @@ loop:
   if not paused and pipeline not running:
     item = queue.Current()
     if item == nil: sleep(100ms); continue
-    err = pipeline.Launch(item.StreamURL())
+    err = pipeline.Launch(item.StreamURL(), onTrackEnd)
+    // onTrackEnd: calls queue.Next() then wakes the loop
     if err: send channel message; queue.Next(); continue
     announce current station (if config.Bot.AnnounceCurrentMusic)
   sleep(100ms)
