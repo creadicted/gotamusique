@@ -118,7 +118,10 @@ func handleRBQuery(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg st
 		return
 	}
 	if len(stations) == 0 {
-		sendToChannel(msg, "No stations found for \""+arg+"\".")
+		sendToChannel(msg, format(cfg.Bot.FormattedReplies,
+			"No stations found for <b>"+esc(arg)+"</b>.",
+			"No stations found for \""+arg+"\".",
+		))
 		return
 	}
 
