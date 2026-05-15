@@ -11,7 +11,7 @@ Rewrite of botamusique in Go, delivered in two phases.
 
 **Goal:** A single Go binary that connects to a Mumble server and streams internet radio.  
 No database, no file library, no web UI, no yt-dlp.  
-After milestone 1-09 the bot is deployable and useful.
+After milestone 1-08 the bot is deployable and useful.
 
 | #    | File                                                             | Status | Description                              |
 |------|------------------------------------------------------------------|--------|------------------------------------------|
