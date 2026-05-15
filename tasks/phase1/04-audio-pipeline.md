@@ -1,6 +1,6 @@
 # 1-04 — Audio Pipeline
 
-**Status:** todo  
+**Status:** done  
 **Depends on:** 1-03  
 **Unlocks:** 1-06
 

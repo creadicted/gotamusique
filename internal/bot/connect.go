@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/konradk/gotamusique/internal/audio"
 	"layeh.com/gumble/gumble"
 	"layeh.com/gumble/gumbleutil"
 )
@@ -83,6 +84,7 @@ func (b *Bot) buildGumbleConfig(disconnected chan<- struct{}) *gumble.Config {
 			// DialWithDialer returns, so b.client must be set here first.
 			b.mu.Lock()
 			b.client = e.Client
+			b.audio = audio.New(b.client, b.cfg, b.log)
 			b.mu.Unlock()
 			b.log.Debug("connected to server")
 			b.joinChannel()
@@ -98,7 +100,6 @@ func (b *Bot) buildGumbleConfig(disconnected chan<- struct{}) *gumble.Config {
 			}
 		},
 		// TODO(1-07): register TextMessage handler (command dispatcher)
-		// TODO(1-04): register audio event handler (audio pipeline)
 	})
 
 	return cfg

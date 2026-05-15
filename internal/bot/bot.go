@@ -6,6 +6,7 @@ import (
 	"os"
 	"sync"
 
+	"github.com/konradk/gotamusique/internal/audio"
 	"github.com/konradk/gotamusique/internal/config"
 	"layeh.com/gumble/gumble"
 )
@@ -14,8 +15,8 @@ import (
 type Bot struct {
 	cfg    *config.Config
 	client *gumble.Client
-	queue  interface{} // placeholder until 1-06 (queue.Queue)
-	audio  interface{} // placeholder until 1-04 (audio.Pipeline)
+	queue  interface{}    // placeholder until 1-06 (queue.Queue)
+	audio  *audio.Pipeline
 	log    *slog.Logger
 	mu     sync.Mutex
 	cancel func()
@@ -53,8 +54,9 @@ func (b *Bot) Shutdown() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	// TODO(1-04): stop audio pipeline when audio.Pipeline is wired
-	// if b.audio != nil { b.audio.Stop() }
+	if b.audio != nil {
+		b.audio.Interrupt()
+	}
 
 	if b.client != nil && b.client.State() != gumble.StateDisconnected {
 		b.client.Disconnect() //nolint:errcheck
