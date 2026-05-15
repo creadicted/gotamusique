@@ -380,9 +380,3 @@ func TestIsAdmin_CaseSensitive(t *testing.T) {
 		t.Error("'Admin' should be recognised as admin")
 	}
 }
-
-// capturingChannel is unused but kept to prevent import pruning issues.
-type capturingChannel struct {
-	ch       *gumble.Channel
-	messages []string
-}
