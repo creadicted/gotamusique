@@ -7,3 +7,9 @@ static/
 media/
 lang/
 .idea/
+# local config and secrets — never needed at build time
+configuration.ini
+.env
+*.db
+*.db-shm
+*.db-wal
