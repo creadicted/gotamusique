@@ -121,7 +121,9 @@ func (b *Bot) buildGumbleConfig(disconnected chan<- struct{}) *gumble.Config {
 			default:
 			}
 		},
-		// TODO(1-07): register TextMessage handler (command dispatcher)
+		TextMessage: func(e *gumble.TextMessageEvent) {
+			b.dispatcher.Dispatch(b, &e.TextMessage)
+		},
 	})
 
 	return cfg

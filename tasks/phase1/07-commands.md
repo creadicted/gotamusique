@@ -1,12 +1,34 @@
 # 1-07 — Command Dispatcher & Radio Commands
 
-**Status:** todo  
+**Status:** done  
 **Depends on:** 1-03, 1-05, 1-06  
 **Unlocks:** 1-08 (feature complete for Phase 1)
 
 ## Objective
 
 Parse incoming Mumble text messages, route them to handlers, and implement all radio-relevant commands.
+
+## Architecture decisions
+
+### Circular-import break
+`command` defines `BotAPI` — an interface covering the methods handlers need. `*bot.Bot`
+satisfies it without the `bot` package knowing about `command`. `bot` imports `command`
+(to create `Dispatcher` and call `RegisterAll`); `command` does NOT import `bot`.
+
+### Admin check
+Case-sensitive string comparison against `cfg.Bot.Admin`. Mumble usernames are
+case-sensitive at the protocol level.
+
+### URL vs preset detection (`!radio <arg>`)
+`url.Parse` + scheme check: `http`/`https` → treat as direct stream URL (validate first);
+anything else → look up in `cfg.Radio` by exact key.
+
+### Stream validation
+Direct URLs (`!radio <url>`) and radio-browser results (`!rbplay`) are validated with
+`RadioItem.Validate()` before enqueuing. Config presets are trusted and not validated.
+
+### Private message guard
+Hardcoded reject (no config option in Phase 1). Private messages have no `Channels`.
 
 ## Dispatcher
 
@@ -66,6 +88,32 @@ func (d *Dispatcher) Dispatch(bot *Bot, msg *gumble.TextMessage)
 > `!mute` / `!unmute` are the equivalent operations — they silence the bot without
 > reconnecting to the stream.
 
+## Command output formats
+
+### `!radio` (no arg)
+Presets sorted alphabetically by key; each line: `key — comment` (falls back to URL
+hostname if comment is empty). HTML mode: `<b>key</b> — name<br>` wrapped in a header.
+
+### `!queue`
+```
+Queue (N items):
+> 1. [Radio] Jazz Yeah !   ← > marks current index (1-based)
+  2. SomaFM Groove Salad
+```
+`Queue is empty.` when nothing is queued. HTML mode: `<pre>`-wrapped.
+
+### `!np`
+`Now playing: <title>` (HTML: `<b>`-wrapped title); `Nothing is currently playing.` when idle.
+
+### `!volume`
+No arg: `Volume: 80` (current `TargetVolume * 100`, rounded). With arg: `Volume set to 80`.
+Setting volume also clears the muted state.
+
+### `!help`
+All registered commands sorted alphabetically by primary alias, one per line:
+`!alias1, !alias2 — description`. HTML mode: `<pre>`-wrapped. Uses actual configured
+aliases, not hardcoded names.
+
 ## `!rbquery` response format
 
 ```
@@ -75,7 +123,9 @@ Radio-Browser results:
 | <uuid>    | <name>       | ...   | ...           | ...     |
 ```
 
-Truncate to 5000 chars (Mumble message limit). If still too long, drop codec/country columns.
+Pipe table, `<pre>`-wrapped in HTML mode. Result count capped by `radio.RadioBrowser.Search`
+(currently 10). Truncate to 5000 chars; if still too long, rebuild without Codec/Country
+columns; if still too long, hard-truncate to 5000.
 
 ## Deliverables
 
