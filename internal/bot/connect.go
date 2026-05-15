@@ -18,6 +18,7 @@ const (
 	backoffInitial = 5 * time.Second
 	backoffMax     = 60 * time.Second
 	maxRetries     = 10
+	dialTimeout    = 10 * time.Second
 )
 
 // Run connects to the Mumble server and blocks until ctx is cancelled or the
@@ -78,6 +79,11 @@ func (b *Bot) buildGumbleConfig(disconnected chan<- struct{}) *gumble.Config {
 
 	cfg.Attach(gumbleutil.Listener{
 		Connect: func(e *gumble.ConnectEvent) {
+			// The Connect event fires inside gumble's read goroutine before
+			// DialWithDialer returns, so b.client must be set here first.
+			b.mu.Lock()
+			b.client = e.Client
+			b.mu.Unlock()
 			b.log.Debug("connected to server")
 			b.joinChannel()
 			b.setComment()
@@ -98,10 +104,36 @@ func (b *Bot) buildGumbleConfig(disconnected chan<- struct{}) *gumble.Config {
 	return cfg
 }
 
+// describeConnErr wraps low-level network errors with an actionable hint.
+// The original error is preserved via %w so errors.Is/As still work.
+func describeConnErr(err error) error {
+	s := err.Error()
+	var hint string
+	switch {
+	case strings.Contains(s, "connection reset"):
+		hint = "server reset the connection (wrong password, IP blocked, or TLS mismatch)"
+	case strings.Contains(s, "connection refused"):
+		hint = "connection refused — check host and port"
+	case strings.Contains(s, "no such host"), strings.Contains(s, "name resolution"):
+		hint = "hostname not found — check server address"
+	case strings.Contains(s, "timeout"), strings.Contains(s, "timed out"):
+		hint = "timed out — server may be unreachable"
+	case strings.Contains(s, "certificate"):
+		hint = "TLS certificate error — try setting tls_skip_verify = True in [server]"
+	default:
+		return err
+	}
+	return fmt.Errorf("%s: %w", hint, err)
+}
+
 // connect performs a single connection attempt and stores the client on success.
 func (b *Bot) connect(cfg *gumble.Config) error {
 	tlsCfg := &tls.Config{
 		InsecureSkipVerify: b.cfg.Server.TLSSkipVerify, //nolint:gosec
+		// Many Mumble servers (murmur built against older OpenSSL/Qt) RST
+		// connections when they receive a TLS 1.3 ClientHello instead of
+		// negotiating down to 1.2. Cap at 1.2 for compatibility.
+		MaxVersion: tls.VersionTLS12,
 	}
 
 	if b.cfg.Server.Certificate != "" {
@@ -115,9 +147,9 @@ func (b *Bot) connect(cfg *gumble.Config) error {
 	addr := net.JoinHostPort(b.cfg.Server.Host, fmt.Sprintf("%d", b.cfg.Server.Port))
 	b.log.Debug("connecting", slog.String("addr", addr))
 
-	client, err := gumble.DialWithDialer(new(net.Dialer), addr, cfg, tlsCfg)
+	client, err := gumble.DialWithDialer(&net.Dialer{Timeout: dialTimeout}, addr, cfg, tlsCfg)
 	if err != nil {
-		return err
+		return describeConnErr(err)
 	}
 
 	b.mu.Lock()

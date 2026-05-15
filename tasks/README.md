@@ -11,44 +11,44 @@ Rewrite of botamusique in Go, delivered in two phases.
 No database, no file library, no web UI, no yt-dlp.  
 After milestone 1-08 the bot is deployable and useful.
 
-| # | File | Status | Description |
-|---|---|---|---|
-| 1-01 | [phase1/01-scaffold.md](phase1/01-scaffold.md) | done | Go module, layout, Makefile |
-| 1-02 | [phase1/02-config.md](phase1/02-config.md) | done | INI config (server + radio presets only) |
-| 1-03 | [phase1/03-mumble-connection.md](phase1/03-mumble-connection.md) | todo | Connect, join channel, SIGINT shutdown |
-| 1-04 | [phase1/04-audio-pipeline.md](phase1/04-audio-pipeline.md) | todo | ffmpeg → PCM → Mumble audio output |
-| 1-05 | [phase1/05-radio-media.md](phase1/05-radio-media.md) | todo | HTTP stream item, radio-browser.info API |
-| 1-06 | [phase1/06-queue.md](phase1/06-queue.md) | todo | Simple in-memory queue + play/stop/skip |
-| 1-07 | [phase1/07-commands.md](phase1/07-commands.md) | todo | Chat command dispatcher + radio commands |
-| 1-08 | [phase1/08-docker.md](phase1/08-docker.md) | todo | Dockerfile + docker-compose |
+| #    | File                                                             | Status | Description                              |
+|------|------------------------------------------------------------------|--------|------------------------------------------|
+| 1-01 | [phase1/01-scaffold.md](phase1/01-scaffold.md)                   | done   | Go module, layout, Makefile              |
+| 1-02 | [phase1/02-config.md](phase1/02-config.md)                       | done   | INI config (server + radio presets only) |
+| 1-03 | [phase1/03-mumble-connection.md](phase1/03-mumble-connection.md) | done      | Connect, join channel, SIGINT shutdown   |
+| 1-04 | [phase1/04-audio-pipeline.md](phase1/04-audio-pipeline.md)       | todo   | ffmpeg → PCM → Mumble audio output       |
+| 1-05 | [phase1/05-radio-media.md](phase1/05-radio-media.md)             | todo   | HTTP stream item, radio-browser.info API |
+| 1-06 | [phase1/06-queue.md](phase1/06-queue.md)                         | todo   | Simple in-memory queue + play/stop/skip  |
+| 1-07 | [phase1/07-commands.md](phase1/07-commands.md)                   | todo   | Chat command dispatcher + radio commands |
+| 1-08 | [phase1/08-docker.md](phase1/08-docker.md)                       | todo   | Dockerfile + docker-compose              |
 
 ## Phase 2 — Full Bot
 
 **Goal:** Parity with the original Python bot.  
 Builds on the Phase 1 binary; each milestone is independently mergeable.
 
-| # | File | Status | Description |
-|---|---|---|---|
-| 2-01 | [phase2/01-database.md](phase2/01-database.md) | todo | SQLite settings + music DB, migration |
-| 2-02 | [phase2/02-file-media.md](phase2/02-file-media.md) | todo | Local file playback (ffprobe metadata) |
-| 2-03 | [phase2/03-url-media.md](phase2/03-url-media.md) | todo | YouTube / yt-dlp integration |
-| 2-04 | [phase2/04-playlist-modes.md](phase2/04-playlist-modes.md) | todo | repeat / random / autoplay modes |
-| 2-05 | [phase2/05-music-library.md](phase2/05-music-library.md) | todo | Dir scan, DB cache, tags |
-| 2-06 | [phase2/06-full-commands.md](phase2/06-full-commands.md) | todo | All remaining chat commands |
-| 2-07 | [phase2/07-web-api.md](phase2/07-web-api.md) | todo | REST API for web remote control |
-| 2-08 | [phase2/08-web-frontend.md](phase2/08-web-frontend.md) | todo | Serve existing frontend from binary |
-| 2-09 | [phase2/09-ducking.md](phase2/09-ducking.md) | todo | Auto volume-lower on voice activity |
-| 2-10 | [phase2/10-persistence.md](phase2/10-persistence.md) | todo | Save/restore playlist across restarts |
-| 2-11 | [phase2/11-admin.md](phase2/11-admin.md) | todo | Ban/whitelist, admin-only commands |
+| #    | File                                                       | Status | Description                            |
+|------|------------------------------------------------------------|--------|----------------------------------------|
+| 2-01 | [phase2/01-database.md](phase2/01-database.md)             | todo   | SQLite settings + music DB, migration  |
+| 2-02 | [phase2/02-file-media.md](phase2/02-file-media.md)         | todo   | Local file playback (ffprobe metadata) |
+| 2-03 | [phase2/03-url-media.md](phase2/03-url-media.md)           | todo   | YouTube / yt-dlp integration           |
+| 2-04 | [phase2/04-playlist-modes.md](phase2/04-playlist-modes.md) | todo   | repeat / random / autoplay modes       |
+| 2-05 | [phase2/05-music-library.md](phase2/05-music-library.md)   | todo   | Dir scan, DB cache, tags               |
+| 2-06 | [phase2/06-full-commands.md](phase2/06-full-commands.md)   | todo   | All remaining chat commands            |
+| 2-07 | [phase2/07-web-api.md](phase2/07-web-api.md)               | todo   | REST API for web remote control        |
+| 2-08 | [phase2/08-web-frontend.md](phase2/08-web-frontend.md)     | todo   | Serve existing frontend from binary    |
+| 2-09 | [phase2/09-ducking.md](phase2/09-ducking.md)               | todo   | Auto volume-lower on voice activity    |
+| 2-10 | [phase2/10-persistence.md](phase2/10-persistence.md)       | todo   | Save/restore playlist across restarts  |
+| 2-11 | [phase2/11-admin.md](phase2/11-admin.md)                   | todo   | Ban/whitelist, admin-only commands     |
 
 ## Key libraries
 
-| Purpose | Library |
-|---|---|
-| Mumble protocol | `github.com/layeh/gumble` |
-| SQLite (phase 2) | `modernc.org/sqlite` |
-| INI config | `gopkg.in/ini.v1` |
-| HTTP server (phase 2) | stdlib `net/http` |
+| Purpose               | Library                   |
+|-----------------------|---------------------------|
+| Mumble protocol       | `github.com/layeh/gumble` |
+| SQLite (phase 2)      | `modernc.org/sqlite`      |
+| INI config            | `gopkg.in/ini.v1`         |
+| HTTP server (phase 2) | stdlib `net/http`         |
 
 ffmpeg and yt-dlp (phase 2) are external binaries via `os/exec`.
 
