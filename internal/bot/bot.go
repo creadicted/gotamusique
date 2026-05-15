@@ -5,21 +5,30 @@ import (
 	"log/slog"
 	"os"
 	"sync"
+	"sync/atomic"
 
 	"github.com/konradk/gotamusique/internal/audio"
 	"github.com/konradk/gotamusique/internal/config"
+	"github.com/konradk/gotamusique/internal/queue"
 	"layeh.com/gumble/gumble"
 )
 
 // Bot holds the gumble client and all shared state for the bot's lifetime.
 type Bot struct {
-	cfg    *config.Config
-	client *gumble.Client
-	queue  interface{}    // placeholder until 1-06 (queue.Queue)
-	audio  *audio.Pipeline
-	log    *slog.Logger
-	mu     sync.Mutex
-	cancel func()
+	cfg  *config.Config
+	log  *slog.Logger
+
+	mu         sync.Mutex
+	client     *gumble.Client
+	audio      *audio.Pipeline
+	cancelLoop func() // cancels the per-connection loop goroutine
+	isMuted    bool
+	prevVol    float64 // volume saved before Mute()
+
+	queue         *queue.Queue
+	wakeCh        chan struct{} // buffered(1): non-blocking wake for the loop goroutine
+	launchVersion atomic.Int64 // incremented by Play() to suppress onTrackEnd's queue.Next()
+	cancel        func()       // cancels the top-level Run context (set by main)
 }
 
 // New creates a Bot from cfg. The logger writes to stderr unless cfg.Bot.Logfile
@@ -43,10 +52,15 @@ func New(cfg *config.Config) (*Bot, error) {
 	log := slog.New(slog.NewTextHandler(w, &slog.HandlerOptions{Level: level}))
 
 	return &Bot{
-		cfg: cfg,
-		log: log,
+		cfg:    cfg,
+		log:    log,
+		queue:  queue.NewQueue(),
+		wakeCh: make(chan struct{}, 1),
 	}, nil
 }
+
+// Queue returns the bot's play queue.
+func (b *Bot) Queue() *queue.Queue { return b.queue }
 
 // Shutdown stops the audio pipeline (if running) and disconnects from Mumble.
 // Safe to call from any goroutine.

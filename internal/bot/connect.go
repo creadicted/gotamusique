@@ -15,6 +15,26 @@ import (
 	"layeh.com/gumble/gumbleutil"
 )
 
+// perConnContext creates a fresh cancellable context for one connection's loop
+// goroutine and stores the cancel function on the bot.
+func (b *Bot) startLoop() {
+	ctx, cancel := context.WithCancel(context.Background())
+	b.mu.Lock()
+	b.cancelLoop = cancel
+	b.mu.Unlock()
+	go b.loop(ctx)
+}
+
+func (b *Bot) stopLoop() {
+	b.mu.Lock()
+	cancel := b.cancelLoop
+	b.cancelLoop = nil
+	b.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+}
+
 const (
 	backoffInitial = 5 * time.Second
 	backoffMax     = 60 * time.Second
@@ -90,9 +110,11 @@ func (b *Bot) buildGumbleConfig(disconnected chan<- struct{}) *gumble.Config {
 			b.joinChannel()
 			b.setComment()
 			b.setAvatar()
+			b.startLoop()
 		},
 		Disconnect: func(e *gumble.DisconnectEvent) {
 			b.log.Debug("disconnected from server", slog.Int("type", int(e.Type)))
+			b.stopLoop()
 			// non-blocking send: if Run is shutting down, the channel may be full
 			select {
 			case disconnected <- struct{}{}:

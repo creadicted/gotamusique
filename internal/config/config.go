@@ -42,6 +42,7 @@ type BotConfig struct {
 	Stereo               bool
 	Logfile              string
 	AnnounceCurrentMusic bool
+	FormattedReplies     bool
 }
 
 type CommandsConfig struct {
@@ -70,6 +71,7 @@ var sectionAllowlists = map[string]map[string]bool{
 		"bandwidth": true, "admin": true, "comment": true,
 		"avatar": true, "stereo": true, "logfile": true,
 		"announce_current_music": true,
+		"formatted_replies":      true,
 	},
 	"debug": {
 		"ffmpeg": true, "mumble_connection": true,
@@ -160,6 +162,7 @@ func build(f *ini.File) (*Config, error) {
 			Stereo:               b.Key("stereo").MustBool(true),
 			Logfile:              b.Key("logfile").String(),
 			AnnounceCurrentMusic: b.Key("announce_current_music").MustBool(true),
+			FormattedReplies:     b.Key("formatted_replies").MustBool(true),
 		},
 		Debug: DebugConfig{
 			Ffmpeg:           d.Key("ffmpeg").MustBool(false),
