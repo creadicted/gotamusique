@@ -6,26 +6,31 @@
 
 ## Objective
 
-A minimal thread-safe queue of `RadioItem`s with a current-index pointer. No playlist modes, no persistence, no DB — just a slice.
+A minimal thread-safe queue of `audio.MediaItem`s with a current-index pointer.
+No playlist modes, no persistence, no DB — just a slice.
+
+The queue holds the `audio.MediaItem` interface (defined in milestone 1-05) rather
+than a concrete `*radio.RadioItem`, so Phase 2 items (files, yt-dlp) slot in
+without touching the queue.
 
 ## API
 
 ```go
 type Queue struct {
     mu           sync.RWMutex
-    items        []*radio.RadioItem
+    items        []audio.MediaItem
     CurrentIndex int
 }
 
 func NewQueue() *Queue
-func (q *Queue) Append(item *radio.RadioItem)
-func (q *Queue) Insert(index int, item *radio.RadioItem)
+func (q *Queue) Append(item audio.MediaItem)
+func (q *Queue) Insert(index int, item audio.MediaItem)
 func (q *Queue) Remove(index int)
-func (q *Queue) Current() *radio.RadioItem   // nil if empty
-func (q *Queue) Next() bool                  // advance index; false if nothing next
+func (q *Queue) Current() audio.MediaItem   // nil if empty
+func (q *Queue) Next() bool                 // advance index; false if nothing next
 func (q *Queue) Clear()
 func (q *Queue) Len() int
-func (q *Queue) Items() []*radio.RadioItem   // snapshot for display
+func (q *Queue) Items() []audio.MediaItem   // snapshot for display
 ```
 
 `Next()` behaviour: advance `CurrentIndex` by 1; return `false` if already at end (one-shot — stop when queue exhausted).

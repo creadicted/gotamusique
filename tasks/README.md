@@ -1,6 +1,6 @@
 # Go Migration Tasks
 
-**Version: 0.1.0** — Phase 1 in progress (milestones 1-01 through 1-04 complete)
+**Version: 0.1.0** — Phase 1 in progress (milestones 1-01 through 1-05 complete)
 
 Rewrite of botamusique in Go, delivered in two phases.
 
@@ -19,7 +19,7 @@ After milestone 1-08 the bot is deployable and useful.
 | 1-02 | [phase1/02-config.md](phase1/02-config.md)                       | done   | INI config (server + radio presets only) |
 | 1-03 | [phase1/03-mumble-connection.md](phase1/03-mumble-connection.md) | done   | Connect, join channel, SIGINT shutdown   |
 | 1-04 | [phase1/04-audio-pipeline.md](phase1/04-audio-pipeline.md)       | done   | ffmpeg → PCM → Mumble audio output       |
-| 1-05 | [phase1/05-radio-media.md](phase1/05-radio-media.md)             | todo   | HTTP stream item, radio-browser.info API |
+| 1-05 | [phase1/05-radio-media.md](phase1/05-radio-media.md)             | done   | HTTP stream item, radio-browser.info API |
 | 1-06 | [phase1/06-queue.md](phase1/06-queue.md)                         | todo   | Simple in-memory queue + play/stop/skip  |
 | 1-07 | [phase1/07-commands.md](phase1/07-commands.md)                   | todo   | Chat command dispatcher + radio commands |
 | 1-08 | [phase1/08-docker.md](phase1/08-docker.md)                       | todo   | Dockerfile + docker-compose              |
@@ -42,6 +42,14 @@ Builds on the Phase 1 binary; each milestone is independently mergeable.
 | 2-09 | [phase2/09-ducking.md](phase2/09-ducking.md)               | todo   | Auto volume-lower on voice activity    |
 | 2-10 | [phase2/10-persistence.md](phase2/10-persistence.md)       | todo   | Save/restore playlist across restarts  |
 | 2-11 | [phase2/11-admin.md](phase2/11-admin.md)                   | todo   | Ban/whitelist, admin-only commands     |
+
+## Future
+
+Ideas that are technically feasible but not prioritised — captured here to avoid re-investigating.
+
+| Idea | Description |
+|---|---|
+| Spotify integration | Resolve `open.spotify.com` track/playlist/album URLs to track metadata via the Spotify Web API (Client Credentials flow, no Premium required), then hand off to yt-dlp for audio. Adds setup overhead (users must register a Spotify Developer App and supply credentials) for a benefit that is mostly limited to bulk-importing playlists. Low priority until there is clear user demand. |
 
 ## Key libraries
 
