@@ -12,7 +12,7 @@ import (
 	"github.com/konradk/gotamusique/internal/config"
 )
 
-const version = "0.1.5"
+const version = "0.1.6"
 
 func main() {
 	os.Exit(run())
