@@ -5,10 +5,8 @@ on:
     tags: ['v*']
 
 jobs:
-  release:
+  build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -24,13 +22,14 @@ jobs:
           CGO_ENABLED=1 GOOS=linux GOARCH=amd64 \
             go build -o gotamusique-linux-amd64 ./cmd/gotamusique
 
-      - name: Publish release
-        uses: softprops/action-gh-release@v2
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
         with:
-          files: gotamusique-linux-amd64
+          name: gotamusique-linux-amd64
+          path: gotamusique-linux-amd64
 
   docker:
-    needs: release
+    needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -65,3 +64,19 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  release:
+    needs: [build, docker]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download binary artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: gotamusique-linux-amd64
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: gotamusique-linux-amd64

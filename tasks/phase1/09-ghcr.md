@@ -10,47 +10,19 @@ Publish the Docker image to GitHub Container Registry (GHCR) automatically on ev
 
 ## Changes to `.github/workflows/release.yml`
 
-Add a `docker` job after the existing `release` job:
+Replace the single `release` job with three jobs so the GitHub Release is only published after both the binary build and image push succeed:
 
-```yaml
-  docker:
-    needs: release
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ github.repository }}
-          flavor: |
-            latest=auto
-          tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-
-      - name: Build and push
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 ```
+build → docker → release
+          ↗
+build ───
+```
+
+- `build`: test + compile, uploads binary as a workflow artifact
+- `docker`: `needs: build` — pushes image to GHCR
+- `release`: `needs: [build, docker]` — downloads artifact, publishes GitHub Release
+
+This prevents a versioned GitHub Release from existing without a corresponding container image.
 
 ## Tagging strategy
 
