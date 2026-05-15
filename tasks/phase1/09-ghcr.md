@@ -6,22 +6,15 @@
 
 ## Objective
 
-Publish the Docker image to GitHub Container Registry (GHCR) automatically on every release tag, so users can deploy without building from source.
+Publish the Docker image to GitHub Container Registry (GHCR) automatically on every `v*` release tag, so users can deploy without building from source. Added as a job to the existing `release.yml` — same trigger, no duplicate test runs.
 
-## GitHub Actions workflow
+## Changes to `.github/workflows/release.yml`
 
-`.github/workflows/ghcr-publish.yml`:
+Add a `docker` job after the existing `release` job:
 
 ```yaml
-name: GHCR Publish
-
-on:
-  push:
-    tags:
-      - 'v*'
-
-jobs:
   docker:
+    needs: release
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -55,15 +48,31 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 ```
 
 ## Tagging strategy
 
-| Push | Tags produced |
+| Tag push | Images produced |
 |---|---|
-| `git tag v1.2.3` | `ghcr.io/konradk/gotamusique:1.2.3`, `:1.2`, `:latest` |
+| `v1.2.3` | `ghcr.io/konradk/gotamusique:1.2.3`, `:1.2`, `:latest` |
+| `v1.2.3-rc.1` | `ghcr.io/konradk/gotamusique:1.2.3-rc.1` only — no `:latest` |
 
-No `latest` is pushed for pre-release tags (`v1.0.0-rc.1`).
+`latest=auto` in `docker/metadata-action` handles this automatically.
+
+## Platform
+
+`linux/amd64` only — matches the existing binary release. ARM64 deferred.
+
+## Post-deploy manual step (one-time)
+
+After the first successful push, make the package public:
+
+1. Go to `https://github.com/konradk/gotamusique/pkgs/container/gotamusique`
+2. Package Settings → Change visibility → Public
+
+Until this is done, `docker pull ghcr.io/konradk/gotamusique:latest` will return 403 for unauthenticated users.
 
 ## docker-compose snippet for end users
 
@@ -79,6 +88,7 @@ services:
 ## Acceptance criteria
 
 - Pushing a `v*` tag triggers the workflow and produces a public image on GHCR
-- `docker pull ghcr.io/konradk/gotamusique:latest` works without authentication
+- `docker pull ghcr.io/konradk/gotamusique:latest` works without authentication (after visibility is set to public)
 - Image version matches the git tag
-- Pre-release tags (e.g. `v0.1.0-rc.1`) do not overwrite `:latest`
+- Pre-release tags do not overwrite `:latest`
+- Subsequent tag builds are faster due to GHA layer cache
