@@ -4,8 +4,7 @@ A Go rewrite of [botamusique](https://github.com/azlux/botamusique), a Mumble mu
 binary, no Python runtime required.
 
 > **Work in progress — Phase 1 (radio-only) nearing completion.**
-> Milestones 1-01 through 1-05 are done. The chat command interface (1-06/1-07) is the next step.
-> The command reference below documents the intended interface so you know what to expect.
+> Milestones 1-01 through 1-07 are done. Docker packaging (1-08) is the remaining step.
 
 ## Download
 

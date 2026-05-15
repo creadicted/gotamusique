@@ -24,8 +24,10 @@ case-sensitive at the protocol level.
 anything else → look up in `cfg.Radio` by exact key.
 
 ### Stream validation
-Direct URLs (`!radio <url>`) and radio-browser results (`!rbplay`) are validated with
-`RadioItem.Validate()` before enqueuing. Config presets are trusted and not validated.
+Direct URLs (`!radio <url>`) are validated with `RadioItem.Validate()` before enqueuing.
+Config presets and radio-browser results (`!rbplay`) are trusted and not validated —
+`rbplay` URLs come from a structured API and many streams use the ICY/SHOUTcast protocol
+which the Go HTTP client cannot parse, so validation produces false negatives.
 
 ### Private message guard
 Hardcoded reject (no config option in Phase 1). Private messages have no `Channels`.

@@ -32,10 +32,24 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Install Zig
+        run: |
+          curl -fsSL https://ziglang.org/download/0.13.0/zig-linux-x86_64-0.13.0.tar.xz | sudo tar -xJ -C /opt
+          sudo ln -s /opt/zig-linux-x86_64-0.13.0/zig /usr/local/bin/zig
+          printf '#!/bin/sh\nexec zig cc -target x86_64-linux-musl "$@"\n' | sudo tee /usr/local/bin/zig-cc-amd64 >/dev/null
+          printf '#!/bin/sh\nexec zig cc -target aarch64-linux-musl "$@"\n' | sudo tee /usr/local/bin/zig-cc-arm64 >/dev/null
+          sudo chmod +x /usr/local/bin/zig-cc-amd64 /usr/local/bin/zig-cc-arm64
+
       - name: Build binaries
         run: |
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o gotamusique-linux-amd64 ./cmd/gotamusique
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o gotamusique-linux-arm64 ./cmd/gotamusique
+          CGO_ENABLED=1 GOOS=linux GOARCH=amd64 CC=zig-cc-amd64 \
+            go build -tags 'netgo osusergo' \
+            -ldflags="-linkmode external -extldflags '-static'" \
+            -o gotamusique-linux-amd64 ./cmd/gotamusique
+          CGO_ENABLED=1 GOOS=linux GOARCH=arm64 CC=zig-cc-arm64 \
+            go build -tags 'netgo osusergo' \
+            -ldflags="-linkmode external -extldflags '-static'" \
+            -o gotamusique-linux-arm64 ./cmd/gotamusique
 
       - name: Publish rolling release
         uses: softprops/action-gh-release@v2
