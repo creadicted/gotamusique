@@ -13,7 +13,6 @@ Pre-built static binaries are published automatically on every commit to `master
 | Platform     | Binary                    |
 |--------------|---------------------------|
 | Linux x86-64 | `gotamusique-linux-amd64` |
-| Linux ARM64  | `gotamusique-linux-arm64` |
 
 Download from the [latest release](../../releases/tag/latest) — no Go toolchain or Python runtime needed.
 
