@@ -1,6 +1,7 @@
 # Go Migration Tasks
 
-**Version: 0.1.0** — Phase 1 in progress (milestones 1-01 through 1-05 complete)
+**Version: 0.1.4** — Phase 1 in progress (milestones 1-01 through 1-04 complete)
+**Version: 0.1.5** — Phase 1 in progress (milestones 1-01 through 1-05 complete)
 
 Rewrite of botamusique in Go, delivered in two phases.
 
