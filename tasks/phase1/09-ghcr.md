@@ -28,8 +28,8 @@ This prevents a versioned GitHub Release from existing without a corresponding c
 
 | Tag push | Images produced |
 |---|---|
-| `v1.2.3` | `ghcr.io/konradk/gotamusique:1.2.3`, `:1.2`, `:latest` |
-| `v1.2.3-rc.1` | `ghcr.io/konradk/gotamusique:1.2.3-rc.1` only — no `:latest` |
+| `v1.2.3` | `ghcr.io/creadicted/gotamusique:1.2.3`, `:1.2`, `:latest` |
+| `v1.2.3-rc.1` | `ghcr.io/creadicted/gotamusique:1.2.3-rc.1` only — no `:latest` |
 
 `latest=auto` in `docker/metadata-action` handles this automatically.
 
@@ -44,14 +44,14 @@ After the first successful push, make the package public:
 1. Go to `https://github.com/konradk/gotamusique/pkgs/container/gotamusique`
 2. Package Settings → Change visibility → Public
 
-Until this is done, `docker pull ghcr.io/konradk/gotamusique:latest` will return 403 for unauthenticated users.
+Until this is done, `docker pull ghcr.io/creadicted/gotamusique:latest` will return 403 for unauthenticated users.
 
 ## docker-compose snippet for end users
 
 ```yaml
 services:
   gotamusique:
-    image: ghcr.io/konradk/gotamusique:latest
+    image: ghcr.io/creadicted/gotamusique:latest
     volumes:
       - ./configuration.ini:/app/configuration.ini:ro
     restart: unless-stopped
@@ -60,7 +60,7 @@ services:
 ## Acceptance criteria
 
 - Pushing a `v*` tag triggers the workflow and produces a public image on GHCR
-- `docker pull ghcr.io/konradk/gotamusique:latest` works without authentication (after visibility is set to public)
+- `docker pull ghcr.io/creadicted/gotamusique:latest` works without authentication (after visibility is set to public)
 - Image version matches the git tag
 - Pre-release tags do not overwrite `:latest`
 - Subsequent tag builds are faster due to GHA layer cache

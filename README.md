@@ -57,9 +57,9 @@ The image is published to GHCR on every versioned release tag (`v*`). No Go tool
 
 | Tag | When pushed |
 |---|---|
-| `ghcr.io/konradk/gotamusique:1.2.3` | On `git tag v1.2.3` |
-| `ghcr.io/konradk/gotamusique:1.2` | Same — tracks the latest patch of that minor |
-| `ghcr.io/konradk/gotamusique:latest` | Same — tracks the latest stable release |
+| `ghcr.io/creadicted/gotamusique:1.2.3` | On `git tag v1.2.3` |
+| `ghcr.io/creadicted/gotamusique:1.2` | Same — tracks the latest patch of that minor |
+| `ghcr.io/creadicted/gotamusique:latest` | Same — tracks the latest stable release |
 
 Pre-release tags (e.g. `v1.0.0-rc.1`) publish a versioned image but do not update `:latest`.
 
@@ -79,7 +79,7 @@ EOF
 cat > docker-compose.yml <<'EOF'
 services:
   gotamusique:
-    image: ghcr.io/konradk/gotamusique:latest
+    image: ghcr.io/creadicted/gotamusique:latest
     volumes:
       - ./configuration.ini:/app/configuration.ini:ro
     restart: unless-stopped
@@ -94,7 +94,7 @@ Only put keys you want to override in `configuration.ini` — the image ships wi
 **Using a custom config path:**
 
 ```sh
-docker run -v /path/to/myconfig.ini:/app/myconfig.ini ghcr.io/konradk/gotamusique:latest --config myconfig.ini
+docker run -v /path/to/myconfig.ini:/app/myconfig.ini ghcr.io/creadicted/gotamusique:latest --config myconfig.ini
 ```
 
 **Building locally:**
