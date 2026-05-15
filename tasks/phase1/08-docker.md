@@ -12,7 +12,7 @@ A minimal multi-stage Docker image that ships the Phase 1 bot. No Python, no pip
 
 ```dockerfile
 # Stage 1 — build
-FROM golang:1.25-alpine AS builder
+FROM golang:1.25.9-alpine AS builder
 WORKDIR /src
 RUN apk add --no-cache gcc musl-dev opus-dev
 COPY go.mod go.sum ./
