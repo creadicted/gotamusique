@@ -19,13 +19,15 @@ jobs:
       - run: go vet ./...
       - run: go test ./...
 
-      - name: Install Zig
+      - name: Install build tools
         run: |
           curl -fsSL https://ziglang.org/download/0.13.0/zig-linux-x86_64-0.13.0.tar.xz | sudo tar -xJ -C /opt
           sudo ln -s /opt/zig-linux-x86_64-0.13.0/zig /usr/local/bin/zig
           printf '#!/bin/sh\nexec zig cc -target x86_64-linux-musl "$@"\n' | sudo tee /usr/local/bin/zig-cc-amd64 >/dev/null
-          printf '#!/bin/sh\nexec zig cc -target aarch64-linux-musl "$@"\n' | sudo tee /usr/local/bin/zig-cc-arm64 >/dev/null
-          sudo chmod +x /usr/local/bin/zig-cc-amd64 /usr/local/bin/zig-cc-arm64
+          sudo chmod +x /usr/local/bin/zig-cc-amd64
+          sudo dpkg --add-architecture arm64
+          sudo apt-get update -q
+          sudo apt-get install -y gcc-aarch64-linux-gnu libopus-dev:arm64
 
       - name: Build binaries
         run: |
@@ -33,9 +35,10 @@ jobs:
             go build -tags 'netgo osusergo' \
             -ldflags="-linkmode external -extldflags '-static'" \
             -o gotamusique-linux-amd64 ./cmd/gotamusique
-          CGO_ENABLED=1 GOOS=linux GOARCH=arm64 CC=zig-cc-arm64 \
-            go build -tags 'netgo osusergo' \
-            -ldflags="-linkmode external -extldflags '-static'" \
+          CGO_ENABLED=1 GOOS=linux GOARCH=arm64 \
+            CC=aarch64-linux-gnu-gcc \
+            PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig \
+            go build \
             -o gotamusique-linux-arm64 ./cmd/gotamusique
 
       - name: Publish release
