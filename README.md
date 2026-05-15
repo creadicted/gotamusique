@@ -3,8 +3,7 @@
 A Go rewrite of [botamusique](https://github.com/azlux/botamusique), a Mumble music bot. Single statically-linked
 binary, no Python runtime required.
 
-> **Work in progress — Phase 1 (radio-only) nearing completion.**
-> Milestones 1-01 through 1-08 are done. GHCR publishing (1-09) is the remaining step.
+> **Phase 1 currently focuses on radio-only support and remains in progress.** Phase 2 (file library, yt-dlp, web UI) is in planning — see [`tasks/README.md`](tasks/README.md) for current milestone status.
 
 ## Download
 
@@ -54,7 +53,15 @@ The bot connects, joins the configured channel, and waits for commands in Mumble
 
 ## Docker
 
-The image is published to GHCR on every release. No Go toolchain or `ffmpeg` installation needed on the host — `ffmpeg` is bundled in the image.
+The image is published to GHCR on every versioned release tag (`v*`). No Go toolchain or `ffmpeg` installation needed on the host — `ffmpeg` is bundled in the image.
+
+| Tag | When pushed |
+|---|---|
+| `ghcr.io/konradk/gotamusique:1.2.3` | On `git tag v1.2.3` |
+| `ghcr.io/konradk/gotamusique:1.2` | Same — tracks the latest patch of that minor |
+| `ghcr.io/konradk/gotamusique:latest` | Same — tracks the latest stable release |
+
+Pre-release tags (e.g. `v1.0.0-rc.1`) publish a versioned image but do not update `:latest`.
 
 ```sh
 # 1. Create a configuration.ini with your overrides (see Configuration below)
