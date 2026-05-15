@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/konradk/gotamusique/internal/audio"
+	"github.com/konradk/gotamusique/internal/radio"
 	"layeh.com/gumble/gumble"
 	"layeh.com/gumble/gumbleutil"
 )
@@ -111,6 +112,10 @@ func (b *Bot) buildGumbleConfig(disconnected chan<- struct{}) *gumble.Config {
 			b.setComment()
 			b.setAvatar()
 			b.startLoop()
+			// DEBUG: auto-start the first configured radio preset on connect — uncomment to skip manual !radio calls during testing.
+			if preset, ok := b.cfg.Radio["jazz"]; ok {
+				b.Enqueue(radio.NewRadioItemFromPreset("jazz", preset))
+			}
 		},
 		Disconnect: func(e *gumble.DisconnectEvent) {
 			b.log.Debug("disconnected from server", slog.Int("type", int(e.Type)))
