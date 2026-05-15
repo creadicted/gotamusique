@@ -35,7 +35,7 @@ func handleRadio(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg stri
 	if u, err := url.Parse(arg); err == nil && (u.Scheme == "http" || u.Scheme == "https") {
 		playURL(bot, cfg, msg, arg)
 	} else {
-		playPreset(bot, cfg, msg, arg)
+		playPreset(bot, cfg, msg, cmd, arg)
 	}
 }
 
@@ -86,12 +86,13 @@ func playURL(bot BotAPI, cfg *config.Config, msg *gumble.TextMessage, rawURL str
 	))
 }
 
-func playPreset(bot BotAPI, cfg *config.Config, msg *gumble.TextMessage, name string) {
+func playPreset(bot BotAPI, cfg *config.Config, msg *gumble.TextMessage, cmd, name string) {
 	preset, ok := cfg.Radio[name]
 	if !ok {
+		sym := symbol(cfg)
 		sendToChannel(msg, format(cfg.Bot.FormattedReplies,
-			"Unknown preset <b>"+esc(name)+"</b>. Use <b>!radio</b> to list presets.",
-			"Unknown preset \""+name+"\". Use !radio to list presets.",
+			"Unknown preset <b>"+esc(name)+"</b>. Use <b>"+esc(sym+cmd)+"</b> to list presets.",
+			"Unknown preset \""+name+"\". Use "+sym+cmd+" to list presets.",
 		))
 		return
 	}
