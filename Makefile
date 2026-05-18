@@ -3,7 +3,7 @@ BIN := bin/gotamusique
 .PHONY: build test run dev clean fmt lint docs
 
 build:
-	go build -o $(BIN) ./cmd/gotamusique
+	CGO_CFLAGS="-w -O2" go build -o $(BIN) ./cmd/gotamusique
 
 test:
 	go test ./...
