@@ -1,9 +1,7 @@
 package radio
 
 import (
-	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -43,11 +41,12 @@ func (r *RadioItem) Validate() error {
 	resp, err = client.Get(r.URL)
 	if err != nil {
 		// ICY/SHOUTcast servers respond with "ICY 200 OK" instead of
-		// "HTTP/1.1 200 OK". The Go HTTP client cannot parse this and returns
-		// either io.EOF or a "malformed HTTP" error. The server did respond,
-		// so treat these as reachable.
-		if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) ||
-			strings.Contains(err.Error(), "malformed HTTP") {
+		// "HTTP/1.1 200 OK". The Go HTTP client rejects this with exactly
+		// "malformed HTTP version \"ICY\"". That substring only appears when
+		// the server sent a real ICY status line, so it is safe to treat as
+		// reachable. Bare io.EOF (connect+close with no data) is intentionally
+		// not accepted here.
+		if strings.Contains(err.Error(), "malformed HTTP version \"ICY\"") {
 			return nil
 		}
 		return fmt.Errorf("validating stream %q: %w", r.URL, err)
