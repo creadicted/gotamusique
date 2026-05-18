@@ -1,6 +1,7 @@
 package radio
 
 import (
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -192,6 +193,34 @@ func TestValidate_headSuccess_noGetCalled(t *testing.T) {
 	}
 	if getCount > 0 {
 		t.Errorf("GET should not be called when HEAD succeeds; called %d time(s)", getCount)
+	}
+}
+
+func TestValidate_icyProtocol(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func(c net.Conn) {
+				defer c.Close()
+				buf := make([]byte, 512)
+				c.Read(buf) //nolint:errcheck
+				c.Write([]byte("ICY 200 OK\r\nContent-Type: audio/mpeg\r\n\r\n")) //nolint:errcheck
+			}(conn)
+		}
+	}()
+
+	item := NewRadioItemFromURL("http://" + ln.Addr().String() + "/stream")
+	if err := item.Validate(); err != nil {
+		t.Errorf("ICY stream should be treated as reachable, got: %v", err)
 	}
 }
 

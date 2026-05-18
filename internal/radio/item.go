@@ -1,9 +1,12 @@
 package radio
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/konradk/gotamusique/internal/config"
@@ -39,6 +42,14 @@ func (r *RadioItem) Validate() error {
 
 	resp, err = client.Get(r.URL)
 	if err != nil {
+		// ICY/SHOUTcast servers respond with "ICY 200 OK" instead of
+		// "HTTP/1.1 200 OK". The Go HTTP client cannot parse this and returns
+		// either io.EOF or a "malformed HTTP" error. The server did respond,
+		// so treat these as reachable.
+		if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) ||
+			strings.Contains(err.Error(), "malformed HTTP") {
+			return nil
+		}
 		return fmt.Errorf("validating stream %q: %w", r.URL, err)
 	}
 	resp.Body.Close()
