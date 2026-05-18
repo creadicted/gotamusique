@@ -44,6 +44,15 @@ Builds on the Phase 1 binary; each milestone is independently mergeable.
 | 2-10 | [phase2/10-persistence.md](phase2/10-persistence.md)       | todo   | Save/restore playlist across restarts  |
 | 2-11 | [phase2/11-admin.md](phase2/11-admin.md)                   | todo   | Ban/whitelist, admin-only commands     |
 
+## Feature Requests
+
+User-requested improvements that are scoped and ready to implement.  
+Each FR lives in `feature-requests/` and must ship with updated docs and tests.
+
+| #     | File | Status | Description |
+|-------|------|--------|-------------|
+| FR-01 | [feature-requests/FR-01-rbquery-index-and-limit.md](feature-requests/FR-01-rbquery-index-and-limit.md) | open | `!rbquery` numeric index for `!rbplay` + optional result count |
+
 ## Future
 
 Ideas that are technically feasible but not prioritised — captured here to avoid re-investigating.
