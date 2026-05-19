@@ -196,7 +196,7 @@ func TestHandleRadio_KnownPreset_Enqueues(t *testing.T) {
 
 func TestHandleRBQuery_NoArg_NoEnqueue(t *testing.T) {
 	bot := defaultBot()
-	callHandler(handleRBQuery, bot, "")
+	callHandler(makeRBQueryHandler(newRBCache(), nil), bot, "")
 	if len(bot.enqueueCalls) != 0 {
 		t.Error("handleRBQuery with no arg should not enqueue")
 	}
@@ -204,9 +204,210 @@ func TestHandleRBQuery_NoArg_NoEnqueue(t *testing.T) {
 
 func TestHandleRBPlay_NoArg_NoEnqueue(t *testing.T) {
 	bot := defaultBot()
-	callHandler(handleRBPlay, bot, "")
+	callHandler(makeRBPlayHandler(newRBCache(), nil), bot, "")
 	if len(bot.enqueueCalls) != 0 {
 		t.Error("handleRBPlay with no arg should not enqueue")
+	}
+}
+
+// --- parseRBQueryArg ---
+
+func TestParseRBQueryArg_noFlag(t *testing.T) {
+	name, limit, err := parseRBQueryArg("soma")
+	if err != nil || name != "soma" || limit != defaultSearchLimit {
+		t.Errorf("got (%q, %d, %v), want (soma, %d, nil)", name, limit, err, defaultSearchLimit)
+	}
+}
+
+func TestParseRBQueryArg_shortFlag(t *testing.T) {
+	name, limit, err := parseRBQueryArg("soma -n 20")
+	if err != nil || name != "soma" || limit != 20 {
+		t.Errorf("got (%q, %d, %v), want (soma, 20, nil)", name, limit, err)
+	}
+}
+
+func TestParseRBQueryArg_longFlag(t *testing.T) {
+	name, limit, err := parseRBQueryArg("soma --limit 20")
+	if err != nil || name != "soma" || limit != 20 {
+		t.Errorf("got (%q, %d, %v), want (soma, 20, nil)", name, limit, err)
+	}
+}
+
+func TestParseRBQueryArg_capLimit(t *testing.T) {
+	name, limit, err := parseRBQueryArg("soma --limit 999")
+	if err != nil || name != "soma" || limit != maxSearchLimit {
+		t.Errorf("got (%q, %d, %v), want (soma, %d, nil)", name, limit, err, maxSearchLimit)
+	}
+}
+
+func TestParseRBQueryArg_invalidLimit(t *testing.T) {
+	_, _, err := parseRBQueryArg("soma -n abc")
+	if err == nil {
+		t.Error("expected error for non-integer limit")
+	}
+}
+
+func TestParseRBQueryArg_zeroLimit(t *testing.T) {
+	_, _, err := parseRBQueryArg("soma -n 0")
+	if err == nil {
+		t.Error("expected error for zero limit")
+	}
+}
+
+func TestParseRBQueryArg_flagWithoutValue(t *testing.T) {
+	_, _, err := parseRBQueryArg("soma -n")
+	if err == nil {
+		t.Error("expected error for flag without value")
+	}
+}
+
+func TestParseRBQueryArg_emptyNameWithFlag(t *testing.T) {
+	_, _, err := parseRBQueryArg("-n 20")
+	if err == nil {
+		t.Error("expected error when station name is empty")
+	}
+}
+
+func TestParseRBQueryArg_multiWordName(t *testing.T) {
+	name, limit, err := parseRBQueryArg("bbc radio 4 -n 20")
+	if err != nil || name != "bbc radio 4" || limit != 20 {
+		t.Errorf("got (%q, %d, %v), want (bbc radio 4, 20, nil)", name, limit, err)
+	}
+}
+
+// --- handleRBQuery handler tests ---
+
+func TestHandleRBQuery_defaultLimit(t *testing.T) {
+	var capturedLimit int
+	searchFn := func(name string, limit int) ([]radio.Station, error) {
+		capturedLimit = limit
+		return []radio.Station{{UUID: "abc", Name: "Test FM"}}, nil
+	}
+	callHandler(makeRBQueryHandler(newRBCache(), searchFn), defaultBot(), "soma")
+	if capturedLimit != defaultSearchLimit {
+		t.Errorf("limit = %d, want %d", capturedLimit, defaultSearchLimit)
+	}
+}
+
+func TestHandleRBQuery_customLimit(t *testing.T) {
+	var capturedLimit int
+	searchFn := func(name string, limit int) ([]radio.Station, error) {
+		capturedLimit = limit
+		return []radio.Station{{UUID: "abc", Name: "Test FM"}}, nil
+	}
+	callHandler(makeRBQueryHandler(newRBCache(), searchFn), defaultBot(), "soma -n 20")
+	if capturedLimit != 20 {
+		t.Errorf("limit = %d, want 20", capturedLimit)
+	}
+}
+
+func TestHandleRBQuery_limitCap(t *testing.T) {
+	var capturedLimit int
+	searchFn := func(name string, limit int) ([]radio.Station, error) {
+		capturedLimit = limit
+		return []radio.Station{{UUID: "abc", Name: "Test FM"}}, nil
+	}
+	callHandler(makeRBQueryHandler(newRBCache(), searchFn), defaultBot(), "soma --limit 999")
+	if capturedLimit != maxSearchLimit {
+		t.Errorf("limit = %d, want %d (capped)", capturedLimit, maxSearchLimit)
+	}
+}
+
+func TestHandleRBQuery_invalidFlag(t *testing.T) {
+	called := false
+	searchFn := func(name string, limit int) ([]radio.Station, error) {
+		called = true
+		return nil, nil
+	}
+	callHandler(makeRBQueryHandler(newRBCache(), searchFn), defaultBot(), "soma -n abc")
+	if called {
+		t.Error("searchFn should not be called when flag parsing fails")
+	}
+}
+
+func TestHandleRBQuery_setsCache(t *testing.T) {
+	stations := []radio.Station{
+		{UUID: "abc", Name: "Test FM"},
+		{UUID: "def", Name: "Jazz FM"},
+	}
+	searchFn := func(name string, limit int) ([]radio.Station, error) {
+		return stations, nil
+	}
+	cache := newRBCache()
+	callHandler(makeRBQueryHandler(cache, searchFn), defaultBot(), "soma")
+
+	got := cache.get(0) // makeMsg creates a channel with ID=0
+	if len(got) != 2 {
+		t.Fatalf("cache has %d stations, want 2", len(got))
+	}
+	if got[0].UUID != "abc" || got[1].UUID != "def" {
+		t.Errorf("cache content mismatch: %+v", got)
+	}
+}
+
+// --- handleRBPlay handler tests ---
+
+func TestHandleRBPlay_indexResolvesFromCache(t *testing.T) {
+	stations := []radio.Station{
+		{UUID: "aaa", Name: "First FM", URL: "http://example.com/1"},
+		{UUID: "bbb", Name: "Second FM", URL: "http://example.com/2"},
+	}
+	cache := newRBCache()
+	cache.set(0, stations)
+
+	bot := defaultBot()
+	callHandler(makeRBPlayHandler(cache, nil), bot, "2")
+
+	if len(bot.enqueueCalls) != 1 {
+		t.Fatalf("expected 1 enqueue, got %d", len(bot.enqueueCalls))
+	}
+	if got := bot.enqueueCalls[0].FormatTitle(); got != "[Radio] Second FM" {
+		t.Errorf("enqueued %q, want %q", got, "[Radio] Second FM")
+	}
+}
+
+func TestHandleRBPlay_indexCacheMiss(t *testing.T) {
+	bot := defaultBot()
+	callHandler(makeRBPlayHandler(newRBCache(), nil), bot, "1")
+	if len(bot.enqueueCalls) != 0 {
+		t.Error("cache miss should not enqueue anything")
+	}
+}
+
+func TestHandleRBPlay_indexOutOfRange(t *testing.T) {
+	stations := []radio.Station{
+		{UUID: "aaa", Name: "A"},
+		{UUID: "bbb", Name: "B"},
+		{UUID: "ccc", Name: "C"},
+	}
+	cache := newRBCache()
+	cache.set(0, stations)
+
+	bot := defaultBot()
+	callHandler(makeRBPlayHandler(cache, nil), bot, "99")
+	if len(bot.enqueueCalls) != 0 {
+		t.Error("out-of-range index should not enqueue anything")
+	}
+}
+
+func TestHandleRBPlay_uuidFlowUnchanged(t *testing.T) {
+	const uuid = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+	station := &radio.Station{UUID: uuid, Name: "Test FM", URL: "http://example.com/stream"}
+
+	var capturedUUID string
+	byUUIDFn := func(u string) (*radio.Station, error) {
+		capturedUUID = u
+		return station, nil
+	}
+
+	bot := defaultBot()
+	callHandler(makeRBPlayHandler(newRBCache(), byUUIDFn), bot, uuid)
+
+	if capturedUUID != uuid {
+		t.Errorf("byUUIDFn called with %q, want %q", capturedUUID, uuid)
+	}
+	if len(bot.enqueueCalls) != 1 {
+		t.Errorf("expected 1 enqueue, got %d", len(bot.enqueueCalls))
 	}
 }
 
@@ -295,8 +496,8 @@ func TestRBTableFull_Structure(t *testing.T) {
 	stations := []radio.Station{
 		{UUID: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", Name: "Test FM", Codec: "MP3", Bitrate: 128, Country: "DE", Tags: "pop,rock"},
 	}
-	out := rbTableFull(stations)
-	if !strings.Contains(out, "Radio-Browser results:") {
+	out := rbTableFull("test", stations)
+	if !strings.Contains(out, "Radio-Browser results for") {
 		t.Error("table missing header")
 	}
 	if !strings.Contains(out, "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee") {
@@ -311,12 +512,29 @@ func TestRBTableFull_Structure(t *testing.T) {
 	if !strings.Contains(out, "pop") {
 		t.Error("table missing first genre tag")
 	}
+	if !strings.Contains(out, "#") {
+		t.Error("table missing index column header")
+	}
+}
+
+func TestRBTableFull_IndexColumn(t *testing.T) {
+	stations := []radio.Station{
+		{UUID: "aaa", Name: "First"},
+		{UUID: "bbb", Name: "Second"},
+	}
+	out := rbTableFull("test", stations)
+	if !strings.Contains(out, "1 ") {
+		t.Error("table missing index 1")
+	}
+	if !strings.Contains(out, "2 ") {
+		t.Error("table missing index 2")
+	}
 }
 
 func TestRBTableFull_TruncatesLongName(t *testing.T) {
 	name := strings.Repeat("X", 40)
 	stations := []radio.Station{{UUID: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", Name: name}}
-	out := rbTableFull(stations)
+	out := rbTableFull("test", stations)
 	if strings.Contains(out, name) {
 		t.Error("long station name should be truncated in full table")
 	}
@@ -334,7 +552,7 @@ func TestBuildRBTable_FallsBackToShort(t *testing.T) {
 			Tags:    strings.Repeat("D", 15),
 		})
 	}
-	out := buildRBTable(stations)
+	out := buildRBTable("test", stations)
 	if len(out) > maxTableLen {
 		t.Errorf("buildRBTable result len = %d, exceeds maxTableLen %d", len(out), maxTableLen)
 	}

@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/konradk/gotamusique/internal/config"
 	"github.com/konradk/gotamusique/internal/radio"
@@ -104,60 +105,161 @@ func playPreset(bot BotAPI, cfg *config.Config, msg *gumble.TextMessage, cmd, na
 	))
 }
 
-// handleRBQuery searches radio-browser.info and displays results as a table.
-func handleRBQuery(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
-	cfg := bot.Config()
-	if arg == "" {
-		sendToChannel(msg, "Usage: "+symbol(cfg)+cmd+" <name>")
-		return
+// --- rbCache ---
+
+const (
+	defaultSearchLimit = 10
+	maxSearchLimit     = 50
+)
+
+type rbCache struct {
+	mu       sync.Mutex
+	stations map[uint32][]radio.Station
+}
+
+func newRBCache() *rbCache {
+	return &rbCache{stations: make(map[uint32][]radio.Station)}
+}
+
+func (c *rbCache) set(channelID uint32, stations []radio.Station) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.stations[channelID] = stations
+}
+
+func (c *rbCache) get(channelID uint32) []radio.Station {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.stations[channelID]
+}
+
+// parseRBQueryArg extracts an optional trailing [-n N | --limit N] flag from arg.
+// Returns the station name, the result limit, and any parse error.
+func parseRBQueryArg(arg string) (name string, limit int, err error) {
+	fields := strings.Fields(arg)
+	limit = defaultSearchLimit
+
+	if len(fields) == 0 {
+		return "", defaultSearchLimit, nil
 	}
 
-	rb := radio.NewRadioBrowser()
-	stations, err := rb.Search(arg)
-	if err != nil {
-		sendToChannel(msg, "radio-browser search failed: "+err.Error())
-		return
-	}
-	if len(stations) == 0 {
-		sendToChannel(msg, format(cfg.Bot.FormattedReplies,
-			"No stations found for <b>"+esc(arg)+"</b>.",
-			"No stations found for \""+arg+"\".",
-		))
-		return
+	// Trailing flag without a value: e.g. "soma -n"
+	last := fields[len(fields)-1]
+	if last == "-n" || last == "--limit" {
+		return "", 0, fmt.Errorf("flag %q requires a value", last)
 	}
 
-	text := buildRBTable(stations)
-	if cfg.Bot.FormattedReplies {
-		sendToChannel(msg, "<pre>"+esc(text)+"</pre>")
-	} else {
-		sendToChannel(msg, text)
+	// Trailing flag pair: e.g. "soma -n 20" or "soma --limit 20"
+	if len(fields) >= 2 {
+		flag := fields[len(fields)-2]
+		val := fields[len(fields)-1]
+		if flag == "-n" || flag == "--limit" {
+			n, parseErr := strconv.Atoi(val)
+			if parseErr != nil || n <= 0 {
+				return "", 0, fmt.Errorf("invalid limit %q: must be a positive integer", val)
+			}
+			if n > maxSearchLimit {
+				n = maxSearchLimit
+			}
+			name = strings.TrimSpace(strings.Join(fields[:len(fields)-2], " "))
+			if name == "" {
+				return "", 0, fmt.Errorf("station name required")
+			}
+			return name, n, nil
+		}
+	}
+
+	return arg, defaultSearchLimit, nil
+}
+
+// makeRBQueryHandler returns a HandlerFunc that searches radio-browser.info and
+// caches results. searchFn is rb.Search in production; inject a mock in tests.
+func makeRBQueryHandler(cache *rbCache, searchFn func(string, int) ([]radio.Station, error)) HandlerFunc {
+	return func(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
+		cfg := bot.Config()
+		if arg == "" {
+			sendToChannel(msg, "Usage: "+symbol(cfg)+cmd+" <name> [-n N]")
+			return
+		}
+
+		name, limit, err := parseRBQueryArg(arg)
+		if err != nil {
+			sendToChannel(msg, "Usage: "+symbol(cfg)+cmd+" <name> [-n N] (N: 1-50): "+err.Error())
+			return
+		}
+
+		stations, searchErr := searchFn(name, limit)
+		if searchErr != nil {
+			sendToChannel(msg, "radio-browser search failed: "+searchErr.Error())
+			return
+		}
+		if len(stations) == 0 {
+			sendToChannel(msg, format(cfg.Bot.FormattedReplies,
+				"No stations found for <b>"+esc(name)+"</b>.",
+				"No stations found for \""+name+"\".",
+			))
+			return
+		}
+
+		cache.set(msg.Channels[0].ID, stations)
+
+		text := buildRBTable(name, stations)
+		if cfg.Bot.FormattedReplies {
+			sendToChannel(msg, "<pre>"+esc(text)+"</pre>")
+		} else {
+			sendToChannel(msg, text)
+		}
 	}
 }
 
-// handleRBPlay fetches a station by UUID, validates its stream, and enqueues it.
-func handleRBPlay(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
-	cfg := bot.Config()
-	if arg == "" {
-		sendToChannel(msg, "Usage: "+symbol(cfg)+cmd+" <uuid>")
-		return
-	}
+// makeRBPlayHandler returns a HandlerFunc that plays a station by UUID or cache index.
+// byUUIDFn is rb.ByUUID in production; inject a mock in tests.
+func makeRBPlayHandler(cache *rbCache, byUUIDFn func(string) (*radio.Station, error)) HandlerFunc {
+	return func(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
+		cfg := bot.Config()
+		if arg == "" {
+			sendToChannel(msg, "Usage: "+symbol(cfg)+cmd+" <uuid|N>")
+			return
+		}
 
-	rb := radio.NewRadioBrowser()
-	station, err := rb.ByUUID(arg)
-	if err != nil {
+		// Integer index: resolve against the channel's cached query results.
+		if n, err := strconv.Atoi(arg); err == nil && n > 0 {
+			channelID := msg.Channels[0].ID
+			stations := cache.get(channelID)
+			if len(stations) == 0 {
+				sendToChannel(msg, "No recent !rbquery results for this channel.")
+				return
+			}
+			if n > len(stations) {
+				sendToChannel(msg, "Index out of range — use !rbquery to see available stations.")
+				return
+			}
+			item := radio.NewRadioItemFromStation(stations[n-1])
+			bot.Enqueue(item)
+			sendToChannel(msg, format(cfg.Bot.FormattedReplies,
+				"Queued: <b>"+esc(item.Name)+"</b>",
+				"Queued: "+item.Name,
+			))
+			return
+		}
+
+		// UUID flow.
+		station, err := byUUIDFn(arg)
+		if err != nil {
+			sendToChannel(msg, format(cfg.Bot.FormattedReplies,
+				"Station not found: "+esc(err.Error()),
+				"Station not found: "+err.Error(),
+			))
+			return
+		}
+
+		item := radio.NewRadioItemFromStation(*station)
+		bot.Enqueue(item)
 		sendToChannel(msg, format(cfg.Bot.FormattedReplies,
-			"Station not found: "+esc(err.Error()),
-			"Station not found: "+err.Error(),
+			"Queued: <b>"+esc(item.Name)+"</b>",
+			"Queued: "+item.Name,
 		))
-		return
 	}
-
-	item := radio.NewRadioItemFromStation(*station)
-	bot.Enqueue(item)
-	sendToChannel(msg, format(cfg.Bot.FormattedReplies,
-		"Queued: <b>"+esc(item.Name)+"</b>",
-		"Queued: "+item.Name,
-	))
 }
 
 func handleStop(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
@@ -265,20 +367,21 @@ func handleKill(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg strin
 
 const maxTableLen = 5000
 
-func buildRBTable(stations []radio.Station) string {
-	text := rbTableFull(stations)
+func buildRBTable(name string, stations []radio.Station) string {
+	text := rbTableFull(name, stations)
 	if len(text) <= maxTableLen {
 		return text
 	}
-	text = rbTableShort(stations)
+	text = rbTableShort(name, stations)
 	if len(text) <= maxTableLen {
 		return text
 	}
 	return text[:maxTableLen]
 }
 
-func rbTableFull(stations []radio.Station) string {
+func rbTableFull(name string, stations []radio.Station) string {
 	const (
+		wIndex   = 2
 		wUUID    = 36
 		wName    = 25
 		wGenre   = 15
@@ -286,18 +389,20 @@ func rbTableFull(stations []radio.Station) string {
 		wCountry = 7
 	)
 	var sb strings.Builder
-	sb.WriteString("Radio-Browser results:\n")
-	fmt.Fprintf(&sb, "| %-*s | %-*s | %-*s | %-*s | %-*s |\n",
-		wUUID, "rbplay ID", wName, "Station Name", wGenre, "Genre", wCodec, "Codec/Bitrate", wCountry, "Country")
-	fmt.Fprintf(&sb, "| %s | %s | %s | %s | %s |\n",
+	fmt.Fprintf(&sb, "Radio-Browser results for %q:\n", name)
+	fmt.Fprintf(&sb, "| %-*s | %-*s | %-*s | %-*s | %-*s | %-*s |\n",
+		wIndex, "#", wUUID, "rbplay ID", wName, "Station Name", wGenre, "Genre", wCodec, "Codec/Bitrate", wCountry, "Country")
+	fmt.Fprintf(&sb, "| %s | %s | %s | %s | %s | %s |\n",
+		strings.Repeat("-", wIndex),
 		strings.Repeat("-", wUUID),
 		strings.Repeat("-", wName),
 		strings.Repeat("-", wGenre),
 		strings.Repeat("-", wCodec),
 		strings.Repeat("-", wCountry),
 	)
-	for _, s := range stations {
-		fmt.Fprintf(&sb, "| %-*s | %-*s | %-*s | %-*s | %-*s |\n",
+	for i, s := range stations {
+		fmt.Fprintf(&sb, "| %-*d | %-*s | %-*s | %-*s | %-*s | %-*s |\n",
+			wIndex, i+1,
 			wUUID, truncateField(s.UUID, wUUID),
 			wName, truncateField(s.Name, wName),
 			wGenre, truncateField(firstTag(s.Tags), wGenre),
@@ -308,22 +413,25 @@ func rbTableFull(stations []radio.Station) string {
 	return sb.String()
 }
 
-func rbTableShort(stations []radio.Station) string {
+func rbTableShort(name string, stations []radio.Station) string {
 	const (
+		wIndex = 2
 		wUUID  = 36
 		wName  = 35
 		wGenre = 20
 	)
 	var sb strings.Builder
-	sb.WriteString("Radio-Browser results:\n")
-	fmt.Fprintf(&sb, "| %-*s | %-*s | %-*s |\n", wUUID, "rbplay ID", wName, "Station Name", wGenre, "Genre")
-	fmt.Fprintf(&sb, "| %s | %s | %s |\n",
+	fmt.Fprintf(&sb, "Radio-Browser results for %q:\n", name)
+	fmt.Fprintf(&sb, "| %-*s | %-*s | %-*s | %-*s |\n", wIndex, "#", wUUID, "rbplay ID", wName, "Station Name", wGenre, "Genre")
+	fmt.Fprintf(&sb, "| %s | %s | %s | %s |\n",
+		strings.Repeat("-", wIndex),
 		strings.Repeat("-", wUUID),
 		strings.Repeat("-", wName),
 		strings.Repeat("-", wGenre),
 	)
-	for _, s := range stations {
-		fmt.Fprintf(&sb, "| %-*s | %-*s | %-*s |\n",
+	for i, s := range stations {
+		fmt.Fprintf(&sb, "| %-*d | %-*s | %-*s | %-*s |\n",
+			wIndex, i+1,
 			wUUID, truncateField(s.UUID, wUUID),
 			wName, truncateField(s.Name, wName),
 			wGenre, truncateField(firstTag(s.Tags), wGenre),
