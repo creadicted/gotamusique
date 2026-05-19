@@ -44,10 +44,7 @@ type MusicDB interface {
 ```
 
 ## Migration
-
-Replicate all Python migration steps:
-- Settings DB: versions 0 → 1 → 2
-- Music DB: versions 0 → 1 → 2 → 4
+Dont replicate migration logic. We start with a clean slate.
 
 ## Deliverables
 

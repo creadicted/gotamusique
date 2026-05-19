@@ -24,7 +24,7 @@ func TestSearch_success(t *testing.T) {
 	defer ts.Close()
 
 	rb := newRadioBrowserWithClient(&http.Client{}, ts.URL)
-	got, err := rb.Search("jazz")
+	got, err := rb.Search("jazz", 10)
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
@@ -43,7 +43,7 @@ func TestSearch_sendsUserAgent(t *testing.T) {
 	defer ts.Close()
 
 	rb := newRadioBrowserWithClient(&http.Client{}, ts.URL)
-	rb.Search("jazz") //nolint:errcheck
+	rb.Search("jazz", 10) //nolint:errcheck
 }
 
 func TestSearch_encodesSpacesInName(t *testing.T) {
@@ -55,7 +55,7 @@ func TestSearch_encodesSpacesInName(t *testing.T) {
 	defer ts.Close()
 
 	rb := newRadioBrowserWithClient(&http.Client{}, ts.URL)
-	rb.Search("jazz blues") //nolint:errcheck
+	rb.Search("jazz blues", 10) //nolint:errcheck
 	if !strings.Contains(capturedURI, "jazz%20blues") {
 		t.Errorf("expected URL-encoded name in request URI, got %q", capturedURI)
 	}
@@ -70,9 +70,24 @@ func TestSearch_limitsResults(t *testing.T) {
 	defer ts.Close()
 
 	rb := newRadioBrowserWithClient(&http.Client{}, ts.URL)
-	rb.Search("jazz") //nolint:errcheck
+	rb.Search("jazz", 10) //nolint:errcheck
 	if !strings.Contains(capturedURI, "limit=10") {
 		t.Errorf("expected limit=10 in request URI, got %q", capturedURI)
+	}
+}
+
+func TestSearch_customLimit(t *testing.T) {
+	var capturedURI string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedURI = r.URL.RequestURI()
+		json.NewEncoder(w).Encode([]Station{}) //nolint:errcheck
+	}))
+	defer ts.Close()
+
+	rb := newRadioBrowserWithClient(&http.Client{}, ts.URL)
+	rb.Search("jazz", 20) //nolint:errcheck
+	if !strings.Contains(capturedURI, "limit=20") {
+		t.Errorf("expected limit=20 in request URI, got %q", capturedURI)
 	}
 }
 
@@ -83,7 +98,7 @@ func TestSearch_emptyResults(t *testing.T) {
 	defer ts.Close()
 
 	rb := newRadioBrowserWithClient(&http.Client{}, ts.URL)
-	got, err := rb.Search("xyznonexistent")
+	got, err := rb.Search("xyznonexistent", 10)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -99,7 +114,7 @@ func TestSearch_apiNon2xx(t *testing.T) {
 	defer ts.Close()
 
 	rb := newRadioBrowserWithClient(&http.Client{}, ts.URL)
-	_, err := rb.Search("jazz")
+	_, err := rb.Search("jazz", 10)
 	if err == nil {
 		t.Fatal("expected error on non-2xx response")
 	}
@@ -112,7 +127,7 @@ func TestSearch_malformedJSON(t *testing.T) {
 	defer ts.Close()
 
 	rb := newRadioBrowserWithClient(&http.Client{}, ts.URL)
-	_, err := rb.Search("jazz")
+	_, err := rb.Search("jazz", 10)
 	if err == nil {
 		t.Fatal("expected error on malformed JSON")
 	}
@@ -219,7 +234,7 @@ func TestMirrorFallback_secondMirrorSucceeds(t *testing.T) {
 		baseURL: ts1.URL,
 		mirrors: []string{ts2.URL},
 	}
-	got, err := rb.Search("test")
+	got, err := rb.Search("test", 10)
 	if err != nil {
 		t.Fatalf("expected fallback to succeed; got %v", err)
 	}
@@ -244,7 +259,7 @@ func TestMirrorFallback_allFail(t *testing.T) {
 		baseURL: ts1.URL,
 		mirrors: []string{ts2.URL},
 	}
-	_, err := rb.Search("test")
+	_, err := rb.Search("test", 10)
 	if err == nil {
 		t.Fatal("expected error when all mirrors fail")
 	}
@@ -257,7 +272,7 @@ func TestMirrorFallback_noMirrors(t *testing.T) {
 	defer ts.Close()
 
 	rb := newRadioBrowserWithClient(&http.Client{}, ts.URL)
-	_, err := rb.Search("test")
+	_, err := rb.Search("test", 10)
 	if err == nil {
 		t.Fatal("expected error when single target fails and no mirrors")
 	}
@@ -295,7 +310,7 @@ func TestSearch_integration(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 	rb := NewRadioBrowser()
-	stations, err := rb.Search("jazz")
+	stations, err := rb.Search("jazz", 10)
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
@@ -309,7 +324,7 @@ func TestByUUID_integration(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 	rb := NewRadioBrowser()
-	stations, err := rb.Search("jazz")
+	stations, err := rb.Search("jazz", 10)
 	if err != nil || len(stations) == 0 {
 		t.Skip("could not fetch stations to derive a UUID")
 	}
