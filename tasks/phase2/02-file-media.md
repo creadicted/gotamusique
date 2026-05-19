@@ -46,4 +46,4 @@ Embedded album art: extract with `ffmpeg -i <path> -an -vcodec copy <tmp>.png`, 
 
 - `!file song.mp3` adds the file and plays it
 - Title and artist extracted from ID3 tags
-- Missing file returns validation error and is skipped with a channel message
+- Missing file returns a validation error and is skipped with a channel message
