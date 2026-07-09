@@ -240,11 +240,11 @@ func makeRBPlayHandler(cache *rbCache, byUUIDFn func(string) (*radio.Station, er
 			channelID := msg.Channels[0].ID
 			stations := cache.get(channelID)
 			if len(stations) == 0 {
-				sendToChannel(msg, "No recent !rbquery results for this channel.")
+				sendToChannel(msg, "No recent search results for this channel.")
 				return
 			}
 			if n > len(stations) {
-				sendToChannel(msg, "Index out of range — use !rbquery to see available stations.")
+				sendToChannel(msg, "Index out of range — search again to see available stations.")
 				return
 			}
 			item := radio.NewRadioItemFromStation(stations[n-1])
