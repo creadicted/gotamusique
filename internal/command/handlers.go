@@ -402,7 +402,7 @@ func rbTableFull(name string, stations []radio.Station) string {
 		wCountry = 7
 	)
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "Radio-Browser results for %q:\n", name)
+	fmt.Fprintf(&sb, "Radio-Browser results for \"%s\":\n", name)
 	fmt.Fprintf(&sb, "| %-*s | %-*s | %-*s | %-*s | %-*s | %-*s |\n",
 		wIndex, "#", wUUID, "rbplay ID", wName, "Station Name", wGenre, "Genre", wCodec, "Codec/Bitrate", wCountry, "Country")
 	fmt.Fprintf(&sb, "| %s | %s | %s | %s | %s | %s |\n",
@@ -434,7 +434,7 @@ func rbTableShort(name string, stations []radio.Station) string {
 		wGenre = 20
 	)
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "Radio-Browser results for %q:\n", name)
+	fmt.Fprintf(&sb, "Radio-Browser results for \"%s\":\n", name)
 	fmt.Fprintf(&sb, "| %-*s | %-*s | %-*s | %-*s |\n", wIndex, "#", wUUID, "rbplay ID", wName, "Station Name", wGenre, "Genre")
 	fmt.Fprintf(&sb, "| %s | %s | %s | %s |\n",
 		strings.Repeat("-", wIndex),
