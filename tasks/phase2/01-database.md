@@ -44,7 +44,7 @@ type MusicDB interface {
 ```
 
 ## Migration
-Dont replicate migration logic. We start with a clean slate.
+Don't replicate migration logic. We start with a clean slate.
 
 ## Deliverables
 
