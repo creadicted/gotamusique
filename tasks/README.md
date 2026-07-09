@@ -52,6 +52,7 @@ Each FR lives in `feature-requests/` and must ship with updated docs and tests.
 | #     | File | Status | Description |
 |-------|------|--------|-------------|
 | FR-01 | [feature-requests/FR-01-rbquery-index-and-limit.md](feature-requests/FR-01-rbquery-index-and-limit.md) | open | `!rbquery` numeric index for `!rbplay` + optional result count |
+| FR-02 | [feature-requests/FR-02-pause-and-auto-pause-when-alone.md](feature-requests/FR-02-pause-and-auto-pause-when-alone.md) | open | `!pause`/`!resume` (keep queue position) + auto-pause when alone in channel |
 
 ## Future
 
