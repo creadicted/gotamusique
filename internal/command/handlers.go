@@ -110,11 +110,16 @@ func playPreset(bot BotAPI, cfg *config.Config, msg *gumble.TextMessage, cmd, na
 const (
 	defaultSearchLimit = 10
 	maxSearchLimit     = 50
+	// maxCacheChannels bounds how many channels' query results are retained.
+	// Each channel keeps only its latest result, so this caps total memory even
+	// on a long-running bot that sees many channels over its lifetime.
+	maxCacheChannels = 64
 )
 
 type rbCache struct {
 	mu       sync.Mutex
 	stations map[uint32][]radio.Station
+	order    []uint32 // insertion order of channel IDs, for FIFO eviction
 }
 
 func newRBCache() *rbCache {
@@ -124,6 +129,14 @@ func newRBCache() *rbCache {
 func (c *rbCache) set(channelID uint32, stations []radio.Station) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if _, exists := c.stations[channelID]; !exists {
+		if len(c.order) >= maxCacheChannels {
+			oldest := c.order[0]
+			c.order = c.order[1:]
+			delete(c.stations, oldest)
+		}
+		c.order = append(c.order, channelID)
+	}
 	c.stations[channelID] = stations
 }
 
