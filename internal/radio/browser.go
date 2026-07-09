@@ -11,7 +11,6 @@ import (
 const (
 	browserTimeout   = 10 * time.Second
 	browserUserAgent = "gotamusique/0.1"
-	searchLimit      = 10
 )
 
 var browserMirrors = []string{
@@ -55,9 +54,9 @@ func newRadioBrowserWithClient(client *http.Client, baseURL string) *RadioBrowse
 	return &RadioBrowser{client: client, baseURL: baseURL}
 }
 
-// Search returns up to 10 stations whose name matches the query.
-func (rb *RadioBrowser) Search(name string) ([]Station, error) {
-	path := fmt.Sprintf("/stations/byname/%s?limit=%d", url.PathEscape(name), searchLimit)
+// Search returns up to limit stations whose name matches the query.
+func (rb *RadioBrowser) Search(name string, limit int) ([]Station, error) {
+	path := fmt.Sprintf("/stations/byname/%s?limit=%d", url.PathEscape(name), limit)
 	var stations []Station
 	if err := rb.get(path, &stations); err != nil {
 		return nil, err

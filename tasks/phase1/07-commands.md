@@ -72,8 +72,8 @@ func (d *Dispatcher) Dispatch(bot *Bot, msg *gumble.TextMessage)
 | Command (default alias) | Description |
 |---|---|
 | `!radio [name\|url]` | No arg: list presets. Name: play preset. URL: play stream URL. |
-| `!rbquery <name>` | Search radio-browser.info, display table of results |
-| `!rbplay <uuid>` | Play station by radio-browser UUID |
+| `!rbquery <name> [-n N]` | Search radio-browser.info; N results (default 10, max 50) |
+| `!rbplay <uuid\|N>` | Play station by UUID or by index from last `!rbquery` |
 | `!stop` | Stop playback and reset queue |
 | `!mute` | Set volume to 0 — ffmpeg keeps running, stream stays connected |
 | `!unmute` | Restore volume after `!mute` |
@@ -119,15 +119,20 @@ aliases, not hardcoded names.
 ## `!rbquery` response format
 
 ```
-Radio-Browser results:
-| rbplay ID | Station Name | Genre | Codec/Bitrate | Country |
-| --------- | ------------ | ----- | ------------- | ------- |
-| <uuid>    | <name>       | ...   | ...           | ...     |
+Radio-Browser results for "soma":
+| #  | rbplay ID                            | Station Name             | Genre | Codec/Bitrate | Country |
+| -- | ------------------------------------ | ------------------------ | ----- | ------------- | ------- |
+|  1 | <uuid>                               | <name>                   | ...   | ...           | ...     |
+|  2 | <uuid>                               | <name>                   | ...   | ...           | ...     |
 ```
 
-Pipe table, `<pre>`-wrapped in HTML mode. Result count capped by `radio.RadioBrowser.Search`
-(currently 10). Truncate to 5000 chars; if still too long, rebuild without Codec/Country
-columns; if still too long, hard-truncate to 5000.
+Pipe table, `<pre>`-wrapped in HTML mode. Default 10 results; user-controllable via
+`-n N` / `--limit N` flag (max 50). Truncate to 5000 chars; if still too long, rebuild
+without Codec/Country columns; if still too long, hard-truncate to 5000.
+
+`!rbplay N` after `!rbquery` plays result N from the most recent search in the channel.
+Cache miss reply: `"No recent !rbquery results for this channel."`
+Out-of-range reply: `"Index out of range — use !rbquery to see available stations."`
 
 ## Deliverables
 
