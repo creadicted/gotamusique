@@ -1,7 +1,7 @@
-# 2-08 — Web Frontend
+# 3-08 — Web Frontend
 
 **Status:** todo  
-**Depends on:** 2-07  
+**Depends on:** 3-07  
 **Unlocks:** nothing
 
 ## Objective

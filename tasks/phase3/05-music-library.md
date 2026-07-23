@@ -1,8 +1,8 @@
-# 2-05 — Music Library & Cache
+# 3-05 — Music Library & Cache
 
 **Status:** todo  
-**Depends on:** 2-01, 2-02  
-**Unlocks:** 2-06, 2-07
+**Depends on:** 3-01, 3-02  
+**Unlocks:** 3-06, 3-07
 
 ## Objective
 

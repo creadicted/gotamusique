@@ -1,7 +1,7 @@
-# 2-11 — Admin Features
+# 3-11 — Admin Features
 
 **Status:** todo  
-**Depends on:** 2-01 (for DB-backed bans)  
+**Depends on:** 3-01 (for DB-backed bans)  
 **Unlocks:** nothing
 
 ## Objective

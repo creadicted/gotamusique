@@ -1,7 +1,7 @@
-# 2-10 — Playlist Persistence
+# 3-10 — Playlist Persistence
 
 **Status:** todo  
-**Depends on:** 2-04, 2-01  
+**Depends on:** 3-04, 3-01  
 **Unlocks:** nothing
 
 ## Objective

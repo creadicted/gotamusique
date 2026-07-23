@@ -1,8 +1,8 @@
-# 2-03 — URL Media (yt-dlp)
+# 3-03 — URL Media (yt-dlp)
 
 **Status:** todo  
-**Depends on:** 2-01  
-**Unlocks:** 2-06
+**Depends on:** 3-01  
+**Unlocks:** 3-06
 
 ## Objective
 

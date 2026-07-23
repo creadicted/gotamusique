@@ -1,8 +1,8 @@
-# 2-04 — Playlist Modes
+# 3-04 — Playlist Modes
 
 **Status:** todo  
-**Depends on:** Phase 1 (queue), 2-01  
-**Unlocks:** 2-06
+**Depends on:** Phase 1 (queue), 3-01  
+**Unlocks:** 3-06
 
 ## Objective
 

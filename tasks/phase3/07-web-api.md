@@ -1,8 +1,8 @@
-# 2-07 — Web REST API
+# 3-07 — Web REST API
 
 **Status:** todo  
-**Depends on:** 2-04, 2-05  
-**Unlocks:** 2-08
+**Depends on:** 3-04, 3-05  
+**Unlocks:** 3-08
 
 ## Objective
 

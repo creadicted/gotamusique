@@ -1,8 +1,8 @@
-# 2-02 — Local File Media
+# 3-02 — Local File Media
 
 **Status:** todo  
-**Depends on:** 2-01  
-**Unlocks:** 2-05
+**Depends on:** 3-01  
+**Unlocks:** 3-05
 
 ## Objective
 

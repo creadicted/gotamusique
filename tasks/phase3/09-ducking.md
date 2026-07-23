@@ -1,4 +1,4 @@
-# 2-09 — Volume Ducking
+# 3-09 — Volume Ducking
 
 **Status:** todo  
 **Depends on:** Phase 1 audio pipeline, Phase 1 Mumble connection  

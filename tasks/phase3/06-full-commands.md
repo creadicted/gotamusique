@@ -1,7 +1,7 @@
-# 2-06 — Full Command Set
+# 3-06 — Full Command Set
 
 **Status:** todo  
-**Depends on:** 2-02, 2-03, 2-04, 2-05  
+**Depends on:** 3-02, 3-03, 3-04, 3-05  
 **Unlocks:** nothing (feature-complete bot)
 
 ## Objective
