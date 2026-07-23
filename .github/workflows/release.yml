@@ -83,3 +83,5 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: gotamusique-linux-amd64
+          prerelease: ${{ contains(github.ref, '-') }}
+          generate_release_notes: true
