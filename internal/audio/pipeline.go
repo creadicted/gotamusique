@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"os/exec"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -76,15 +77,7 @@ func (p *Pipeline) Launch(url string, onEnd func(error)) error {
 		verbosity = "debug"
 	}
 
-	cmd := exec.Command("ffmpeg",
-		"-v", verbosity,
-		"-nostdin",
-		"-i", url,
-		"-ac", "1",
-		"-f", "s16le",
-		"-ar", "48000",
-		"-",
-	)
+	cmd := exec.Command("ffmpeg", buildFFmpegArgs(url, verbosity)...)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -184,6 +177,26 @@ func (p *Pipeline) doFadeOut(cmd *exec.Cmd, stdout io.ReadCloser, audioCh chan<-
 	cmd.Process.Kill() //nolint:errcheck
 	// Closing stdout unblocks any pending write in ffmpeg, allowing cmd.Wait to complete.
 	stdout.Close()
+}
+
+// buildFFmpegArgs returns the argument list for an ffmpeg invocation that decodes
+// url to mono 16-bit LE PCM at 48 kHz. HTTP/HTTPS URLs get reconnect flags so
+// live streams survive transient interruptions.
+func buildFFmpegArgs(url, verbosity string) []string {
+	args := []string{"-v", verbosity, "-nostdin"}
+
+	if strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://") {
+		args = append(args,
+			"-reconnect", "1",
+			"-reconnect_streamed", "1",
+			"-reconnect_delay_max", "5",
+			"-reconnect_at_eof", "1",
+			"-reconnect_on_http_error", "4xx,5xx",
+		)
+	}
+
+	args = append(args, "-i", url, "-ac", "1", "-f", "s16le", "-ar", "48000", "-")
+	return args
 }
 
 // decodePCM converts a buffer of int16 little-endian bytes into a gumble AudioBuffer.

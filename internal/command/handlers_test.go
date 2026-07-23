@@ -1,10 +1,13 @@
 package command
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/konradk/gotamusique/internal/config"
+	"github.com/konradk/gotamusique/internal/hls"
 	"github.com/konradk/gotamusique/internal/radio"
 	"layeh.com/gumble/gumble"
 )
@@ -191,6 +194,73 @@ func TestHandleRadio_KnownPreset_Enqueues(t *testing.T) {
 	callHandler(handleRadio, bot, "jazz")
 	if len(bot.enqueueCalls) != 1 {
 		t.Errorf("handleRadio with known preset: enqueueCalls = %d, want 1", len(bot.enqueueCalls))
+	}
+}
+
+func TestHandleHLS_NoArg_NoEnqueue(t *testing.T) {
+	bot := defaultBot()
+	callHandler(handleHLS, bot, "")
+	if len(bot.enqueueCalls) != 0 {
+		t.Errorf("handleHLS with no arg enqueued %d items, want 0", len(bot.enqueueCalls))
+	}
+}
+
+func TestHandleHLS_NonHTTPScheme_NoEnqueue(t *testing.T) {
+	bot := defaultBot()
+	callHandler(handleHLS, bot, "ftp://cdn.example.com/stream.m3u8")
+	if len(bot.enqueueCalls) != 0 {
+		t.Errorf("handleHLS with non-HTTP scheme enqueued %d items, want 0", len(bot.enqueueCalls))
+	}
+}
+
+func TestHandleHLS_PlainString_NoEnqueue(t *testing.T) {
+	bot := defaultBot()
+	callHandler(handleHLS, bot, "jazz")
+	if len(bot.enqueueCalls) != 0 {
+		t.Errorf("handleHLS with plain string enqueued %d items, want 0", len(bot.enqueueCalls))
+	}
+}
+
+func TestHandleHLS_ValidHTTPSURL_EnqueuesHLSItem(t *testing.T) {
+	bot := defaultBot()
+	callHandler(handleHLS, bot, "https://cdn.example.com/live/jazz-128k.m3u8")
+	if len(bot.enqueueCalls) != 1 {
+		t.Fatalf("enqueueCalls = %d, want 1", len(bot.enqueueCalls))
+	}
+	if _, ok := bot.enqueueCalls[0].(*hls.HLSItem); !ok {
+		t.Errorf("enqueued item is %T, want *hls.HLSItem", bot.enqueueCalls[0])
+	}
+}
+
+func TestHandleHLS_ValidHTTPURL_EnqueuesHLSItem(t *testing.T) {
+	bot := defaultBot()
+	callHandler(handleHLS, bot, "http://cdn.example.com/stream.m3u8")
+	if len(bot.enqueueCalls) != 1 {
+		t.Fatalf("enqueueCalls = %d, want 1", len(bot.enqueueCalls))
+	}
+	item, ok := bot.enqueueCalls[0].(*hls.HLSItem)
+	if !ok {
+		t.Fatalf("enqueued item is %T, want *hls.HLSItem", bot.enqueueCalls[0])
+	}
+	if item.Name != "stream" {
+		t.Errorf("item.Name = %q, want %q", item.Name, "stream")
+	}
+}
+
+func TestHandleHLS_RadioURLNotAffected(t *testing.T) {
+	// !radio must always produce a RadioItem, never an HLSItem, even for .m3u8 URLs.
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	bot := defaultBot()
+	callHandler(handleRadio, bot, ts.URL+"/stream.m3u8")
+	if len(bot.enqueueCalls) != 1 {
+		t.Fatalf("enqueueCalls = %d, want 1", len(bot.enqueueCalls))
+	}
+	if _, ok := bot.enqueueCalls[0].(*radio.RadioItem); !ok {
+		t.Errorf("!radio with .m3u8 URL enqueued %T, want *radio.RadioItem", bot.enqueueCalls[0])
 	}
 }
 
