@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/konradk/gotamusique/internal/config"
+	"github.com/konradk/gotamusique/internal/hls"
 	"github.com/konradk/gotamusique/internal/radio"
 	"layeh.com/gumble/gumble"
 )
@@ -273,6 +274,28 @@ func makeRBPlayHandler(cache *rbCache, byUUIDFn func(string) (*radio.Station, er
 			"Queued: "+item.Name,
 		))
 	}
+}
+
+// handleHLS: URL-only handler for HLS/M3U8 streams.
+func handleHLS(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
+	cfg := bot.Config()
+	if arg == "" {
+		sendToChannel(msg, "Usage: "+symbol(cfg)+cmd+" <url>")
+		return
+	}
+
+	u, err := url.Parse(arg)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
+		sendToChannel(msg, "Usage: "+symbol(cfg)+cmd+" <url>")
+		return
+	}
+
+	item := hls.NewHLSItemFromURL(arg)
+	bot.Enqueue(item)
+	sendToChannel(msg, format(cfg.Bot.FormattedReplies,
+		"Queued: <b>"+esc(item.Name)+"</b>",
+		"Queued: "+item.Name,
+	))
 }
 
 func handleStop(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {

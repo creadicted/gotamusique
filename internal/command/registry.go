@@ -15,6 +15,7 @@ func RegisterAll(bot BotAPI, d *Dispatcher) {
 	rb := radio.NewRadioBrowser()
 
 	d.Register(a("play_radio"), handleRadio, false, "List presets or play by name/URL")
+	d.Register(a("play_hls"), handleHLS, false, "Play an HLS/M3U8 stream by URL")
 	d.Register(a("rb_query"), makeRBQueryHandler(rbcache, rb.Search), false, "Search radio-browser.info; [-n N] results (default 10, max 50)")
 	d.Register(a("rb_play"), makeRBPlayHandler(rbcache, rb.ByUUID), false, "Play station by UUID or by index from the last search")
 	d.Register(a("stop"), handleStop, false, "Stop playback and reset queue")
