@@ -1,6 +1,6 @@
 # 3-02 — Local File Media
 
-**Status:** todo  
+**Status:** done  
 **Depends on:** 3-01  
 **Unlocks:** 3-05
 
