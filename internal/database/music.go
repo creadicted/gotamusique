@@ -98,7 +98,7 @@ func (m *musicDB) QueryByID(id string) (*MusicRecord, error) {
 func (m *musicDB) QueryByKeywords(keywords []string) ([]MusicRecord, error) {
 	cond := &Condition{}
 	for _, kw := range keywords {
-		cond.AndLike("title", "%"+kw+"%", false)
+		cond.AndLike("keywords", "%"+kw+"%", false)
 	}
 	return m.Query(cond)
 }
