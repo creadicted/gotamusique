@@ -118,7 +118,7 @@ func (m *musicDB) QueryRandom(count int, cond *Condition) ([]MusicRecord, error)
 	args := append(append([]any(nil), cond.args...), count)
 	query := "SELECT id, type, title, metadata, tags, path, keywords, create_at FROM music " +
 		"WHERE id IN (SELECT id FROM music WHERE " + cond.sqlFragment() + " ORDER BY RANDOM() LIMIT ?) " +
-		"ORDER BY RANDOM()
+		"ORDER BY RANDOM()"
 	rows, err := m.db.Query(query, args...)
 	if err != nil {
 		return nil, err
