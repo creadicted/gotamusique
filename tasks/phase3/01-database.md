@@ -1,6 +1,6 @@
 # 3-01 — Database Layer
 
-**Status:** todo  
+**Status:** done  
 **Depends on:** Phase 1 complete  
 **Unlocks:** 3-02, 3-03, 3-05, 3-10, 3-11
 

@@ -41,7 +41,7 @@ Builds on the Phase 1 binary; each milestone is independently mergeable.
 
 | #    | File                                                         | Status | Description                            |
 |------|--------------------------------------------------------------|--------|----------------------------------------|
-| 3-01 | [phase3/01-database.md](phase3/01-database.md)               | todo   | SQLite settings + music DB, migration  |
+| 3-01 | [phase3/01-database.md](phase3/01-database.md)               | done   | SQLite settings + music DB, migration  |
 | 3-02 | [phase3/02-file-media.md](phase3/02-file-media.md)           | todo   | Local file playback (ffprobe metadata) |
 | 3-03 | [phase3/03-url-media.md](phase3/03-url-media.md)             | todo   | YouTube / yt-dlp integration           |
 | 3-04 | [phase3/04-playlist-modes.md](phase3/04-playlist-modes.md)   | todo   | repeat / random / autoplay modes       |
