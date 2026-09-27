@@ -51,6 +51,9 @@ func migrateSettings(db *sql.DB) error {
 		fmt.Sscanf(rawVer, "%d", &current)
 	}
 
+	if current > settingsDBVersion {
+		return fmt.Errorf("unsupported settings version %d", current)
+	}
 	if current == settingsDBVersion {
 		return nil
 	}
