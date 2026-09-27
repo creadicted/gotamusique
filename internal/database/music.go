@@ -128,7 +128,7 @@ func (m *musicDB) QueryRandom(count int, cond *Condition) ([]MusicRecord, error)
 }
 
 func (m *musicDB) Delete(cond *Condition) error {
-	_, err := m.db.Exec("DELETE FROM music WHERE "+cond.SQL(), cond.Args()...)
+	_, err := m.db.Exec("DELETE FROM music WHERE id != 'info' AND "+cond.SQL(), cond.Args()...)
 	return err
 }
 
