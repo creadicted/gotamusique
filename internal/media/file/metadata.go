@@ -79,7 +79,7 @@ func extractThumb(absPath string) string {
 	defer os.Remove(tmp.Name())
 
 	if err := exec.Command(
-		"ffmpeg", "-y", "-i", absPath, "-an", "-vcodec", "copy", tmp.Name(),
+		"ffmpeg", "-y", "-i", absPath, "-an", "-vcodec", "png", "-frames:v", "1", tmp.Name(),
 	).Run(); err != nil {
 		return ""
 	}
