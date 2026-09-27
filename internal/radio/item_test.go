@@ -237,7 +237,7 @@ func TestValidate_icyProtocol(t *testing.T) {
 			go func(c net.Conn) {
 				defer c.Close()
 				buf := make([]byte, 512)
-				c.Read(buf) //nolint:errcheck
+				c.Read(buf)                                                       //nolint:errcheck
 				c.Write([]byte("ICY 200 OK\r\nContent-Type: audio/mpeg\r\n\r\n")) //nolint:errcheck
 			}(conn)
 		}
