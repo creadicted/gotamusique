@@ -31,6 +31,7 @@ type Bot struct {
 	launchVersion atomic.Int64  // incremented by Play() to suppress onTrackEnd's queue.Next()
 	playEpoch     atomic.Int64  // incremented by every playback control; invalidates in-flight resolves
 	resolveCancel func()        // cancels the in-flight Resolver call (guarded by mu)
+	fails         failGuard     // distinct entries that failed since the last good track
 	cancel        func()        // cancels the top-level Run context (set by main)
 	dispatcher    *command.Dispatcher
 }

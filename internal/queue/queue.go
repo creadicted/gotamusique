@@ -21,6 +21,7 @@ type Queue struct {
 	items        []audio.MediaItem
 	currentIndex int
 	mode         Mode
+	version      uint64 // bumped by every mutator; see Version
 }
 
 func NewQueue() *Queue { return &Queue{mode: ModeOneShot} }
@@ -42,6 +43,7 @@ func (q *Queue) Mode() Mode {
 func (q *Queue) SetMode(m Mode) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
+	q.version++
 	prev := q.mode
 	q.mode = m
 	if m == ModeRandom && prev != ModeRandom {
@@ -54,6 +56,7 @@ func (q *Queue) SetMode(m Mode) {
 func (q *Queue) Randomize() {
 	q.mu.Lock()
 	defer q.mu.Unlock()
+	q.version++
 	q.shuffleAfterCurrentLocked()
 }
 
@@ -89,6 +92,7 @@ func (q *Queue) reshuffleLocked(last int) {
 func (q *Queue) Append(item audio.MediaItem) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
+	q.version++
 	if q.mode == ModeRandom && q.currentIndex < len(q.items) {
 		pos := q.currentIndex + 1 + rand.IntN(len(q.items)-q.currentIndex)
 		q.items = slices.Insert(q.items, pos, item)
@@ -103,6 +107,7 @@ func (q *Queue) Append(item audio.MediaItem) {
 func (q *Queue) Insert(index int, item audio.MediaItem) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
+	q.version++
 	if index < 0 || index > len(q.items) {
 		return fmt.Errorf("insert index %d out of range [0, %d]", index, len(q.items))
 	}
@@ -122,6 +127,7 @@ func (q *Queue) Insert(index int, item audio.MediaItem) error {
 func (q *Queue) Remove(index int) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
+	q.version++
 	if index < 0 || index >= len(q.items) {
 		return fmt.Errorf("remove index %d out of range [0, %d)", index, len(q.items))
 	}
@@ -154,6 +160,24 @@ func (q *Queue) Current() audio.MediaItem {
 func (q *Queue) Next() bool {
 	q.mu.Lock()
 	defer q.mu.Unlock()
+	q.version++
+	return q.nextLocked()
+}
+
+// NextIfUnchanged is Next, but only if nothing changed since version was read
+// (see Snapshot). It returns false without moving when the queue changed, so a
+// failure handler never advances past a track that was just selected or queued.
+func (q *Queue) NextIfUnchanged(version uint64) bool {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if q.version != version {
+		return false
+	}
+	q.version++
+	return q.nextLocked()
+}
+
+func (q *Queue) nextLocked() bool {
 	n := len(q.items)
 	if n == 0 {
 		return false
@@ -180,18 +204,56 @@ func (q *Queue) Next() bool {
 	}
 }
 
-// FinishIfCurrent moves the queue to the past-end (idle) position, but only if
-// item is still the current item. It reports whether it did. The check and the
-// move are atomic, so a concurrent skip/jump/clear that changed the selection
-// is never overwritten. Unlike Reset it keeps playback idle: the queue does not
+// Version returns a counter that every mutator (Append, Insert, Remove, Next,
+// JumpTo, Reset, Clear, SetMode, Randomize, FinishIfUnchanged) increments. Two
+// reads returning the same value mean nothing changed in between. A mutator may
+// also bump it on a rejected call (e.g. an out-of-range Insert); callers must
+// treat a changed value as "re-evaluate", never as proof something moved.
+func (q *Queue) Version() uint64 {
+	q.mu.RLock()
+	defer q.mu.RUnlock()
+	return q.version
+}
+
+// Snapshot is a consistent copy of the queue taken under one lock.
+type Snapshot struct {
+	Items   []audio.MediaItem
+	Index   int
+	Version uint64
+}
+
+// Current returns the snapshot's current item, or nil when idle or empty.
+func (s Snapshot) Current() audio.MediaItem {
+	if s.Index < 0 || s.Index >= len(s.Items) {
+		return nil
+	}
+	return s.Items[s.Index]
+}
+
+// Snapshot returns the items, current index and version atomically.
+func (q *Queue) Snapshot() Snapshot {
+	q.mu.RLock()
+	defer q.mu.RUnlock()
+	items := make([]audio.MediaItem, len(q.items))
+	copy(items, q.items)
+	return Snapshot{Items: items, Index: q.currentIndex, Version: q.version}
+}
+
+// FinishIfUnchanged moves the queue to the past-end (idle) position, but only if
+// nothing has changed since version was read (see Snapshot). The check and the
+// move are atomic, so it never overwrites a newer selection or skips an item
+// appended in the meantime, even when the current item is the same one (a
+// re-selected item, or a one-item repeat/random queue that wrapped). It reports
+// whether it went idle. Unlike Reset, the items are kept and the queue does not
 // restart from index 0 until something new is queued or played.
-func (q *Queue) FinishIfCurrent(item audio.MediaItem) bool {
+func (q *Queue) FinishIfUnchanged(version uint64) bool {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	if q.currentIndex >= len(q.items) || q.items[q.currentIndex] != item {
+	if q.version != version || q.currentIndex >= len(q.items) {
 		return false
 	}
 	q.currentIndex = len(q.items)
+	q.version++
 	return true
 }
 
@@ -199,6 +261,7 @@ func (q *Queue) FinishIfCurrent(item audio.MediaItem) bool {
 func (q *Queue) JumpTo(index int) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
+	q.version++
 	if index < 0 || index >= len(q.items) {
 		return fmt.Errorf("index %d out of range [0, %d)", index, len(q.items))
 	}
@@ -210,6 +273,7 @@ func (q *Queue) JumpTo(index int) error {
 func (q *Queue) Reset() {
 	q.mu.Lock()
 	defer q.mu.Unlock()
+	q.version++
 	q.currentIndex = 0
 }
 
@@ -217,6 +281,7 @@ func (q *Queue) Reset() {
 func (q *Queue) Clear() {
 	q.mu.Lock()
 	defer q.mu.Unlock()
+	q.version++
 	q.items = nil
 	q.currentIndex = 0
 }

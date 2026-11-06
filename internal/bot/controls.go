@@ -114,6 +114,7 @@ func (b *Bot) Clear() {
 // calls it, so the loop never launches or skips based on an outdated selection.
 func (b *Bot) invalidatePlayback() {
 	b.playEpoch.Add(1)
+	b.fails.reset() // a user control ends any failure streak
 	b.mu.Lock()
 	cancel := b.resolveCancel
 	b.mu.Unlock()

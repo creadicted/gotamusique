@@ -20,7 +20,7 @@ Works on mixed queues (radio + HLS + file + URL).
 | 5 | Ships `!mode` only. `!random`, `!repeat [n]`, `!last` stay in 3-06. Mode is in-memory; `[bot] playback_mode` sets the startup value. |
 | 6 | At the end of the list `random` reshuffles and keeps going. The first track of the new lap is never the one that just played. |
 | 7 | The spec's "async prepare" is dropped: `audio.Resolver` (3-03) already resolves items just before they play. See Known limitations. |
-| 8 | `Version()` is deferred to 3-07. |
+| 8 | A queue `Version()` counter ships here after all: the failure guard needs it to detect a changed queue atomically (see the failure-guard bullet below). The web UI (3-07) reuses it. |
 | 9 | Anyone can read and set `!mode`. A bad `playback_mode` in config logs a warning and falls back to `one-shot`. |
 
 ## Modes
@@ -80,12 +80,25 @@ still starts. The mode is **not** persisted across restarts (3-10 handles that).
 - `Randomize()`/`SetMode(random)` can change which item is current's successor, not the current
   item itself, so an in-flight `Resolve` is unaffected. Anything that changes the current index
   must still go through the `playEpoch` guard (`invalidatePlayback`).
-- **All-items-fail guard (fixed in this milestone):** the loop's failure guard used to call
-  `Stop()`, which resets the queue to index 0, so a queue where every item fails was retried
-  forever (~35 attempts and chat messages per 700 ms with 5 items, in every mode). It now calls
-  `Queue.FinishIfCurrent(item)`, which goes idle at the end of the queue (items kept) and only
-  acts if the failing item is still current, so a concurrent skip/play is never overwritten.
-  Playback resumes when something new is queued or played. Covered by loop regression tests.
+- **Failure guard (reworked after review):**
+  - *Giving up.* The loop used to call `Stop()` after "too many consecutive failures". `Stop()`
+    resets the queue to index 0, so an all-failing queue was retried forever (~35 attempts per
+    700 ms with 5 items, in every mode). It now goes idle at the end of the queue with the items
+    kept, via `Queue.FinishIfUnchanged`. Playback resumes when something new is queued or played.
+  - *What counts.* The guard tracks **distinct failed entries** since the last played track and
+    gives up only when every entry currently in the queue has failed. Counting attempts would
+    stop a queue that still has playable tracks: in `random` mode a reshuffle can retry the same
+    failing entries before a playable one comes up. A played track, or any user control, clears
+    the streak.
+  - *Stale results.* The loop takes `Queue.Snapshot()` (items, index and `Version`) before it
+    resolves/launches. The failure path only moves the queue (`FinishIfUnchanged`,
+    `NextIfUnchanged`) if the version is unchanged. Comparing the current item is not enough:
+    `!play` can re-select the same item, a skip can wrap a one-item repeat/random queue back onto
+    it, and an item appended during the failing resolve leaves the current item unchanged.
+  - *Unplayable files.* If ffmpeg starts but produces no audio at all (e.g. a file deleted after
+    it was queued) the pipeline reports `audio.ErrNoAudio`, and that counts as a failure. Before,
+    process creation counted as success and an unplayable `repeat`/`random` queue spun forever.
+    A stream that produced at least one frame and then ended is still a normal end of track.
 - A one-item queue in `repeat` or `random` replays that item forever.
 
 ## Known limitations
