@@ -36,6 +36,17 @@ IP ban after `max_attempts` failed logins.
 
 All POST /post responses return the current status JSON.
 
+## Queue version counter (deferred from 3-04)
+
+`GET /playlist` is polled by the UI, so `internal/queue` needs a monotonic `Version() int`
+that changes whenever the queue's observable state changes. 3-04 deliberately did not add it.
+
+- Bump it under the queue's mutex in every mutator: `Append`, `Insert`, `Remove`, `Next`,
+  `JumpTo`, `Reset`, `Clear`, `SetMode`, `Randomize`.
+- Decide whether `Next()` bumps when the index does not change (e.g. one-shot at the end).
+- Add a test that exercises **every** mutator and asserts the version increased, so a mutator
+  added later cannot forget to bump it.
+
 ## Deliverables
 
 - `internal/web/server.go`

@@ -13,7 +13,7 @@ Add all commands that require Phase 2 subsystems (file library, URL media, advan
 ### File commands
 | Command | Description |
 |---|---|
-| `!file <path>` | Add local file or folder |
+| `!file <path>` | Add local file or folder — single files **shipped in 3-02**; folders remain |
 | `!filematch <regex>` | Regex match on filenames, add all matches |
 | `!listfile [regex]` | List files (paginated, 50/page) |
 | `!search <keywords>` | Keyword search in music library |
@@ -22,8 +22,8 @@ Add all commands that require Phase 2 subsystems (file library, URL media, advan
 ### URL commands
 | Command | Description |
 |---|---|
-| `!url <url>` | Add YouTube/SC/etc. URL |
-| `!playlist <url>` | Expand and queue a playlist |
+| `!url <url>` | Add YouTube/SC/etc. URL — **shipped in 3-03** |
+| `!playlist <url>` | Expand and queue a playlist — **shipped in 3-03** |
 | `!yplay <query>` | Search YouTube, play first result |
 | `!ysearch <query>` | Search YouTube, display results table |
 
@@ -39,7 +39,7 @@ Add all commands that require Phase 2 subsystems (file library, URL media, advan
 ### Mode commands
 | Command | Description |
 |---|---|
-| `!mode [one-shot\|repeat\|random\|autoplay]` | Get or set playback mode |
+| `!mode [one-shot\|repeat\|random\|autoplay]` | Get or set playback mode — **shipped in 3-04** (`autoplay` added in 3-05) |
 | `!last` | Jump to last item in queue |
 | `!repeat [n]` | Duplicate current item n times |
 | `!random` | Shuffle queue |
