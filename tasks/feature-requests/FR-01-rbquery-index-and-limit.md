@@ -1,6 +1,6 @@
 # FR-01 — rbquery: numeric index for rbplay + configurable result count
 
-**Status:** open  
+**Status:** done  
 **Affects:** `internal/radio/`, `internal/command/`  
 **Related milestone:** 1-07 (command dispatcher & radio commands)
 

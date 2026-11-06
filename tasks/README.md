@@ -32,7 +32,7 @@ mergeable.
 
 | #    | File                                          | Status | Description                        |
 |------|-----------------------------------------------|--------|------------------------------------|
-| 2-01 | [phase2/01-hls-m3u8.md](phase2/01-hls-m3u8.md) | todo   | Auto-detect HLS/M3U8 streams in `!radio` |
+| 2-01 | [phase2/01-hls-m3u8.md](phase2/01-hls-m3u8.md) | done   | Auto-detect HLS/M3U8 streams in `!radio` |
 
 ## Phase 3 — Full Bot
 
@@ -43,7 +43,7 @@ Builds on the Phase 1 binary; each milestone is independently mergeable.
 |------|--------------------------------------------------------------|--------|----------------------------------------|
 | 3-01 | [phase3/01-database.md](phase3/01-database.md)               | done   | SQLite settings + music DB, migration  |
 | 3-02 | [phase3/02-file-media.md](phase3/02-file-media.md)           | done   | Local file playback (ffprobe metadata) |
-| 3-03 | [phase3/03-url-media.md](phase3/03-url-media.md)             | todo   | YouTube / yt-dlp integration           |
+| 3-03 | [phase3/03-url-media.md](phase3/03-url-media.md)             | todo   | YouTube / yt-dlp (stream-only)             |
 | 3-04 | [phase3/04-playlist-modes.md](phase3/04-playlist-modes.md)   | todo   | repeat / random / autoplay modes       |
 | 3-05 | [phase3/05-music-library.md](phase3/05-music-library.md)     | todo   | Dir scan, DB cache, tags               |
 | 3-06 | [phase3/06-full-commands.md](phase3/06-full-commands.md)     | todo   | All remaining chat commands            |
@@ -60,7 +60,7 @@ Each FR lives in `feature-requests/` and must ship with updated docs and tests.
 
 | #     | File | Status | Description |
 |-------|------|--------|-------------|
-| FR-01 | [feature-requests/FR-01-rbquery-index-and-limit.md](feature-requests/FR-01-rbquery-index-and-limit.md) | open | `!rbquery` numeric index for `!rbplay` + optional result count |
+| FR-01 | [feature-requests/FR-01-rbquery-index-and-limit.md](feature-requests/FR-01-rbquery-index-and-limit.md) | done | `!rbquery` numeric index for `!rbplay` + optional result count |
 | FR-02 | [feature-requests/FR-02-pause-and-auto-pause-when-alone.md](feature-requests/FR-02-pause-and-auto-pause-when-alone.md) | open | `!pause`/`!resume` (keep queue position) + auto-pause when alone in channel |
 | FR-03 | [feature-requests/FR-03-local-file-hls-random-folder-playback.md](feature-requests/FR-03-local-file-hls-random-folder-playback.md) | open | Local file, HLS/M3U8, and random-folder playback (pending clarifying questions) |
 

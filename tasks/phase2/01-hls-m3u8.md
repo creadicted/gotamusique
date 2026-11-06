@@ -1,6 +1,6 @@
 # 2-01 — HLS / M3U8 stream playback
 
-**Status:** todo  
+**Status:** done  
 **Depends on:** Phase 1 complete  
 **Unlocks:** nothing (standalone enhancement)
 
