@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"os/exec"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -59,10 +60,11 @@ func (p *Pipeline) Volume() *VolumeHelper { return &p.vol }
 func (p *Pipeline) IsRunning() bool { return p.running.Load() }
 
 // Launch starts ffmpeg for url and begins streaming PCM frames to Mumble.
+// opts tunes the ffmpeg input (finite tracks, HTTP headers, cookies).
 // onEnd is called exactly once when the goroutine exits: nil for a clean stop
 // (stream ended or Interrupt), non-nil for unexpected errors.
 // Returns ErrAlreadyRunning if a stream is already in progress.
-func (p *Pipeline) Launch(url string, onEnd func(error)) error {
+func (p *Pipeline) Launch(url string, opts StreamOptions, onEnd func(error)) error {
 	if p.running.Swap(true) {
 		return ErrAlreadyRunning
 	}
@@ -77,7 +79,7 @@ func (p *Pipeline) Launch(url string, onEnd func(error)) error {
 		verbosity = "debug"
 	}
 
-	cmd := exec.Command("ffmpeg", buildFFmpegArgs(url, verbosity)...)
+	cmd := exec.Command("ffmpeg", buildFFmpegArgs(url, verbosity, opts)...)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -181,8 +183,11 @@ func (p *Pipeline) doFadeOut(cmd *exec.Cmd, stdout io.ReadCloser, audioCh chan<-
 
 // buildFFmpegArgs returns the argument list for an ffmpeg invocation that decodes
 // url to mono 16-bit LE PCM at 48 kHz. HTTP/HTTPS URLs get reconnect flags so
-// live streams survive transient interruptions.
-func buildFFmpegArgs(url, verbosity string) []string {
+// live streams survive transient interruptions. For finite tracks
+// -reconnect_at_eof is omitted so a completed download ends instead of being
+// restarted from the beginning; transient-error reconnection is kept. Headers
+// and cookies from opts are passed before -i (http(s) only).
+func buildFFmpegArgs(url, verbosity string, opts StreamOptions) []string {
 	args := []string{"-v", verbosity, "-nostdin"}
 
 	if strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://") {
@@ -190,12 +195,59 @@ func buildFFmpegArgs(url, verbosity string) []string {
 			"-reconnect", "1",
 			"-reconnect_streamed", "1",
 			"-reconnect_delay_max", "5",
-			"-reconnect_at_eof", "1",
-			"-reconnect_on_http_error", "4xx,5xx",
 		)
+		if !opts.Finite {
+			args = append(args, "-reconnect_at_eof", "1")
+		}
+		args = append(args, "-reconnect_on_http_error", "4xx,5xx")
+		args = append(args, httpInputArgs(opts)...)
 	}
 
 	args = append(args, "-i", url, "-ac", "1", "-f", "s16le", "-ar", "48000", "-")
+	return args
+}
+
+// httpInputArgs renders opts.Headers/Cookies as ffmpeg http-protocol options.
+// User-Agent goes through -user_agent; everything else through -headers, which
+// requires each line to end in CRLF. Values containing CR/LF are dropped so a
+// header can never inject another one.
+func httpInputArgs(opts StreamOptions) []string {
+	var args []string
+
+	keys := make([]string, 0, len(opts.Headers))
+	for k := range opts.Headers {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	var hdr strings.Builder
+	for _, k := range keys {
+		v := opts.Headers[k]
+		if k == "" || strings.ContainsAny(k, ":\r\n") || strings.ContainsAny(v, "\r\n") {
+			continue // malformed or injection attempt
+		}
+		if strings.EqualFold(k, "User-Agent") {
+			args = append(args, "-user_agent", v)
+			continue
+		}
+		if strings.EqualFold(k, "Cookie") {
+			continue // cookies are passed scoped, via opts.Cookies
+		}
+		hdr.WriteString(k + ": " + v + "\r\n")
+	}
+	if hdr.Len() > 0 {
+		args = append(args, "-headers", hdr.String())
+	}
+
+	var cookies []string
+	for _, c := range opts.Cookies {
+		if c != "" && !strings.ContainsAny(c, "\r\n") {
+			cookies = append(cookies, c)
+		}
+	}
+	if len(cookies) > 0 {
+		args = append(args, "-cookies", strings.Join(cookies, "\n"))
+	}
 	return args
 }
 

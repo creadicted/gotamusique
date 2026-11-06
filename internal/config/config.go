@@ -14,12 +14,13 @@ import (
 var defaultINI []byte
 
 type Config struct {
-	Server   ServerConfig
-	Bot      BotConfig
-	Files    FilesConfig
-	Commands CommandsConfig
-	Radio    map[string]RadioPreset
-	Debug    DebugConfig
+	Server    ServerConfig
+	Bot       BotConfig
+	Files     FilesConfig
+	YoutubeDL YoutubeDLConfig
+	Commands  CommandsConfig
+	Radio     map[string]RadioPreset
+	Debug     DebugConfig
 }
 
 type ServerConfig struct {
@@ -44,6 +45,16 @@ type BotConfig struct {
 	Logfile              string
 	AnnounceCurrentMusic bool
 	FormattedReplies     bool
+	MaxTrackDuration     int // minutes; 0 = no limit
+	MaxTrackPlaylist     int // max entries added by the playlist command
+}
+
+// YoutubeDLConfig holds the [youtube_dl] section (yt-dlp settings).
+type YoutubeDLConfig struct {
+	Binary        string // yt-dlp executable; empty = "yt-dlp" from PATH
+	CookieFile    string
+	SourceAddress string
+	UserAgent     string
 }
 
 type CommandsConfig struct {
@@ -77,6 +88,12 @@ var sectionAllowlists = map[string]map[string]bool{
 		"avatar": true, "stereo": true, "logfile": true,
 		"announce_current_music": true,
 		"formatted_replies":      true,
+		"max_track_duration":     true,
+		"max_track_playlist":     true,
+	},
+	"youtube_dl": {
+		"binary": true, "cookiefile": true,
+		"source_address": true, "user_agent": true,
 	},
 	"files": {
 		"music_folder": true,
@@ -148,6 +165,7 @@ func build(f *ini.File) (*Config, error) {
 	s := f.Section("server")
 	b := f.Section("bot")
 	fi := f.Section("files")
+	yt := f.Section("youtube_dl")
 	d := f.Section("debug")
 
 	cfg := &Config{
@@ -172,6 +190,14 @@ func build(f *ini.File) (*Config, error) {
 			Logfile:              b.Key("logfile").String(),
 			AnnounceCurrentMusic: b.Key("announce_current_music").MustBool(true),
 			FormattedReplies:     b.Key("formatted_replies").MustBool(true),
+			MaxTrackDuration:     b.Key("max_track_duration").MustInt(60),
+			MaxTrackPlaylist:     b.Key("max_track_playlist").MustInt(20),
+		},
+		YoutubeDL: YoutubeDLConfig{
+			Binary:        yt.Key("binary").String(),
+			CookieFile:    yt.Key("cookiefile").String(),
+			SourceAddress: yt.Key("source_address").String(),
+			UserAgent:     yt.Key("user_agent").String(),
 		},
 		Files: FilesConfig{
 			MusicFolder: fi.Key("music_folder").String(),

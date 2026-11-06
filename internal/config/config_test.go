@@ -61,3 +61,22 @@ func TestLoad_MissingUserFile(t *testing.T) {
 		t.Errorf("Server.TLSSkipVerify = false, want default true")
 	}
 }
+
+func TestLoad_YoutubeDLDefaults(t *testing.T) {
+	cfg, err := Load("testdata/does_not_exist.ini")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Bot.MaxTrackDuration != 60 || cfg.Bot.MaxTrackPlaylist != 20 {
+		t.Errorf("limits = %d/%d, want 60/20", cfg.Bot.MaxTrackDuration, cfg.Bot.MaxTrackPlaylist)
+	}
+	if cfg.YoutubeDL.Binary != "" || cfg.YoutubeDL.CookieFile != "" {
+		t.Errorf("unexpected youtube_dl defaults: %+v", cfg.YoutubeDL)
+	}
+	if got := cfg.Commands.Aliases["play_url"]; len(got) != 1 || got[0] != "url" {
+		t.Errorf("play_url aliases = %v", got)
+	}
+	if got := cfg.Commands.Aliases["play_playlist"]; len(got) != 1 || got[0] != "playlist" {
+		t.Errorf("play_playlist aliases = %v", got)
+	}
+}

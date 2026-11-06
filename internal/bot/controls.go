@@ -16,6 +16,7 @@ func (b *Bot) Play(index int) error {
 	if err := b.queue.JumpTo(index); err != nil {
 		return fmt.Errorf("play: %w", err)
 	}
+	b.invalidatePlayback()
 	// Increment version so the previous track's onTrackEnd callback does not
 	// also advance the queue after we've already set the desired index.
 	b.launchVersion.Add(1)
@@ -68,6 +69,7 @@ func (b *Bot) IsMuted() bool {
 // Stop interrupts the current track and resets the queue to the beginning
 // without clearing the items. Use Clear to also empty the queue.
 func (b *Bot) Stop() {
+	b.invalidatePlayback()
 	b.mu.Lock()
 	if b.audio != nil {
 		b.audio.Interrupt()
@@ -80,6 +82,7 @@ func (b *Bot) Stop() {
 // If the pipeline is not running (already idle), the queue is advanced
 // directly so the loop picks up the next item.
 func (b *Bot) Skip() {
+	b.invalidatePlayback()
 	b.mu.Lock()
 	pipeline := b.audio
 	running := pipeline != nil && pipeline.IsRunning()
@@ -96,12 +99,26 @@ func (b *Bot) Skip() {
 
 // Clear interrupts playback and empties the queue.
 func (b *Bot) Clear() {
+	b.invalidatePlayback()
 	b.mu.Lock()
 	if b.audio != nil {
 		b.audio.Interrupt()
 	}
 	b.mu.Unlock()
 	b.queue.Clear()
+}
+
+// invalidatePlayback marks any in-flight Resolver call as stale and cancels it.
+// Every control that changes what should play next (Play, Stop, Skip, Clear)
+// calls it, so the loop never launches or skips based on an outdated selection.
+func (b *Bot) invalidatePlayback() {
+	b.playEpoch.Add(1)
+	b.mu.Lock()
+	cancel := b.resolveCancel
+	b.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
 }
 
 // wakeLoop sends a non-blocking signal to the loop goroutine.
