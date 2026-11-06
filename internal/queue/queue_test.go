@@ -413,3 +413,60 @@ func TestConcurrentNextAndAppend(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+// --- FinishIfCurrent ---
+
+func TestFinishIfCurrent_GoesIdleAndStaysIdle(t *testing.T) {
+	q := NewQueue()
+	a, b := item("a"), item("b")
+	q.Append(a)
+	q.Append(b)
+	if !q.FinishIfCurrent(a) {
+		t.Fatal("FinishIfCurrent(current) = false")
+	}
+	if q.Current() != nil || q.Index() != q.Len() {
+		t.Errorf("not idle: current=%v index=%d len=%d", q.Current(), q.Index(), q.Len())
+	}
+	if q.Len() != 2 {
+		t.Error("FinishIfCurrent must not drop items")
+	}
+}
+
+func TestFinishIfCurrent_NoOpWhenSelectionChanged(t *testing.T) {
+	q := NewQueue()
+	a, b := item("a"), item("b")
+	q.Append(a)
+	q.Append(b)
+	q.Next() // current is now b
+	if q.FinishIfCurrent(a) {
+		t.Error("must not finish when the given item is no longer current")
+	}
+	if q.Current() != b {
+		t.Error("selection was overwritten")
+	}
+}
+
+func TestFinishIfCurrent_EmptyAndIdle(t *testing.T) {
+	q := NewQueue()
+	if q.FinishIfCurrent(item("x")) {
+		t.Error("empty queue: want false")
+	}
+	a := item("a")
+	q.Append(a)
+	q.FinishIfCurrent(a)
+	if q.FinishIfCurrent(a) {
+		t.Error("already idle: want false")
+	}
+}
+
+func TestFinishIfCurrent_AppendAfterwardsBecomesCurrent(t *testing.T) {
+	q := NewQueue()
+	a := item("a")
+	q.Append(a)
+	q.FinishIfCurrent(a)
+	n := item("new")
+	q.Append(n)
+	if q.Current() != n {
+		t.Error("an item queued after going idle must become current")
+	}
+}

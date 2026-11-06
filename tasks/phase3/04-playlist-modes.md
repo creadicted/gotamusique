@@ -80,6 +80,12 @@ still starts. The mode is **not** persisted across restarts (3-10 handles that).
 - `Randomize()`/`SetMode(random)` can change which item is current's successor, not the current
   item itself, so an in-flight `Resolve` is unaffected. Anything that changes the current index
   must still go through the `playEpoch` guard (`invalidatePlayback`).
+- **All-items-fail guard (fixed in this milestone):** the loop's failure guard used to call
+  `Stop()`, which resets the queue to index 0, so a queue where every item fails was retried
+  forever (~35 attempts and chat messages per 700 ms with 5 items, in every mode). It now calls
+  `Queue.FinishIfCurrent(item)`, which goes idle at the end of the queue (items kept) and only
+  acts if the failing item is still current, so a concurrent skip/play is never overwritten.
+  Playback resumes when something new is queued or played. Covered by loop regression tests.
 - A one-item queue in `repeat` or `random` replays that item forever.
 
 ## Known limitations

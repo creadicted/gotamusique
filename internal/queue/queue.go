@@ -180,6 +180,21 @@ func (q *Queue) Next() bool {
 	}
 }
 
+// FinishIfCurrent moves the queue to the past-end (idle) position, but only if
+// item is still the current item. It reports whether it did. The check and the
+// move are atomic, so a concurrent skip/jump/clear that changed the selection
+// is never overwritten. Unlike Reset it keeps playback idle: the queue does not
+// restart from index 0 until something new is queued or played.
+func (q *Queue) FinishIfCurrent(item audio.MediaItem) bool {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if q.currentIndex >= len(q.items) || q.items[q.currentIndex] != item {
+		return false
+	}
+	q.currentIndex = len(q.items)
+	return true
+}
+
 // JumpTo sets currentIndex to index. Returns an error if index is out of range.
 func (q *Queue) JumpTo(index int) error {
 	q.mu.Lock()

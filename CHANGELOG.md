@@ -38,6 +38,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Flags applied: `-reconnect`, `-reconnect_streamed`, `-reconnect_delay_max 5`,
   `-reconnect_at_eof`, `-reconnect_on_http_error 4xx,5xx`.
 
+### Fixed
+
+- A queue in which every track fails to start no longer retries forever. After "too many
+  consecutive failures" the bot now goes idle (queue kept) instead of resetting to the first
+  track and starting over, which spammed the channel in every mode.
+
 ### Changed
 
 - `!radio` is unchanged and always produces a `[Radio]` item — there is no

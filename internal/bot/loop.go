@@ -75,8 +75,12 @@ func (b *Bot) loop(ctx context.Context) {
 			b.sendChannelMessage(formatAnnouncement(item) + failMsg + err.Error())
 			consecutiveFails++
 			if consecutiveFails >= threshold {
+				// Go idle instead of Stop(): Stop resets the queue to index 0, which
+				// makes this loop immediately retry the same failing items forever.
+				// FinishIfCurrent leaves the queue idle until something new is queued
+				// or played, and does nothing if a control changed the selection.
+				b.queue.FinishIfCurrent(item)
 				b.sendChannelMessage("too many consecutive failures, stopping")
-				b.Stop()
 				consecutiveFails = 0
 				continue
 			}
