@@ -91,6 +91,29 @@ func TestValidate_RejectsPlaylist(t *testing.T) {
 	}
 }
 
+func TestValidate_PlaylistProbeIsFlatAndNeverFullyResolved(t *testing.T) {
+	cfg, dir := fakeYTDLP(t, standardBody)
+	_ = New("https://example.com/playlist-url", cfg).Validate()
+	log := argLog(t, dir)
+	if !strings.Contains(log, "--flat-playlist --playlist-end 1") {
+		t.Errorf("probe must be flat and capped at one entry, args: %s", log)
+	}
+	// Exactly one yt-dlp call: the playlist must be rejected without a full lookup.
+	if n := strings.Count(strings.TrimSpace(log), "\n") + 1; n != 1 {
+		t.Errorf("yt-dlp called %d times for a playlist, want 1: %s", n, log)
+	}
+}
+
+func TestValidate_SingleVideoProbesThenFetches(t *testing.T) {
+	cfg, dir := fakeYTDLP(t, standardBody)
+	if err := New("https://example.com/watch?v=a", cfg).Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if n := strings.Count(strings.TrimSpace(argLog(t, dir)), "\n") + 1; n != 2 {
+		t.Errorf("yt-dlp called %d times for a video, want 2 (probe + info)", n)
+	}
+}
+
 func TestValidate_DurationLimit(t *testing.T) {
 	cfg, _ := fakeYTDLP(t, standardBody)
 	err := New("https://example.com/long-url", cfg).Validate()

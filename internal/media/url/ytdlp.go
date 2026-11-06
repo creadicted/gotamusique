@@ -128,6 +128,24 @@ func lastLine(s string, fallback error) string {
 	return strings.TrimSpace(lines[len(lines)-1])
 }
 
+// IsPlaylist reports whether rawURL is a bare playlist (not a single video).
+// It uses flat extraction capped at one entry, so a huge playlist is detected
+// without resolving its entries. --no-playlist makes a video+list URL resolve
+// to the video, matching what !url queues.
+func IsPlaylist(ctx context.Context, rawURL string, cfg *config.Config) (bool, error) {
+	out, err := run(ctx, cfg, rawURL, "--dump-single-json", "--flat-playlist", "--playlist-end", "1", "--no-playlist")
+	if err != nil {
+		return false, err
+	}
+	var info struct {
+		Type string `json:"_type"`
+	}
+	if err := json.Unmarshal(out, &info); err != nil {
+		return false, fmt.Errorf("unexpected yt-dlp output: %w", err)
+	}
+	return info.Type == "playlist", nil
+}
+
 // GetInfo fetches metadata for a single video (never expands a playlist).
 func GetInfo(ctx context.Context, rawURL string, cfg *config.Config) (*YTInfo, error) {
 	out, err := run(ctx, cfg, rawURL, "--dump-single-json", "--no-playlist")

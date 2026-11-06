@@ -14,7 +14,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   resolved just before a track plays. `!url` queues exactly one track; `!playlist` queues
   up to `max_track_playlist` entries and checks each when it plays. Tracks longer than
   `max_track_duration` are rejected or skipped. Only `http`/`https` URLs are accepted.
-  New `[youtube_dl]` config section; the Docker image bundles a pinned yt-dlp binary.
+  New `[youtube_dl]` config section; the Docker image bundles a pinned yt-dlp binary and deno
+  (base image bumped to Alpine 3.22 for deno >= 2.3.0).
+  Finite URL tracks play to the end instead of using ffmpeg's reconnect-at-EOF; skip/clear/stop
+  during a pending resolve no longer launches or skips the wrong track.
 - **`!hls <url>` command** — play HLS/M3U8 streams directly. The stream is announced
   as `[HLS] <name>` where name is derived from the M3U8 filename in the URL path,
   falling back to the hostname.

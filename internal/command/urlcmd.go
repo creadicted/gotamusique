@@ -13,10 +13,11 @@ import (
 	"layeh.com/gumble/gumble"
 )
 
-const (
-	ytTimeout       = 30 * time.Second
-	maxConcurrentYT = 3
-)
+const maxConcurrentYT = 3
+
+// ytTimeout bounds one request, including time spent waiting for a free slot.
+// A var so tests can shorten it.
+var ytTimeout = 30 * time.Second
 
 // ytSem limits concurrent yt-dlp processes so chat spam cannot fork-bomb the host.
 var ytSem = make(chan struct{}, maxConcurrentYT)
@@ -25,17 +26,31 @@ var ytSem = make(chan struct{}, maxConcurrentYT)
 var ytWG sync.WaitGroup
 
 // runYT runs fn in a goroutine so slow yt-dlp calls never block gumble's event
-// goroutine. fn receives a context bounded by ytTimeout.
-func runYT(fn func(ctx context.Context)) {
+// goroutine. The ytTimeout deadline starts before waiting for a semaphore slot,
+// so a burst of requests can't pile up goroutines or run long after the
+// advertised timeout. If no slot frees up in time, busy is called instead of fn.
+func runYT(fn func(ctx context.Context), busy func()) {
 	ytWG.Add(1)
 	go func() {
 		defer ytWG.Done()
-		ytSem <- struct{}{}
-		defer func() { <-ytSem }()
 		ctx, cancel := context.WithTimeout(context.Background(), ytTimeout)
 		defer cancel()
+		select {
+		case ytSem <- struct{}{}:
+			defer func() { <-ytSem }()
+		case <-ctx.Done():
+			busy()
+			return
+		}
 		fn(ctx)
 	}()
+}
+
+// busyReply tells the user all yt-dlp slots were occupied for the whole timeout.
+func busyReply(cfg *config.Config, msg *gumble.TextMessage) func() {
+	return func() {
+		sendToChannel(msg, "Too many requests in progress, try again in a moment.")
+	}
 }
 
 func reply(cfg *config.Config, msg *gumble.TextMessage, htmlText, plain string) {
@@ -69,7 +84,7 @@ func handleURL(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg string
 		}
 		bot.Enqueue(item)
 		reply(cfg, msg, "Queued: <b>"+esc(item.FormatTitle())+"</b>", "Queued: "+item.FormatTitle())
-	})
+	}, busyReply(cfg, msg))
 }
 
 // handlePlaylist: expand a playlist (capped at max_track_playlist). Entries are
@@ -96,5 +111,5 @@ func handlePlaylist(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg s
 		}
 		text := fmt.Sprintf("Queued %d track(s)", len(items))
 		reply(cfg, msg, text, text)
-	})
+	}, busyReply(cfg, msg))
 }

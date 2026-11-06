@@ -15,3 +15,17 @@ type MediaItem interface {
 type Resolver interface {
 	Resolve(ctx context.Context) error
 }
+
+// Finite is optionally implemented by items with a known, bounded length (e.g.
+// a yt-dlp track with a duration). Finite items must end at EOF, so the
+// pipeline disables ffmpeg's reconnect-at-EOF for them; live streams (radio,
+// HLS, unknown duration) keep it.
+type Finite interface {
+	IsFinite() bool
+}
+
+// IsFinite reports whether item is a finite track.
+func IsFinite(item MediaItem) bool {
+	f, ok := item.(Finite)
+	return ok && f.IsFinite()
+}

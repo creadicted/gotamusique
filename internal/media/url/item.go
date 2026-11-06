@@ -90,12 +90,18 @@ func (u *URLItem) ValidateCtx(ctx context.Context) error {
 	if err := CheckURL(u.URL); err != nil {
 		return err
 	}
-	info, err := GetInfo(ctx, u.URL, u.cfg)
+	// Cheap flat probe first: a bare playlist must be rejected without
+	// resolving every entry (which can exceed the timeout on large playlists).
+	isList, err := IsPlaylist(ctx, u.URL, u.cfg)
 	if err != nil {
 		return err
 	}
-	if info.Type == "playlist" {
+	if isList {
 		return ErrIsPlaylist
+	}
+	info, err := GetInfo(ctx, u.URL, u.cfg)
+	if err != nil {
+		return err
 	}
 	u.apply(info)
 	return u.checkDuration()
@@ -133,6 +139,14 @@ func (u *URLItem) StreamURL() string {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 	return u.streamURL
+}
+
+// IsFinite reports whether the track has a known duration. Live streams report
+// no duration and keep ffmpeg's reconnect-at-EOF behaviour.
+func (u *URLItem) IsFinite() bool {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	return u.Duration > 0
 }
 
 // FormatTitle returns a display string such as "Title - Uploader [3:25]".

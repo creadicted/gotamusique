@@ -29,6 +29,8 @@ type Bot struct {
 	queue         *queue.Queue
 	wakeCh        chan struct{} // buffered(1): non-blocking wake for the loop goroutine
 	launchVersion atomic.Int64  // incremented by Play() to suppress onTrackEnd's queue.Next()
+	playEpoch     atomic.Int64  // incremented by every playback control; invalidates in-flight resolves
+	resolveCancel func()        // cancels the in-flight Resolver call (guarded by mu)
 	cancel        func()        // cancels the top-level Run context (set by main)
 	dispatcher    *command.Dispatcher
 }

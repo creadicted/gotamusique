@@ -59,10 +59,11 @@ func (p *Pipeline) Volume() *VolumeHelper { return &p.vol }
 func (p *Pipeline) IsRunning() bool { return p.running.Load() }
 
 // Launch starts ffmpeg for url and begins streaming PCM frames to Mumble.
+// finite marks a bounded track that must end at EOF (no reconnect-at-EOF).
 // onEnd is called exactly once when the goroutine exits: nil for a clean stop
 // (stream ended or Interrupt), non-nil for unexpected errors.
 // Returns ErrAlreadyRunning if a stream is already in progress.
-func (p *Pipeline) Launch(url string, onEnd func(error)) error {
+func (p *Pipeline) Launch(url string, finite bool, onEnd func(error)) error {
 	if p.running.Swap(true) {
 		return ErrAlreadyRunning
 	}
@@ -77,7 +78,7 @@ func (p *Pipeline) Launch(url string, onEnd func(error)) error {
 		verbosity = "debug"
 	}
 
-	cmd := exec.Command("ffmpeg", buildFFmpegArgs(url, verbosity)...)
+	cmd := exec.Command("ffmpeg", buildFFmpegArgs(url, verbosity, finite)...)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -181,8 +182,10 @@ func (p *Pipeline) doFadeOut(cmd *exec.Cmd, stdout io.ReadCloser, audioCh chan<-
 
 // buildFFmpegArgs returns the argument list for an ffmpeg invocation that decodes
 // url to mono 16-bit LE PCM at 48 kHz. HTTP/HTTPS URLs get reconnect flags so
-// live streams survive transient interruptions.
-func buildFFmpegArgs(url, verbosity string) []string {
+// live streams survive transient interruptions. For finite tracks
+// -reconnect_at_eof is omitted so a completed download ends instead of being
+// restarted from the beginning; transient-error reconnection is kept.
+func buildFFmpegArgs(url, verbosity string, finite bool) []string {
 	args := []string{"-v", verbosity, "-nostdin"}
 
 	if strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://") {
@@ -190,9 +193,11 @@ func buildFFmpegArgs(url, verbosity string) []string {
 			"-reconnect", "1",
 			"-reconnect_streamed", "1",
 			"-reconnect_delay_max", "5",
-			"-reconnect_at_eof", "1",
-			"-reconnect_on_http_error", "4xx,5xx",
 		)
+		if !finite {
+			args = append(args, "-reconnect_at_eof", "1")
+		}
+		args = append(args, "-reconnect_on_http_error", "4xx,5xx")
 	}
 
 	args = append(args, "-i", url, "-ac", "1", "-f", "s16le", "-ar", "48000", "-")

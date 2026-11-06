@@ -1,9 +1,11 @@
 package command
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	urlitem "github.com/konradk/gotamusique/internal/media/url"
 )
@@ -112,5 +114,53 @@ func TestHandlePlaylist_BadURL_NoEnqueue(t *testing.T) {
 	ytWG.Wait()
 	if len(bot.enqueueCalls) != 0 {
 		t.Errorf("enqueued %d, want 0", len(bot.enqueueCalls))
+	}
+}
+
+func TestRunYT_SemaphoreWaitCountsTowardTimeout(t *testing.T) {
+	old := ytTimeout
+	ytTimeout = 150 * time.Millisecond
+	defer func() { ytTimeout = old }()
+
+	// Occupy every slot.
+	for i := 0; i < maxConcurrentYT; i++ {
+		ytSem <- struct{}{}
+	}
+	defer func() {
+		for i := 0; i < maxConcurrentYT; i++ {
+			<-ytSem
+		}
+	}()
+
+	ran, busy := make(chan struct{}, 1), make(chan struct{}, 1)
+	start := time.Now()
+	runYT(func(ctx context.Context) { ran <- struct{}{} }, func() { busy <- struct{}{} })
+
+	select {
+	case <-busy:
+	case <-ran:
+		t.Fatal("fn must not run when no slot frees up before the deadline")
+	case <-time.After(3 * time.Second):
+		t.Fatal("busy callback not invoked: semaphore wait ignores the timeout")
+	}
+	if d := time.Since(start); d > time.Second {
+		t.Errorf("gave up after %v, want ~150ms", d)
+	}
+	ytWG.Wait()
+}
+
+func TestRunYT_RunsWhenSlotFree(t *testing.T) {
+	ran := make(chan struct{}, 1)
+	runYT(func(ctx context.Context) {
+		if _, ok := ctx.Deadline(); !ok {
+			t.Error("ctx must carry a deadline")
+		}
+		ran <- struct{}{}
+	}, func() { t.Error("busy must not be called") })
+	ytWG.Wait()
+	select {
+	case <-ran:
+	default:
+		t.Error("fn did not run")
 	}
 }

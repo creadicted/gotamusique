@@ -20,7 +20,8 @@ Download from the [latest release](../../releases/tag/latest) — no Go toolchai
 ## Requirements
 
 - `ffmpeg` on PATH
-- `yt-dlp` on PATH — only for `!url` / `!playlist` (the Docker image bundles it)
+- `yt-dlp` on PATH — only for `!url` / `!playlist`
+- A JavaScript runtime for yt-dlp's YouTube support — [`deno`](https://deno.com) >= 2.3.0 (enabled by default), or node/QuickJS/bun enabled via yt-dlp's `--js-runtimes` (see the [yt-dlp EJS wiki](https://github.com/yt-dlp/yt-dlp/wiki/EJS)). The Docker image bundles yt-dlp and deno.
 
 No Go toolchain, no Python runtime, no system libraries — the binary is fully static.
 
