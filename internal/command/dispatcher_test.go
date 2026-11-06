@@ -25,6 +25,9 @@ type mockBot struct {
 	queueIdx     int
 	currentItem  audio.MediaItem
 	killCalled   bool
+	mode         string
+	setModeErr   error
+	setModeCalls []string
 }
 
 func (m *mockBot) Config() *config.Config         { return m.cfg }
@@ -42,6 +45,20 @@ func (m *mockBot) TargetVolume() float64          { return m.volume }
 func (m *mockBot) SetVolume(pct int)              { m.volume = float64(pct) / 100.0 }
 func (m *mockBot) JoinChannel(ch *gumble.Channel) {}
 func (m *mockBot) Kill()                          { m.killCalled = true }
+func (m *mockBot) PlaybackMode() string {
+	if m.mode == "" {
+		return "one-shot"
+	}
+	return m.mode
+}
+func (m *mockBot) SetPlaybackMode(name string) error {
+	m.setModeCalls = append(m.setModeCalls, name)
+	if m.setModeErr != nil {
+		return m.setModeErr
+	}
+	m.mode = name
+	return nil
+}
 
 func defaultBot() *mockBot {
 	return &mockBot{

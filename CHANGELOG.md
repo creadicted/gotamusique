@@ -9,6 +9,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **`!mode [one-shot|repeat|random]` command and `[bot] playback_mode` setting** — `repeat`
+  loops the queue. `random` shuffles the upcoming items, inserts newly queued tracks at a random
+  position after the current one, and reshuffles when the list ends (the track that just played
+  never starts the next lap). `autoplay` is recognised but not available yet; an invalid
+  `playback_mode` in the config logs a warning and falls back to `one-shot`. The mode is not
+  saved across restarts.
 - **`!url <url>` and `!playlist <url>` commands** — play audio from YouTube, SoundCloud and
   other yt-dlp sites. Audio is always streamed (no downloads); the direct stream URL is
   resolved just before a track plays. `!url` queues exactly one track; `!playlist` queues

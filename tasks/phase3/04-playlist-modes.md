@@ -1,6 +1,6 @@
 # 3-04 — Playlist Modes
 
-**Status:** todo  
+**Status:** done  
 **Depends on:** Phase 1 (queue), 3-03 (`audio.Resolver`)  
 **Unlocks:** 3-06, 3-10
 
@@ -51,7 +51,8 @@ func (q *Queue) Randomize()             // shuffle items after the current index
 
 - `Next()` becomes mode-aware; its signature is unchanged. All three callers (the loop's
   failure path, the end-of-track callback, `Skip()`) pick up the new behaviour.
-- In `random` mode `Append`/`Insert` place the new item at a random index after the current one.
+- In `random` mode `Append` places the new item at a random index after the current one.
+  `Insert` keeps its explicit index (it is a positional operation; nothing calls it today).
 - Switching back to `one-shot` does **not** restore the original order.
 - Mode and shuffle live under the queue's existing mutex.
 
@@ -79,8 +80,6 @@ still starts. The mode is **not** persisted across restarts (3-10 handles that).
 - `Randomize()`/`SetMode(random)` can change which item is current's successor, not the current
   item itself, so an in-flight `Resolve` is unaffected. Anything that changes the current index
   must still go through the `playEpoch` guard (`invalidatePlayback`).
-- The loop's failure guard (`consecutiveFails >= queue.Len()`) still stops an endless loop when
-  every item fails, since failures are counted across wraps.
 - A one-item queue in `repeat` or `random` replays that item forever.
 
 ## Known limitations

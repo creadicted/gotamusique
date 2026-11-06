@@ -2,6 +2,8 @@ package queue
 
 import (
 	"fmt"
+	"math/rand/v2"
+	"slices"
 	"sync"
 
 	"github.com/konradk/gotamusique/internal/audio"
@@ -9,17 +11,89 @@ import (
 
 // Queue is a thread-safe, index-based media queue.
 // currentIndex == len(items) is the "past-end / idle" sentinel.
+//
+// The playback mode decides what Next does at the end of the queue. Random mode
+// works by shuffling the item list itself, so the list always shows the real
+// play order and Next stays sequential in every mode. The zero value behaves as
+// ModeOneShot.
 type Queue struct {
 	mu           sync.RWMutex
 	items        []audio.MediaItem
 	currentIndex int
+	mode         Mode
 }
 
-func NewQueue() *Queue { return &Queue{} }
+func NewQueue() *Queue { return &Queue{mode: ModeOneShot} }
 
+// Mode returns the current playback mode.
+func (q *Queue) Mode() Mode {
+	q.mu.RLock()
+	defer q.mu.RUnlock()
+	if q.mode == "" {
+		return ModeOneShot
+	}
+	return q.mode
+}
+
+// SetMode changes the playback mode. Entering random mode shuffles the items
+// after the current one; setting random while already in random mode does not
+// reshuffle (use Randomize for that). Leaving random mode keeps the shuffled
+// order. The current item and index are never changed.
+func (q *Queue) SetMode(m Mode) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	prev := q.mode
+	q.mode = m
+	if m == ModeRandom && prev != ModeRandom {
+		q.shuffleAfterCurrentLocked()
+	}
+}
+
+// Randomize shuffles the items after the current one. The current item and
+// everything before it stay where they are.
+func (q *Queue) Randomize() {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.shuffleAfterCurrentLocked()
+}
+
+func (q *Queue) shuffleAfterCurrentLocked() {
+	start := q.currentIndex + 1
+	if start >= len(q.items) {
+		return
+	}
+	rest := q.items[start:]
+	rand.Shuffle(len(rest), func(i, j int) { rest[i], rest[j] = rest[j], rest[i] })
+}
+
+// reshuffleLocked shuffles the whole list. last is the index of the item that
+// just finished (or -1); when possible the new first item is a different one,
+// so the same track never plays twice in a row across a lap.
+func (q *Queue) reshuffleLocked(last int) {
+	n := len(q.items)
+	perm := rand.Perm(n)
+	if n > 1 && last >= 0 && perm[0] == last {
+		j := 1 + rand.IntN(n-1)
+		perm[0], perm[j] = perm[j], perm[0]
+	}
+	out := make([]audio.MediaItem, n)
+	for i, p := range perm {
+		out[i] = q.items[p]
+	}
+	q.items = out
+}
+
+// Append adds item to the queue. In random mode the item lands at a random
+// position after the current one (never before it); when the queue is idle it
+// is simply appended and becomes the current item.
 func (q *Queue) Append(item audio.MediaItem) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
+	if q.mode == ModeRandom && q.currentIndex < len(q.items) {
+		pos := q.currentIndex + 1 + rand.IntN(len(q.items)-q.currentIndex)
+		q.items = slices.Insert(q.items, pos, item)
+		return
+	}
 	q.items = append(q.items, item)
 }
 
@@ -69,20 +143,41 @@ func (q *Queue) Current() audio.MediaItem {
 	return q.items[q.currentIndex]
 }
 
-// Next advances currentIndex by one and returns true. If already at the last
-// item it sets currentIndex to len(items) (the past-end sentinel) and returns
-// false. Further calls while past-end are no-ops that also return false.
+// Next advances to the following item and returns true. At the end of the
+// queue the mode decides:
+//
+//	one-shot: currentIndex becomes len(items) (the past-end sentinel) and Next
+//	          returns false; further calls are no-ops that also return false.
+//	repeat:   wraps to index 0 and returns true.
+//	random:   reshuffles the whole list, wraps to index 0 and returns true; the
+//	          first item of the new lap is not the one that just played.
 func (q *Queue) Next() bool {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	if len(q.items) == 0 || q.currentIndex >= len(q.items)-1 {
-		if len(q.items) > 0 {
-			q.currentIndex = len(q.items)
-		}
+	n := len(q.items)
+	if n == 0 {
 		return false
 	}
-	q.currentIndex++
-	return true
+	if q.currentIndex < n-1 {
+		q.currentIndex++
+		return true
+	}
+	switch q.mode {
+	case ModeRepeat:
+		q.currentIndex = 0
+		return true
+	case ModeRandom:
+		last := -1
+		if q.currentIndex < n {
+			last = q.currentIndex
+		}
+		q.reshuffleLocked(last)
+		q.currentIndex = 0
+		return true
+	default:
+		q.currentIndex = n
+		return false
+	}
 }
 
 // JumpTo sets currentIndex to index. Returns an error if index is out of range.

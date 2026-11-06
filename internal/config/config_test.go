@@ -80,3 +80,16 @@ func TestLoad_YoutubeDLDefaults(t *testing.T) {
 		t.Errorf("play_playlist aliases = %v", got)
 	}
 }
+
+func TestLoad_PlaybackModeDefault(t *testing.T) {
+	cfg, err := Load("testdata/does_not_exist.ini")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Bot.PlaybackMode != "one-shot" {
+		t.Errorf("PlaybackMode = %q, want one-shot", cfg.Bot.PlaybackMode)
+	}
+	if got := cfg.Commands.Aliases["mode"]; len(got) != 1 || got[0] != "mode" {
+		t.Errorf("mode aliases = %v", got)
+	}
+}
