@@ -9,6 +9,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **`!url <url>` and `!playlist <url>` commands** — play audio from YouTube, SoundCloud and
+  other yt-dlp sites. Audio is always streamed (no downloads); the direct stream URL is
+  resolved just before a track plays. `!url` queues exactly one track; `!playlist` queues
+  up to `max_track_playlist` entries and checks each when it plays. Tracks longer than
+  `max_track_duration` are rejected or skipped. Only `http`/`https` URLs are accepted.
+  New `[youtube_dl]` config section; the Docker image bundles a pinned yt-dlp binary.
 - **`!hls <url>` command** — play HLS/M3U8 streams directly. The stream is announced
   as `[HLS] <name>` where name is derived from the M3U8 filename in the URL path,
   falling back to the hostname.

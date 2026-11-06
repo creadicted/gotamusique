@@ -20,6 +20,7 @@ Download from the [latest release](../../releases/tag/latest) — no Go toolchai
 ## Requirements
 
 - `ffmpeg` on PATH
+- `yt-dlp` on PATH — only for `!url` / `!playlist` (the Docker image bundles it)
 
 No Go toolchain, no Python runtime, no system libraries — the binary is fully static.
 
@@ -132,6 +133,19 @@ Missing keys fall back to the embedded defaults — you only have to set what yo
 | `comment`                | `"I play radio."` | Bot comment shown on hover                         |
 | `announce_current_music` | `True`            | Post station name to channel when a track starts   |
 | `logfile`                | *(empty)*         | Write logs to this path instead of stderr          |
+| `max_track_duration`     | `60`              | Max `!url` track length in minutes (`0` = no limit) |
+| `max_track_playlist`     | `20`              | Max tracks added by one `!playlist`                |
+
+### `[youtube_dl]`
+
+Settings for yt-dlp, used by `!url` and `!playlist`.
+
+| Key              | Default     | Description                                         |
+|------------------|-------------|-----------------------------------------------------|
+| `binary`         | *(empty)*   | Path to yt-dlp; empty = `yt-dlp` from `PATH`        |
+| `cookiefile`     | *(empty)*   | Cookies file (e.g. for age-restricted videos)       |
+| `source_address` | *(empty)*   | Local IP to bind outgoing connections to            |
+| `user_agent`     | *(empty)*   | Override the HTTP user agent                        |
 
 ### `[radio]` — presets
 
@@ -181,6 +195,8 @@ Partial command names work: `!hel` dispatches to `!help` as long as it's unambig
 | `!radio`         | List configured radio presets                                            |
 | `!radio <alias>` | Play a preset by its alias, e.g. `!radio jazz`                           |
 | `!radio <url>`   | Play any direct stream URL, e.g. `!radio http://stream.example.com/live` |
+| `!url <url>`     | Play one track via yt-dlp (YouTube, SoundCloud, …). Always a single track |
+| `!playlist <url>`| Queue a playlist (up to `max_track_playlist`); tracks resolve as they play |
 | `!stop`          | Stop playback and reset the queue position                               |
 | `!mute`          | Set volume to 0 — stream stays connected, no reconnect delay             |
 | `!unmute`        | Restore volume after `!mute`                                             |

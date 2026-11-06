@@ -8,6 +8,9 @@ import (
 	"github.com/konradk/gotamusique/internal/audio"
 )
 
+// resolveTimeout bounds a single Resolver.Resolve call.
+const resolveTimeout = 30 * time.Second
+
 func (b *Bot) loop(ctx context.Context) {
 	consecutiveFails := 0
 
@@ -39,17 +42,31 @@ func (b *Bot) loop(ctx context.Context) {
 		}
 
 		launchVer := b.launchVersion.Load()
-		err := pipeline.Launch(item.StreamURL(), func(endErr error) {
-			// Advance the queue only when Play() hasn't already set a new index.
-			if b.launchVersion.Load() == launchVer {
-				b.queue.Next()
+
+		// Items such as yt-dlp URLs resolve their stream just before playback.
+		var err error
+		failMsg := ": failed to start — "
+		if r, ok := item.(audio.Resolver); ok {
+			rctx, cancel := context.WithTimeout(ctx, resolveTimeout)
+			err = r.Resolve(rctx)
+			cancel()
+			if err != nil {
+				failMsg = ": skipped — "
 			}
-			b.wakeLoop()
-		})
+		}
+		if err == nil {
+			err = pipeline.Launch(item.StreamURL(), func(endErr error) {
+				// Advance the queue only when Play() hasn't already set a new index.
+				if b.launchVersion.Load() == launchVer {
+					b.queue.Next()
+				}
+				b.wakeLoop()
+			})
+		}
 
 		if err != nil {
 			b.log.Warn("failed to launch stream", slog.String("url", item.StreamURL()), slog.String("err", err.Error()))
-			b.sendChannelMessage(formatAnnouncement(item) + ": failed to start — " + err.Error())
+			b.sendChannelMessage(formatAnnouncement(item) + failMsg + err.Error())
 			consecutiveFails++
 			if consecutiveFails >= threshold {
 				b.sendChannelMessage("too many consecutive failures, stopping")

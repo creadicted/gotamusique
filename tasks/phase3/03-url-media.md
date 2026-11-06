@@ -1,6 +1,6 @@
 # 3-03 — URL Media (yt-dlp)
 
-**Status:** todo  
+**Status:** done  
 **Depends on:** 3-01  
 **Unlocks:** 3-06
 
