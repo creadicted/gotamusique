@@ -33,6 +33,22 @@ type YTInfo struct {
 	WebpageURL string  `json:"webpage_url"`
 	URL        string  `json:"url"`
 	Type       string  `json:"_type"` // "playlist", "url", "video", ...
+
+	// Stream-selection fields (present with -f; used by ResolveStream).
+	HTTPHeaders      map[string]string `json:"http_headers"`
+	Cookies          string            `json:"cookies"`
+	RequestedFormats []YTInfo          `json:"requested_formats"`
+	Protocol         string            `json:"protocol"`
+}
+
+// Stream is a resolved direct media URL plus the request metadata ffmpeg needs
+// to fetch it.
+type Stream struct {
+	URL     string
+	Headers map[string]string
+	Cookies []string // Set-Cookie formatted, scoped to URL
+	// Live is true when yt-dlp reports the stream as live (no fixed length).
+	Live bool
 }
 
 // DurationD returns the duration as a time.Duration.
@@ -159,20 +175,68 @@ func GetInfo(ctx context.Context, rawURL string, cfg *config.Config) (*YTInfo, e
 	return &info, nil
 }
 
-// ResolveStream returns a direct audio URL for rawURL.
-func ResolveStream(ctx context.Context, rawURL string, cfg *config.Config) (string, error) {
-	out, err := run(ctx, cfg, rawURL, "-g", "-f", "bestaudio/best", "--no-playlist")
+// ResolveStream returns a direct audio URL for rawURL together with the HTTP
+// headers and cookies yt-dlp would send for it. Some sites need a Referer,
+// matching User-Agent or session cookie; handing only the URL to ffmpeg would
+// make those streams validate but fail to play.
+func ResolveStream(ctx context.Context, rawURL string, cfg *config.Config) (*Stream, error) {
+	out, err := run(ctx, cfg, rawURL, "--dump-single-json", "-f", "bestaudio/best", "--no-playlist")
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	// -g prints one URL per line (video+audio for some formats); take the first.
-	sc := bufio.NewScanner(bytes.NewReader(out))
-	for sc.Scan() {
-		if l := strings.TrimSpace(sc.Text()); l != "" {
-			return l, nil
+	var info YTInfo
+	if err := json.Unmarshal(out, &info); err != nil {
+		return nil, fmt.Errorf("unexpected yt-dlp output: %w", err)
+	}
+	return streamFromInfo(info)
+}
+
+// streamFromInfo picks the format to play. With a single format the info
+// itself carries url/headers; for merged formats yt-dlp nests them under
+// requested_formats (we only play the first, the audio-capable one, since
+// -f bestaudio selects a single format in practice).
+func streamFromInfo(info YTInfo) (*Stream, error) {
+	f := info
+	if f.URL == "" && len(info.RequestedFormats) > 0 {
+		f = info.RequestedFormats[0]
+		if f.HTTPHeaders == nil {
+			f.HTTPHeaders = info.HTTPHeaders
 		}
 	}
-	return "", fmt.Errorf("yt-dlp returned no stream URL")
+	if f.URL == "" {
+		return nil, fmt.Errorf("yt-dlp returned no stream URL")
+	}
+	st := &Stream{URL: f.URL, Headers: f.HTTPHeaders, Live: info.Duration == 0}
+	if f.Cookies != "" {
+		st.Cookies = splitCookies(f.Cookies)
+	}
+	return st, nil
+}
+
+// splitCookies converts yt-dlp's single "name=value; Domain=..; Path=..; ..."
+// string into one Set-Cookie line per cookie. yt-dlp joins every cookie's
+// attributes with "; ", starting each cookie with its name=value, so a new
+// cookie begins at the first name=value pair that is not a known attribute.
+func splitCookies(s string) []string {
+	attrs := map[string]bool{"domain": true, "path": true, "secure": true, "expires": true, "version": true}
+	var out []string
+	var cur []string
+	for _, part := range strings.Split(s, ";") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		name := strings.ToLower(strings.SplitN(part, "=", 2)[0])
+		if !attrs[name] && len(cur) > 0 {
+			out = append(out, strings.Join(cur, "; "))
+			cur = nil
+		}
+		cur = append(cur, part)
+	}
+	if len(cur) > 0 {
+		out = append(out, strings.Join(cur, "; "))
+	}
+	return out
 }
 
 // FlatPlaylist lists playlist entries without resolving each one. A single

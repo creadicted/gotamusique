@@ -32,13 +32,21 @@ func fakeYTDLP(t *testing.T, body string) (*config.Config, string) {
 
 const standardBody = `
 case "$*" in
+  *"-f bestaudio"*)
+    case "$*" in
+      *hdr-url*) echo '{"id":"h","url":"http://cdn.example/audio.m4a","duration":100,"http_headers":{"Referer":"https://site.example/","User-Agent":"UA-X"},"cookies":"sid=abc; Domain=.site.example; Path=/; Secure; tok=9"}' ;;
+      *merged-url*) echo '{"id":"m","duration":100,"http_headers":{"Referer":"https://top/"},"requested_formats":[{"url":"http://cdn.example/a.m4a","http_headers":{"Referer":"https://fmt/"}},{"url":"http://cdn.example/v.mp4"}]}' ;;
+      *nourl*) echo '{"id":"n","duration":100}' ;;
+      *live-url*) echo '{"id":"lv","url":"http://cdn.example/live.m3u8","http_headers":{}}' ;;
+      *) echo '{"id":"a","url":"http://cdn.example/audio.m4a","duration":205,"http_headers":{"Accept":"*/*"}}' ;;
+    esac ;;
   *--dump-single-json*)
     case "$*" in
       *playlist-url*) echo '{"_type":"playlist","id":"p","title":"PL"}' ;;
+      *live-url*)     echo '{"id":"lv","title":"Live","uploader":"U","is_live":true}' ;;
       *long-url*)     echo '{"id":"l","title":"Long","duration":7200,"uploader":"U"}' ;;
       *)              echo '{"id":"a","title":"Song","uploader":"Artist","duration":205,"thumbnail":"http://t/x.jpg"}' ;;
     esac ;;
-  *"-g"*)  echo 'http://cdn.example/audio.m4a' ;;
   *--flat-playlist*)
     echo '{"_type":"url","id":"1","title":"One","url":"https://www.youtube.com/watch?v=1"}'
     echo '{"_type":"url","id":"2","title":"Two","url":"https://www.youtube.com/watch?v=2"}'
@@ -252,5 +260,83 @@ func TestFormatTitle(t *testing.T) {
 	it = &URLItem{Title: "Long", Duration: 3725 * time.Second}
 	if got := it.FormatTitle(); got != "Long [1:02:05]" {
 		t.Errorf("got %q", got)
+	}
+}
+
+func TestResolve_PassesHeadersAndCookies(t *testing.T) {
+	cfg, _ := fakeYTDLP(t, standardBody)
+	it := New("https://example.com/hdr-url", cfg)
+	if err := it.Resolve(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	opts := it.StreamOptions()
+	if opts.Headers["Referer"] != "https://site.example/" || opts.Headers["User-Agent"] != "UA-X" {
+		t.Errorf("headers = %v", opts.Headers)
+	}
+	want := []string{"sid=abc; Domain=.site.example; Path=/; Secure", "tok=9"}
+	if len(opts.Cookies) != 2 || opts.Cookies[0] != want[0] || opts.Cookies[1] != want[1] {
+		t.Errorf("cookies = %q, want %q", opts.Cookies, want)
+	}
+	if !opts.Finite {
+		t.Error("track with a duration must be finite")
+	}
+}
+
+func TestResolve_MergedFormatsUseFirstFormat(t *testing.T) {
+	cfg, _ := fakeYTDLP(t, standardBody)
+	it := New("https://example.com/merged-url", cfg)
+	if err := it.Resolve(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if it.StreamURL() != "http://cdn.example/a.m4a" {
+		t.Errorf("StreamURL = %q", it.StreamURL())
+	}
+	if got := it.StreamOptions().Headers["Referer"]; got != "https://fmt/" {
+		t.Errorf("Referer = %q, want the format's own header", got)
+	}
+}
+
+func TestResolve_NoURLInOutput_Errors(t *testing.T) {
+	cfg, _ := fakeYTDLP(t, standardBody)
+	it := New("https://example.com/nourl", cfg)
+	if err := it.Resolve(context.Background()); err == nil || !strings.Contains(err.Error(), "no stream URL") {
+		t.Errorf("err = %v, want no stream URL", err)
+	}
+}
+
+func TestStreamOptions_LiveIsNotFinite(t *testing.T) {
+	cfg, _ := fakeYTDLP(t, standardBody)
+	it := New("https://example.com/live-url", cfg)
+	it.Duration = 0
+	// Resolve fetches metadata first (unknown duration); the live fixture has none.
+	if err := it.Resolve(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if it.StreamOptions().Finite {
+		t.Error("stream without a duration must keep reconnect-at-EOF (not finite)")
+	}
+}
+
+func TestStreamOptions_BeforeResolve_NoHeaders(t *testing.T) {
+	cfg, _ := fakeYTDLP(t, standardBody)
+	opts := New("https://example.com/x", cfg).StreamOptions()
+	if len(opts.Headers) != 0 || len(opts.Cookies) != 0 {
+		t.Errorf("unexpected options before Resolve: %+v", opts)
+	}
+}
+
+func TestSplitCookies(t *testing.T) {
+	got := splitCookies("a=1; Domain=.x.com; Path=/; Secure; b=2; Expires=123; c=3")
+	want := []string{"a=1; Domain=.x.com; Path=/; Secure", "b=2; Expires=123", "c=3"}
+	if len(got) != len(want) {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+	if len(splitCookies("")) != 0 {
+		t.Error("empty input must yield no cookies")
 	}
 }

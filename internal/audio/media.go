@@ -16,16 +16,29 @@ type Resolver interface {
 	Resolve(ctx context.Context) error
 }
 
-// Finite is optionally implemented by items with a known, bounded length (e.g.
-// a yt-dlp track with a duration). Finite items must end at EOF, so the
-// pipeline disables ffmpeg's reconnect-at-EOF for them; live streams (radio,
-// HLS, unknown duration) keep it.
-type Finite interface {
-	IsFinite() bool
+// StreamOptions tunes how ffmpeg opens an item's stream.
+type StreamOptions struct {
+	// Finite marks a bounded track that must end at EOF, so ffmpeg's
+	// reconnect-at-EOF is disabled for it. Live streams (radio, HLS, unknown
+	// duration) leave it false and keep reconnect-at-EOF.
+	Finite bool
+	// Headers are extra HTTP request headers (e.g. Referer, User-Agent) some
+	// resolved streams require. Only applied to http(s) URLs.
+	Headers map[string]string
+	// Cookies are Set-Cookie-formatted lines scoped to the stream URL.
+	Cookies []string
 }
 
-// IsFinite reports whether item is a finite track.
-func IsFinite(item MediaItem) bool {
-	f, ok := item.(Finite)
-	return ok && f.IsFinite()
+// StreamConfigurer is optionally implemented by items that need non-default
+// ffmpeg input options. It is called after Resolve, just before playback.
+type StreamConfigurer interface {
+	StreamOptions() StreamOptions
+}
+
+// OptionsFor returns item's stream options, or the zero value.
+func OptionsFor(item MediaItem) StreamOptions {
+	if c, ok := item.(StreamConfigurer); ok {
+		return c.StreamOptions()
+	}
+	return StreamOptions{}
 }

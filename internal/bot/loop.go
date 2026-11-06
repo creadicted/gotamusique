@@ -61,7 +61,7 @@ func (b *Bot) loop(ctx context.Context) {
 			}
 		}
 		if err == nil {
-			err = pipeline.Launch(item.StreamURL(), audio.IsFinite(item), func(endErr error) {
+			err = pipeline.Launch(item.StreamURL(), audio.OptionsFor(item), func(endErr error) {
 				// Advance the queue only when Play() hasn't already set a new index.
 				if b.launchVersion.Load() == launchVer {
 					b.queue.Next()

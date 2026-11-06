@@ -14,7 +14,7 @@ playable streams. Audio is **always streamed** — nothing is downloaded to disk
 | # | Decision |
 |---|---|
 | 1 | Always stream. No tmp downloads, no `Download()`, no cleanup. |
-| 2 | `yt-dlp -g -f bestaudio` returns a direct URL that ffmpeg reads via `-i`. No stdout pipe. |
+| 2 | `yt-dlp --dump-single-json -f bestaudio` returns a direct URL plus the `http_headers`/`cookies` it needs; ffmpeg reads the URL via `-i` with those passed as `-headers`/`-user_agent`/`-cookies`. No stdout pipe. |
 | 3 | Python-compatible config keys (see Config). Missing yt-dlp binary → chat error; bot still starts. |
 | 4 | Playlists are lazy: flat entries are queued immediately and resolved just before play. |
 | 5 | New optional `audio.Resolver` interface, called by the play loop before `Launch`. |
@@ -81,7 +81,7 @@ func (u *URLItem) FormatTitle() string
 
 ```go
 func GetInfo(ctx context.Context, url string, cfg *config.Config) (*YTInfo, error)       // --dump-json --no-playlist
-func ResolveStream(ctx context.Context, url string, cfg *config.Config) (string, error)  // -g -f bestaudio
+func ResolveStream(ctx context.Context, url string, cfg *config.Config) (*Stream, error)  // --dump-single-json -f bestaudio: URL + headers + cookies
 func FlatPlaylist(ctx context.Context, url string, cfg *config.Config) ([]YTInfo, error) // --flat-playlist --dump-json
 ```
 

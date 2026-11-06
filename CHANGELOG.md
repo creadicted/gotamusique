@@ -16,6 +16,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `max_track_duration` are rejected or skipped. Only `http`/`https` URLs are accepted.
   New `[youtube_dl]` config section; the Docker image bundles a pinned yt-dlp binary and deno
   (base image bumped to Alpine 3.22 for deno >= 2.3.0).
+  The HTTP headers and cookies yt-dlp reports for a stream (Referer, User-Agent, session
+  cookies) are passed to ffmpeg, so sites that require them play correctly.
   Finite URL tracks play to the end instead of using ffmpeg's reconnect-at-EOF; skip/clear/stop
   during a pending resolve no longer launches or skips the wrong track.
 - **`!hls <url>` command** — play HLS/M3U8 streams directly. The stream is announced

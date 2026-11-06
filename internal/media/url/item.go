@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/konradk/gotamusique/internal/audio"
 	"github.com/konradk/gotamusique/internal/config"
 )
 
@@ -25,8 +26,8 @@ type URLItem struct {
 
 	cfg *config.Config
 
-	mu        sync.Mutex
-	streamURL string
+	mu     sync.Mutex
+	stream *Stream // set by Resolve
 }
 
 // New creates an item for rawURL. Call Validate (single tracks) before enqueuing.
@@ -124,12 +125,12 @@ func (u *URLItem) Resolve(ctx context.Context) error {
 	if err := u.checkDuration(); err != nil {
 		return err
 	}
-	s, err := ResolveStream(ctx, u.URL, u.cfg)
+	st, err := ResolveStream(ctx, u.URL, u.cfg)
 	if err != nil {
 		return err
 	}
 	u.mu.Lock()
-	u.streamURL = s
+	u.stream = st
 	u.mu.Unlock()
 	return nil
 }
@@ -138,15 +139,25 @@ func (u *URLItem) Resolve(ctx context.Context) error {
 func (u *URLItem) StreamURL() string {
 	u.mu.Lock()
 	defer u.mu.Unlock()
-	return u.streamURL
+	if u.stream == nil {
+		return ""
+	}
+	return u.stream.URL
 }
 
-// IsFinite reports whether the track has a known duration. Live streams report
-// no duration and keep ffmpeg's reconnect-at-EOF behaviour.
-func (u *URLItem) IsFinite() bool {
+// StreamOptions returns the ffmpeg input options for the resolved stream: the
+// HTTP headers and cookies yt-dlp reported, and whether the track is finite. A
+// track with a known duration is finite and ends at EOF; live streams (no
+// duration) keep ffmpeg's reconnect-at-EOF.
+func (u *URLItem) StreamOptions() audio.StreamOptions {
 	u.mu.Lock()
 	defer u.mu.Unlock()
-	return u.Duration > 0
+	opts := audio.StreamOptions{Finite: u.Duration > 0}
+	if u.stream != nil {
+		opts.Headers = u.stream.Headers
+		opts.Cookies = u.stream.Cookies
+	}
+	return opts
 }
 
 // FormatTitle returns a display string such as "Title - Uploader [3:25]".
