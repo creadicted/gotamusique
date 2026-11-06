@@ -19,7 +19,7 @@ Download from the [latest release](../../releases/tag/latest) — no Go toolchai
 
 ## Requirements
 
-- `ffmpeg` on PATH
+- `ffmpeg` on PATH (`ffprobe` too, for `!file` metadata)
 - `yt-dlp` on PATH — only for `!url` / `!playlist`
 - A JavaScript runtime for yt-dlp's YouTube support — [`deno`](https://deno.com) >= 2.3.0 (enabled by default), or node/QuickJS/bun enabled via yt-dlp's `--js-runtimes` (see the [yt-dlp EJS wiki](https://github.com/yt-dlp/yt-dlp/wiki/EJS)). The Docker image bundles yt-dlp and deno.
 
@@ -148,6 +148,12 @@ Settings for yt-dlp, used by `!url` and `!playlist`.
 | `source_address` | *(empty)*   | Local IP to bind outgoing connections to            |
 | `user_agent`     | *(empty)*   | Override the HTTP user agent                        |
 
+### `[files]`
+
+| Key            | Default   | Description                                                                 |
+|----------------|-----------|-----------------------------------------------------------------------------|
+| `music_folder` | *(empty)* | Root folder for `!file`. Paths are relative to it and cannot escape it, including via symlinks |
+
 ### `[radio]` — presets
 
 Each key is a short alias; the value is a URL, optionally followed by a quoted display name.
@@ -196,6 +202,8 @@ Partial command names work: `!hel` dispatches to `!help` as long as it's unambig
 | `!radio`         | List configured radio presets                                            |
 | `!radio <alias>` | Play a preset by its alias, e.g. `!radio jazz`                           |
 | `!radio <url>`   | Play any direct stream URL, e.g. `!radio http://stream.example.com/live` |
+| `!hls <url>`     | Play an HLS/M3U8 stream, announced as `[HLS] <name>` (from the `.m3u8` filename, else the hostname) |
+| `!file <path>`   | Play a local audio file by path relative to `music_folder`; title/artist/duration via ffprobe |
 | `!url <url>`     | Play one track via yt-dlp (YouTube, SoundCloud, …). Always a single track |
 | `!playlist <url>`| Queue a playlist (up to `max_track_playlist`); tracks resolve as they play |
 | `!stop`          | Stop playback and reset the queue position                               |
@@ -287,7 +295,9 @@ differences.
 
 The following `[bot]` keys from botamusique are **not recognised** in Phase 1 and will be
 silently ignored if present in your config file. Most are planned for Phase 2; a few are
-permanently removed because they don't apply to a Go binary.
+permanently removed because they don't apply to a Go binary. (`music_folder`,
+`max_track_duration` and `max_track_playlist` were in this list but are now implemented — see
+`[files]` and `[bot]` above.)
 
 | Key                                                      | Status   | Notes                                                |
 |----------------------------------------------------------|----------|------------------------------------------------------|
@@ -301,8 +311,7 @@ permanently removed because they don't apply to a Go binary.
 | `download_attempts`                                      | deferred | Phase 2 (yt-dlp)                                     |
 | `ducking` / `ducking_threshold` / `ducking_volume`       | deferred | Phase 2                                              |
 | `language`                                               | deferred | Hardcoded English in Phase 1                         |
-| `max_track_duration` / `max_track_playlist`              | deferred | Phase 2                                              |
-| `music_folder` / `ignored_files` / `ignored_folders`     | deferred | Phase 2 (file library)                               |
+| `ignored_files` / `ignored_folders`                      | deferred | Phase 2 (file library scan)                          |
 | `pip3_path` / `target_version`                           | removed  | Not applicable to a Go binary                        |
 | `playback_mode` / `save_playlist` / `save_music_library` | deferred | Phase 2                                              |
 | `refresh_cache_on_startup`                               | deferred | Phase 2                                              |
