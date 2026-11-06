@@ -16,6 +16,7 @@ var defaultINI []byte
 type Config struct {
 	Server   ServerConfig
 	Bot      BotConfig
+	Files    FilesConfig
 	Commands CommandsConfig
 	Radio    map[string]RadioPreset
 	Debug    DebugConfig
@@ -55,6 +56,10 @@ type RadioPreset struct {
 	Comment string
 }
 
+type FilesConfig struct {
+	MusicFolder string
+}
+
 type DebugConfig struct {
 	Ffmpeg           bool
 	MumbleConnection bool
@@ -72,6 +77,9 @@ var sectionAllowlists = map[string]map[string]bool{
 		"avatar": true, "stereo": true, "logfile": true,
 		"announce_current_music": true,
 		"formatted_replies":      true,
+	},
+	"files": {
+		"music_folder": true,
 	},
 	"debug": {
 		"ffmpeg": true, "mumble_connection": true,
@@ -139,6 +147,7 @@ func validateUserFile(f *ini.File) error {
 func build(f *ini.File) (*Config, error) {
 	s := f.Section("server")
 	b := f.Section("bot")
+	fi := f.Section("files")
 	d := f.Section("debug")
 
 	cfg := &Config{
@@ -163,6 +172,9 @@ func build(f *ini.File) (*Config, error) {
 			Logfile:              b.Key("logfile").String(),
 			AnnounceCurrentMusic: b.Key("announce_current_music").MustBool(true),
 			FormattedReplies:     b.Key("formatted_replies").MustBool(true),
+		},
+		Files: FilesConfig{
+			MusicFolder: fi.Key("music_folder").String(),
 		},
 		Debug: DebugConfig{
 			Ffmpeg:           d.Key("ffmpeg").MustBool(false),

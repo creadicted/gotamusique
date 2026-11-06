@@ -3,11 +3,14 @@ package command
 import (
 	"net/http"
 	"net/http/httptest"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/konradk/gotamusique/internal/config"
 	"github.com/konradk/gotamusique/internal/hls"
+	fileitem "github.com/konradk/gotamusique/internal/media/file"
 	"github.com/konradk/gotamusique/internal/radio"
 	"layeh.com/gumble/gumble"
 )
@@ -653,5 +656,69 @@ func TestAliasesFor_Configured_ReturnsAliases(t *testing.T) {
 	got := aliasesFor(cfg, "stop")
 	if len(got) != 2 || got[0] != "stop" || got[1] != "s" {
 		t.Errorf("aliasesFor = %v, want [stop s]", got)
+	}
+}
+
+// --- handleFile handler tests ---
+
+func TestHandleFile_NoArg_NoEnqueue(t *testing.T) {
+	bot := defaultBot()
+	bot.cfg.Files = config.FilesConfig{MusicFolder: t.TempDir()}
+	callHandler(handleFile, bot, "")
+	if len(bot.enqueueCalls) != 0 {
+		t.Errorf("handleFile with no arg enqueued %d items, want 0", len(bot.enqueueCalls))
+	}
+}
+
+func TestHandleFile_NoMusicFolder_NoEnqueue(t *testing.T) {
+	bot := defaultBot()
+	bot.cfg.Files = config.FilesConfig{MusicFolder: ""}
+	callHandler(handleFile, bot, "song.mp3")
+	if len(bot.enqueueCalls) != 0 {
+		t.Errorf("handleFile with no music_folder enqueued %d items, want 0", len(bot.enqueueCalls))
+	}
+}
+
+func TestHandleFile_MissingFile_NoEnqueue(t *testing.T) {
+	bot := defaultBot()
+	bot.cfg.Files = config.FilesConfig{MusicFolder: t.TempDir()}
+	callHandler(handleFile, bot, "does_not_exist.mp3")
+	if len(bot.enqueueCalls) != 0 {
+		t.Errorf("handleFile with missing file enqueued %d items, want 0", len(bot.enqueueCalls))
+	}
+}
+
+func TestHandleFile_PathTraversal_NoEnqueue(t *testing.T) {
+	bot := defaultBot()
+	bot.cfg.Files = config.FilesConfig{MusicFolder: t.TempDir()}
+	callHandler(handleFile, bot, "../../etc/passwd")
+	if len(bot.enqueueCalls) != 0 {
+		t.Errorf("handleFile with path traversal enqueued %d items, want 0", len(bot.enqueueCalls))
+	}
+}
+
+func TestHandleFile_ValidFile_EnqueuesFileItem(t *testing.T) {
+	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		t.Skip("ffmpeg not found")
+	}
+	if _, err := exec.LookPath("ffprobe"); err != nil {
+		t.Skip("ffprobe not found")
+	}
+	dir := t.TempDir()
+	wav := filepath.Join(dir, "silence.wav")
+	if err := exec.Command(
+		"ffmpeg", "-y", "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo", "-t", "1", wav,
+	).Run(); err != nil {
+		t.Fatalf("cannot generate test WAV: %v", err)
+	}
+
+	bot := defaultBot()
+	bot.cfg.Files = config.FilesConfig{MusicFolder: dir}
+	callHandler(handleFile, bot, "silence.wav")
+	if len(bot.enqueueCalls) != 1 {
+		t.Fatalf("enqueueCalls = %d, want 1", len(bot.enqueueCalls))
+	}
+	if _, ok := bot.enqueueCalls[0].(*fileitem.FileItem); !ok {
+		t.Errorf("enqueued item is %T, want *file.FileItem", bot.enqueueCalls[0])
 	}
 }

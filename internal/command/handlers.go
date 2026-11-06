@@ -12,6 +12,7 @@ import (
 
 	"github.com/konradk/gotamusique/internal/config"
 	"github.com/konradk/gotamusique/internal/hls"
+	fileitem "github.com/konradk/gotamusique/internal/media/file"
 	"github.com/konradk/gotamusique/internal/radio"
 	"layeh.com/gumble/gumble"
 )
@@ -274,6 +275,41 @@ func makeRBPlayHandler(cache *rbCache, byUUIDFn func(string) (*radio.Station, er
 			"Queued: "+item.Name,
 		))
 	}
+}
+
+// handleFile: play a local file by relative path within music_folder.
+func handleFile(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
+	cfg := bot.Config()
+	if arg == "" {
+		sendToChannel(msg, "Usage: "+symbol(cfg)+cmd+" <relative/path/to/file>")
+		return
+	}
+	musicFolder := cfg.Files.MusicFolder
+	if musicFolder == "" {
+		sendToChannel(msg, "music_folder is not configured.")
+		return
+	}
+
+	item := fileitem.New(arg, musicFolder)
+	if err := item.Validate(); err != nil {
+		sendToChannel(msg, format(cfg.Bot.FormattedReplies,
+			"Invalid file: "+esc(err.Error()),
+			"Invalid file: "+err.Error(),
+		))
+		return
+	}
+	if err := item.Prepare(); err != nil {
+		sendToChannel(msg, format(cfg.Bot.FormattedReplies,
+			"Could not read file metadata: "+esc(err.Error()),
+			"Could not read file metadata: "+err.Error(),
+		))
+		return
+	}
+	bot.Enqueue(item)
+	sendToChannel(msg, format(cfg.Bot.FormattedReplies,
+		"Queued: <b>"+esc(item.FormatTitle())+"</b>",
+		"Queued: "+item.FormatTitle(),
+	))
 }
 
 // handleHLS: URL-only handler for HLS/M3U8 streams.
