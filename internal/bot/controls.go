@@ -7,6 +7,7 @@ import (
 
 	"github.com/konradk/gotamusique/internal/audio"
 	"github.com/konradk/gotamusique/internal/config"
+	"github.com/konradk/gotamusique/internal/queue"
 	"layeh.com/gumble/gumble"
 )
 
@@ -113,6 +114,7 @@ func (b *Bot) Clear() {
 // calls it, so the loop never launches or skips based on an outdated selection.
 func (b *Bot) invalidatePlayback() {
 	b.playEpoch.Add(1)
+	b.fails.reset() // a user control ends any failure streak
 	b.mu.Lock()
 	cancel := b.resolveCancel
 	b.mu.Unlock()
@@ -130,6 +132,21 @@ func (b *Bot) wakeLoop() {
 }
 
 // --- BotAPI implementation ---
+
+// PlaybackMode returns the queue's current playback mode name.
+func (b *Bot) PlaybackMode() string { return string(b.queue.Mode()) }
+
+// SetPlaybackMode parses and applies a playback mode. Entering random mode
+// shuffles the upcoming items; the current track is not interrupted.
+func (b *Bot) SetPlaybackMode(name string) error {
+	m, err := queue.ParseMode(name)
+	if err != nil {
+		return err
+	}
+	b.queue.SetMode(m)
+	b.wakeLoop()
+	return nil
+}
 
 // Config returns the bot's configuration.
 func (b *Bot) Config() *config.Config { return b.cfg }

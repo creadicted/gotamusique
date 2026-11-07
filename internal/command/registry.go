@@ -21,6 +21,7 @@ func RegisterAll(bot BotAPI, d *Dispatcher) {
 	d.Register(a("play_hls"), handleHLS, false, "Play an HLS/M3U8 stream by URL")
 	d.Register(a("rb_query"), makeRBQueryHandler(rbcache, rb.Search), false, "Search radio-browser.info; [-n N] results (default 10, max 50)")
 	d.Register(a("rb_play"), makeRBPlayHandler(rbcache, rb.ByUUID), false, "Play station by UUID or by index from the last search")
+	d.Register(a("mode"), handleMode, false, "Get or set playback mode: one-shot, repeat, random")
 	d.Register(a("stop"), handleStop, false, "Stop playback and reset queue")
 	d.Register(a("mute"), handleMute, false, "Silence bot (stream stays connected)")
 	d.Register(a("unmute"), handleUnmute, false, "Restore volume after mute")

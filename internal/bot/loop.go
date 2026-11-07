@@ -2,18 +2,18 @@ package bot
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"time"
 
 	"github.com/konradk/gotamusique/internal/audio"
+	"github.com/konradk/gotamusique/internal/queue"
 )
 
 // resolveTimeout bounds a single Resolver.Resolve call.
 const resolveTimeout = 30 * time.Second
 
 func (b *Bot) loop(ctx context.Context) {
-	consecutiveFails := 0
-
 	for {
 		select {
 		case <-ctx.Done():
@@ -30,16 +30,15 @@ func (b *Bot) loop(ctx context.Context) {
 			continue
 		}
 
-		epoch := b.playEpoch.Load() // before reading the item, so a control in between is detected
-		item := b.queue.Current()
+		// Read the epoch and the queue revision before looking at the item, so a
+		// control or a queue change that slips in afterwards is detected: the
+		// failure handling below only moves the queue if the revision is unchanged.
+		epoch := b.playEpoch.Load()
+		snap := b.queue.Snapshot()
+		item := snap.Current()
 		if item == nil {
-			consecutiveFails = 0
+			b.fails.reset()
 			continue
-		}
-
-		threshold := b.queue.Len()
-		if threshold < 3 {
-			threshold = 3
 		}
 
 		launchVer := b.launchVersion.Load()
@@ -62,34 +61,68 @@ func (b *Bot) loop(ctx context.Context) {
 		}
 		if err == nil {
 			err = pipeline.Launch(item.StreamURL(), audio.OptionsFor(item), func(endErr error) {
-				// Advance the queue only when Play() hasn't already set a new index.
-				if b.launchVersion.Load() == launchVer {
-					b.queue.Next()
-				}
-				b.wakeLoop()
+				b.onTrackEnd(item, snap, launchVer, endErr)
 			})
 		}
 
 		if err != nil {
-			b.log.Warn("failed to launch stream", slog.String("url", item.StreamURL()), slog.String("err", err.Error()))
-			b.sendChannelMessage(formatAnnouncement(item) + failMsg + err.Error())
-			consecutiveFails++
-			if consecutiveFails >= threshold {
-				b.sendChannelMessage("too many consecutive failures, stopping")
-				b.Stop()
-				consecutiveFails = 0
-				continue
-			}
-			b.queue.Next()
-			b.wakeLoop()
+			b.trackFailed(item, snap, failMsg, err)
 			continue
 		}
 
-		consecutiveFails = 0
 		if b.cfg.Bot.AnnounceCurrentMusic {
 			b.sendChannelMessage(formatAnnouncement(item))
 		}
 	}
+}
+
+// onTrackEnd is the pipeline's end-of-track callback. endErr is nil when the
+// track played to the end or was interrupted, audio.ErrNoAudio when ffmpeg never
+// produced audio, or another error for an unexpected read failure.
+func (b *Bot) onTrackEnd(item audio.MediaItem, snap queue.Snapshot, launchVer int64, endErr error) {
+	if b.launchVersion.Load() != launchVer {
+		// Play() already chose a new index; don't move it.
+		b.wakeLoop()
+		return
+	}
+	if errors.Is(endErr, audio.ErrNoAudio) {
+		// ffmpeg started but never produced audio (e.g. the file was deleted after
+		// it was queued): a failure, not a finished track. Feeding it into the
+		// failure guard is what stops an unplayable repeat/random queue.
+		b.trackFailed(item, snap, ": failed to start — ", endErr)
+		return
+	}
+	// The track played (or a control interrupted it): the failure streak is over.
+	b.fails.reset()
+	b.queue.Next()
+	b.wakeLoop()
+}
+
+// trackFailed handles a track that could not be played. It records the failure,
+// and then either gives up (every queue entry has failed) or moves on.
+//
+// The queue is only moved if it is unchanged since snap was taken. Otherwise a
+// control or a newly queued item got in first and the loop simply re-evaluates;
+// that costs at most one more attempt on the same item, but never skips a newer
+// selection or an item appended in the meantime. Safe to call from the loop or
+// from the pipeline's end-of-track callback.
+func (b *Bot) trackFailed(item audio.MediaItem, snap queue.Snapshot, failMsg string, err error) {
+	b.log.Warn("track failed", slog.String("err", err.Error()))
+	b.sendChannelMessage(formatAnnouncement(item) + failMsg + err.Error())
+	b.fails.fail(item)
+
+	if b.fails.allFailed(snap.Items) {
+		// Go idle instead of Stop(): Stop resets the queue to index 0, which would
+		// make the loop immediately retry the same failing items forever.
+		if b.queue.FinishIfUnchanged(snap.Version) {
+			b.sendChannelMessage("too many consecutive failures, stopping")
+			b.fails.reset()
+		}
+		b.wakeLoop()
+		return
+	}
+	b.queue.NextIfUnchanged(snap.Version)
+	b.wakeLoop()
 }
 
 // resolveItem runs item's Resolver with a timeout. stale is true when a playback

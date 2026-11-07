@@ -136,6 +136,7 @@ Missing keys fall back to the embedded defaults — you only have to set what yo
 | `logfile`                | *(empty)*         | Write logs to this path instead of stderr          |
 | `max_track_duration`     | `60`              | Max `!url` track length in minutes (`0` = no limit) |
 | `max_track_playlist`     | `20`              | Max tracks added by one `!playlist`                |
+| `playback_mode`          | `one-shot`        | Startup mode: `one-shot`, `repeat` or `random`     |
 
 ### `[youtube_dl]`
 
@@ -206,6 +207,7 @@ Partial command names work: `!hel` dispatches to `!help` as long as it's unambig
 | `!file <path>`   | Play a local audio file by path relative to `music_folder`; title/artist/duration via ffprobe |
 | `!url <url>`     | Play one track via yt-dlp (YouTube, SoundCloud, …). Always a single track |
 | `!playlist <url>`| Queue a playlist (up to `max_track_playlist`); tracks resolve as they play |
+| `!mode [mode]`   | Show or set the playback mode: `one-shot` (stop at the end), `repeat` (loop the queue), `random` (shuffle; reshuffles and keeps going). Not saved across restarts |
 | `!stop`          | Stop playback and reset the queue position                               |
 | `!mute`          | Set volume to 0 — stream stays connected, no reconnect delay             |
 | `!unmute`        | Restore volume after `!mute`                                             |
@@ -313,7 +315,8 @@ permanently removed because they don't apply to a Go binary. (`music_folder`,
 | `language`                                               | deferred | Hardcoded English in Phase 1                         |
 | `ignored_files` / `ignored_folders`                      | deferred | Phase 2 (file library scan)                          |
 | `pip3_path` / `target_version`                           | removed  | Not applicable to a Go binary                        |
-| `playback_mode` / `save_playlist` / `save_music_library` | deferred | Phase 2                                              |
+| `save_playlist` / `save_music_library`                   | deferred | Phase 2                                              |
+| `playback_mode = autoplay`                               | deferred | Needs the music library; falls back to `one-shot` with a warning |
 | `refresh_cache_on_startup`                               | deferred | Phase 2                                              |
 | `tmp_folder` / `tmp_folder_max_size`                     | deferred | Phase 2 (yt-dlp downloads)                           |
 | `when_nobody_in_channel`                                 | deferred | Phase 2                                              |

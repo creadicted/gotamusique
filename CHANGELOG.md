@@ -9,6 +9,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **`!mode [one-shot|repeat|random]` command and `[bot] playback_mode` setting** — `repeat`
+  loops the queue. `random` shuffles the upcoming items, inserts newly queued tracks at a random
+  position after the current one, and reshuffles when the list ends (the track that just played
+  never starts the next lap). `autoplay` is recognised but not available yet; an invalid
+  `playback_mode` in the config logs a warning and falls back to `one-shot`. The mode is not
+  saved across restarts.
 - **`!url <url>` and `!playlist <url>` commands** — play audio from YouTube, SoundCloud and
   other yt-dlp sites. Audio is always streamed (no downloads); the direct stream URL is
   resolved just before a track plays. `!url` queues exactly one track; `!playlist` queues
@@ -31,6 +37,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   interruptions now recover automatically instead of dropping the stream.
   Flags applied: `-reconnect`, `-reconnect_streamed`, `-reconnect_delay_max 5`,
   `-reconnect_at_eof`, `-reconnect_on_http_error 4xx,5xx`.
+
+### Fixed
+
+- A queue in which every track fails to start no longer retries forever. After every entry has
+  failed the bot goes idle (queue kept) instead of resetting to the first track and starting
+  over, which spammed the channel in every mode. Only distinct failed entries count, so a
+  `random` reshuffle retrying the same broken tracks no longer stops a queue that still has
+  playable ones.
+- A file that ffmpeg cannot open or decode (e.g. deleted after it was queued) is now treated as
+  a failed track. Before, it counted as a track that played, so `repeat` and `random` looped on
+  it forever.
+- A failing track can no longer skip a track you just selected (`!play`, `!skip`) or one that was
+  queued while it was failing.
 
 ### Changed
 

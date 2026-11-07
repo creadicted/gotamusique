@@ -226,3 +226,61 @@ func TestSkip_NoAudio_AdvancesQueue(t *testing.T) {
 		t.Errorf("QueueCurrentIndex after Skip = %d, want 1", idx)
 	}
 }
+
+// --- playback mode ---
+
+func TestNew_StartupMode(t *testing.T) {
+	cases := map[string]string{
+		"":         "one-shot",
+		"repeat":   "repeat",
+		"random":   "random",
+		"RANDOM":   "random",
+		"autoplay": "one-shot", // not implemented yet: warn + fall back
+		"bogus":    "one-shot",
+	}
+	for in, want := range cases {
+		cfg := defaultCfg()
+		cfg.Bot.PlaybackMode = in
+		b, err := New(cfg)
+		if err != nil {
+			t.Fatalf("playback_mode=%q: New failed: %v (bot must still start)", in, err)
+		}
+		if got := b.PlaybackMode(); got != want {
+			t.Errorf("playback_mode=%q: mode = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestSetPlaybackMode(t *testing.T) {
+	b, err := New(defaultCfg())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := b.SetPlaybackMode("repeat"); err != nil || b.PlaybackMode() != "repeat" {
+		t.Errorf("SetPlaybackMode(repeat): err=%v mode=%q", err, b.PlaybackMode())
+	}
+	if err := b.SetPlaybackMode("autoplay"); err == nil {
+		t.Error("autoplay must be refused")
+	}
+	if b.PlaybackMode() != "repeat" {
+		t.Errorf("a refused mode must not change the mode, got %q", b.PlaybackMode())
+	}
+}
+
+func TestSetPlaybackMode_Random_KeepsCurrentItem(t *testing.T) {
+	b, err := New(defaultCfg())
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := &mockItem{"0"}
+	b.Enqueue(first)
+	for i := 1; i < 10; i++ {
+		b.Enqueue(&mockItem{string(rune('0' + i))})
+	}
+	if err := b.SetPlaybackMode("random"); err != nil {
+		t.Fatal(err)
+	}
+	if b.CurrentItem() != first || b.QueueCurrentIndex() != 0 {
+		t.Error("switching to random must not change the current item")
+	}
+}

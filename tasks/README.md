@@ -44,7 +44,7 @@ Builds on the Phase 1 binary; each milestone is independently mergeable.
 | 3-01 | [phase3/01-database.md](phase3/01-database.md)               | done   | SQLite settings + music DB, migration  |
 | 3-02 | [phase3/02-file-media.md](phase3/02-file-media.md)           | done   | Local file playback (ffprobe metadata) |
 | 3-03 | [phase3/03-url-media.md](phase3/03-url-media.md)             | done   | YouTube / yt-dlp (stream-only)             |
-| 3-04 | [phase3/04-playlist-modes.md](phase3/04-playlist-modes.md)   | todo   | repeat / random / autoplay modes       |
+| 3-04 | [phase3/04-playlist-modes.md](phase3/04-playlist-modes.md)   | done   | one-shot / repeat / random modes + `!mode` |
 | 3-05 | [phase3/05-music-library.md](phase3/05-music-library.md)     | todo   | Dir scan, DB cache, tags               |
 | 3-06 | [phase3/06-full-commands.md](phase3/06-full-commands.md)     | todo   | All remaining chat commands            |
 | 3-07 | [phase3/07-web-api.md](phase3/07-web-api.md)                 | todo   | REST API for web remote control        |

@@ -36,6 +36,19 @@ IP ban after `max_attempts` failed logins.
 
 All POST /post responses return the current status JSON.
 
+## Queue version counter (added in 3-04)
+
+`GET /playlist` is polled by the UI. `internal/queue` already has a monotonic `Version() uint64`
+that every mutator bumps (added in 3-04 for the play loop's failure guard, together with
+`Snapshot()`). 3-07 can reuse it as the polling token.
+
+- `TestVersion_EveryMutatorBumps` already asserts every mutator bumps it; add any new mutator to
+  that table.
+- A rejected call (e.g. out-of-range `Insert`) may still bump it, so treat a changed value as
+  "re-read", never as proof that something moved.
+- Decide whether `Next()` should skip the bump when the index does not change (e.g. one-shot at
+  the end); today it always bumps.
+
 ## Deliverables
 
 - `internal/web/server.go`

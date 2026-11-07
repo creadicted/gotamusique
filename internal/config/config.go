@@ -45,8 +45,9 @@ type BotConfig struct {
 	Logfile              string
 	AnnounceCurrentMusic bool
 	FormattedReplies     bool
-	MaxTrackDuration     int // minutes; 0 = no limit
-	MaxTrackPlaylist     int // max entries added by the playlist command
+	MaxTrackDuration     int    // minutes; 0 = no limit
+	MaxTrackPlaylist     int    // max entries added by the playlist command
+	PlaybackMode         string // startup playback mode: one-shot | repeat | random
 }
 
 // YoutubeDLConfig holds the [youtube_dl] section (yt-dlp settings).
@@ -90,6 +91,7 @@ var sectionAllowlists = map[string]map[string]bool{
 		"formatted_replies":      true,
 		"max_track_duration":     true,
 		"max_track_playlist":     true,
+		"playback_mode":          true,
 	},
 	"youtube_dl": {
 		"binary": true, "cookiefile": true,
@@ -192,6 +194,7 @@ func build(f *ini.File) (*Config, error) {
 			FormattedReplies:     b.Key("formatted_replies").MustBool(true),
 			MaxTrackDuration:     b.Key("max_track_duration").MustInt(60),
 			MaxTrackPlaylist:     b.Key("max_track_playlist").MustInt(20),
+			PlaybackMode:         b.Key("playback_mode").MustString("one-shot"),
 		},
 		YoutubeDL: YoutubeDLConfig{
 			Binary:        yt.Key("binary").String(),

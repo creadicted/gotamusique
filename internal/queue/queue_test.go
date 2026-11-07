@@ -413,3 +413,175 @@ func TestConcurrentNextAndAppend(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+// --- Version / Snapshot / FinishIfUnchanged / NextIfUnchanged ---
+
+func TestVersion_EveryMutatorBumps(t *testing.T) {
+	mutators := map[string]func(q *Queue){
+		"Append":    func(q *Queue) { q.Append(item("n")) },
+		"Insert":    func(q *Queue) { _ = q.Insert(0, item("n")) },
+		"Remove":    func(q *Queue) { _ = q.Remove(0) },
+		"Next":      func(q *Queue) { q.Next() },
+		"JumpTo":    func(q *Queue) { _ = q.JumpTo(0) },
+		"Reset":     func(q *Queue) { q.Reset() },
+		"Clear":     func(q *Queue) { q.Clear() },
+		"SetMode":   func(q *Queue) { q.SetMode(ModeRepeat) },
+		"Randomize": func(q *Queue) { q.Randomize() },
+		"FinishIfUnchanged": func(q *Queue) {
+			q.FinishIfUnchanged(q.Version())
+		},
+		"NextIfUnchanged": func(q *Queue) { q.NextIfUnchanged(q.Version()) },
+	}
+	for name, mutate := range mutators {
+		q := NewQueue()
+		q.Append(item("a"))
+		q.Append(item("b"))
+		before := q.Version()
+		mutate(q)
+		if q.Version() == before {
+			t.Errorf("%s did not bump Version", name)
+		}
+	}
+}
+
+func TestVersion_ReadersDoNotBump(t *testing.T) {
+	q := NewQueue()
+	q.Append(item("a"))
+	v := q.Version()
+	q.Current()
+	q.Items()
+	q.Len()
+	q.Index()
+	q.Mode()
+	q.Snapshot()
+	if q.Version() != v {
+		t.Error("a read-only method bumped Version")
+	}
+}
+
+func TestSnapshot_IsConsistentCopy(t *testing.T) {
+	q := NewQueue()
+	a, b := item("a"), item("b")
+	q.Append(a)
+	q.Append(b)
+	q.Next()
+	snap := q.Snapshot()
+	if snap.Current() != b || snap.Index != 1 || len(snap.Items) != 2 || snap.Version != q.Version() {
+		t.Errorf("bad snapshot: %+v", snap)
+	}
+	q.Clear()
+	if len(snap.Items) != 2 || snap.Current() != b {
+		t.Error("snapshot must not change when the queue does")
+	}
+	if (Snapshot{}).Current() != nil {
+		t.Error("empty snapshot Current must be nil")
+	}
+}
+
+func TestFinishIfUnchanged_GoesIdleAndKeepsItems(t *testing.T) {
+	q := NewQueue()
+	q.Append(item("a"))
+	q.Append(item("b"))
+	if !q.FinishIfUnchanged(q.Snapshot().Version) {
+		t.Fatal("FinishIfUnchanged(current version) = false")
+	}
+	if q.Current() != nil || q.Index() != q.Len() || q.Len() != 2 {
+		t.Errorf("not idle with items kept: current=%v index=%d len=%d", q.Current(), q.Index(), q.Len())
+	}
+}
+
+func TestFinishIfUnchanged_RejectsAfterAnyChange(t *testing.T) {
+	changes := map[string]func(q *Queue, a *testItem){
+		"append":          func(q *Queue, a *testItem) { q.Append(item("new")) },
+		"same item again": func(q *Queue, a *testItem) { _ = q.JumpTo(0) }, // re-selects the SAME item
+		"next":            func(q *Queue, a *testItem) { q.Next() },
+		"clear":           func(q *Queue, a *testItem) { q.Clear() },
+	}
+	for name, change := range changes {
+		q := NewQueue()
+		a := item("a")
+		q.Append(a)
+		snap := q.Snapshot()
+		change(q, a)
+		cur := q.Current()
+		if q.FinishIfUnchanged(snap.Version) {
+			t.Errorf("%s: must not finish after the queue changed", name)
+		}
+		if q.Current() != cur {
+			t.Errorf("%s: a rejected finish must not move the queue", name)
+		}
+	}
+}
+
+// A one-item repeat queue wraps back to the very same item; a stale finish
+// comparing only the item would wrongly succeed.
+func TestFinishIfUnchanged_OneItemRepeatWrap(t *testing.T) {
+	q := NewQueue()
+	a := item("a")
+	q.Append(a)
+	q.SetMode(ModeRepeat)
+	snap := q.Snapshot()
+	q.Next() // wraps to a again
+	if q.Current() != a {
+		t.Fatal("setup: expected the same item")
+	}
+	if q.FinishIfUnchanged(snap.Version) {
+		t.Error("a wrap that lands on the same item must still invalidate the snapshot")
+	}
+}
+
+func TestFinishIfUnchanged_ItemAppendedDuringFailureIsNotSkipped(t *testing.T) {
+	q := NewQueue()
+	a := item("a")
+	q.Append(a)
+	snap := q.Snapshot() // loop starts resolving a
+	n := item("new")
+	q.Append(n) // user queues something while a is failing
+	if q.FinishIfUnchanged(snap.Version) {
+		t.Fatal("must not go idle: a new item arrived")
+	}
+	if q.Index() == q.Len() {
+		t.Error("the new item must still be reachable")
+	}
+}
+
+func TestFinishIfUnchanged_EmptyAndIdle(t *testing.T) {
+	q := NewQueue()
+	if q.FinishIfUnchanged(q.Version()) {
+		t.Error("empty queue: want false")
+	}
+	q.Append(item("a"))
+	q.FinishIfUnchanged(q.Version())
+	if q.FinishIfUnchanged(q.Version()) {
+		t.Error("already idle: want false")
+	}
+}
+
+func TestFinishIfUnchanged_AppendAfterwardsBecomesCurrent(t *testing.T) {
+	q := NewQueue()
+	q.Append(item("a"))
+	q.FinishIfUnchanged(q.Version())
+	n := item("new")
+	q.Append(n)
+	if q.Current() != n {
+		t.Error("an item queued after going idle must become current")
+	}
+}
+
+func TestNextIfUnchanged(t *testing.T) {
+	q := NewQueue()
+	a, b := item("a"), item("b")
+	q.Append(a)
+	q.Append(b)
+	snap := q.Snapshot()
+	if !q.NextIfUnchanged(snap.Version) || q.Current() != b {
+		t.Fatal("unchanged queue: NextIfUnchanged must advance")
+	}
+	// snap is now stale
+	if q.NextIfUnchanged(snap.Version) {
+		t.Error("stale version: NextIfUnchanged must not advance")
+	}
+	if q.Current() != b {
+		t.Error("stale NextIfUnchanged moved the queue")
+	}
+}

@@ -29,6 +29,8 @@ type BotAPI interface {
 	SetVolume(pct int)
 	JoinChannel(ch *gumble.Channel)
 	Kill()
+	PlaybackMode() string
+	SetPlaybackMode(name string) error
 }
 
 // HandlerFunc is the signature every command handler must implement.

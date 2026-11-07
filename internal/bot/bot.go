@@ -31,6 +31,7 @@ type Bot struct {
 	launchVersion atomic.Int64  // incremented by Play() to suppress onTrackEnd's queue.Next()
 	playEpoch     atomic.Int64  // incremented by every playback control; invalidates in-flight resolves
 	resolveCancel func()        // cancels the in-flight Resolver call (guarded by mu)
+	fails         failGuard     // distinct entries that failed since the last good track
 	cancel        func()        // cancels the top-level Run context (set by main)
 	dispatcher    *command.Dispatcher
 }
@@ -61,6 +62,7 @@ func New(cfg *config.Config) (*Bot, error) {
 		queue:  queue.NewQueue(),
 		wakeCh: make(chan struct{}, 1),
 	}
+	b.queue.SetMode(startupMode(cfg, log))
 	d := command.NewDispatcher(cfg.Commands.Symbol)
 	command.RegisterAll(b, d)
 	b.dispatcher = d
@@ -83,4 +85,17 @@ func (b *Bot) Shutdown() {
 	if b.client != nil && b.client.State() != gumble.StateDisconnected {
 		b.client.Disconnect() //nolint:errcheck
 	}
+}
+
+// startupMode parses [bot] playback_mode. An invalid value (including
+// "autoplay", which is not implemented yet) logs a warning and falls back to
+// one-shot so the bot still starts, e.g. with a config copied from botamusique.
+func startupMode(cfg *config.Config, log *slog.Logger) queue.Mode {
+	m, err := queue.ParseMode(cfg.Bot.PlaybackMode)
+	if err != nil {
+		log.Warn("invalid playback_mode in config, using one-shot",
+			slog.String("value", cfg.Bot.PlaybackMode), slog.String("err", err.Error()))
+		return queue.ModeOneShot
+	}
+	return m
 }
