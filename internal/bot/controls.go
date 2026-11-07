@@ -7,6 +7,7 @@ import (
 
 	"github.com/konradk/gotamusique/internal/audio"
 	"github.com/konradk/gotamusique/internal/config"
+	"github.com/konradk/gotamusique/internal/library"
 	"github.com/konradk/gotamusique/internal/queue"
 	"layeh.com/gumble/gumble"
 )
@@ -138,13 +139,44 @@ func (b *Bot) PlaybackMode() string { return string(b.queue.Mode()) }
 
 // SetPlaybackMode parses and applies a playback mode. Entering random mode
 // shuffles the upcoming items; the current track is not interrupted.
+//
+// autoplay needs the music library: without one it returns library.ErrUnavailable
+// and changes nothing. On an idle bot (nothing playing) it starts playing right
+// away; a track that is already playing is not interrupted, and the refill
+// happens when it ends. A library with no tracks returns library.ErrEmpty and the
+// mode is not changed.
 func (b *Bot) SetPlaybackMode(name string) error {
 	m, err := queue.ParseMode(name)
 	if err != nil {
 		return err
 	}
+	if m == queue.ModeAutoplay {
+		return b.enterAutoplay()
+	}
+	b.autoplayActive.Store(false)
 	b.queue.SetMode(m)
 	b.wakeLoop()
+	return nil
+}
+
+// enterAutoplay switches to autoplay. Running it again after autoplay stopped
+// itself (the failure cap) restarts it without switching modes first.
+func (b *Bot) enterAutoplay() error {
+	lib := b.libraryRef()
+	if lib == nil {
+		return library.ErrUnavailable
+	}
+	// Probe the library first so an empty one is reported before the mode flips.
+	if items, err := lib.randomTracks(1); err != nil {
+		return err
+	} else if len(items) == 0 {
+		return library.ErrEmpty
+	}
+	b.autoFails.Store(0)
+	b.fails.reset()
+	b.autoplayActive.Store(true)
+	b.queue.SetMode(queue.ModeAutoplay)
+	b.wakeLoop() // an idle queue is refilled by the loop on its next pass
 	return nil
 }
 

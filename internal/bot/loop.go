@@ -38,6 +38,8 @@ func (b *Bot) loop(ctx context.Context) {
 		item := snap.Current()
 		if item == nil {
 			b.fails.reset()
+			// Nothing to play. In autoplay mode this is the "queue ran dry" moment.
+			b.autoplayTick(snap)
 			continue
 		}
 
@@ -94,6 +96,7 @@ func (b *Bot) onTrackEnd(item audio.MediaItem, snap queue.Snapshot, launchVer in
 	}
 	// The track played (or a control interrupted it): the failure streak is over.
 	b.fails.reset()
+	b.autoFails.Store(0)
 	b.queue.Next()
 	b.wakeLoop()
 }
@@ -110,6 +113,9 @@ func (b *Bot) trackFailed(item audio.MediaItem, snap queue.Snapshot, failMsg str
 	b.log.Warn("track failed", slog.String("err", err.Error()))
 	b.sendChannelMessage(formatAnnouncement(item) + failMsg + err.Error())
 	b.fails.fail(item)
+	if b.queue.Mode() == queue.ModeAutoplay {
+		b.autoFails.Add(1)
+	}
 
 	if b.fails.allFailed(snap.Items) {
 		// Go idle instead of Stop(): Stop resets the queue to index 0, which would

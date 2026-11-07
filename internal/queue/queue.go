@@ -257,6 +257,24 @@ func (q *Queue) FinishIfUnchanged(version uint64) bool {
 	return true
 }
 
+// ReplaceIfUnchanged replaces the whole item list with items and makes the first
+// one current, but only if nothing changed since version was read (see
+// Snapshot). It reports whether it replaced. The check and the swap are atomic,
+// so a track queued, a mode change or a control that landed while the caller was
+// building items (e.g. querying the database) is never overwritten. The mode is
+// kept. An empty items slice is refused.
+func (q *Queue) ReplaceIfUnchanged(version uint64, items []audio.MediaItem) bool {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if q.version != version || len(items) == 0 {
+		return false
+	}
+	q.items = slices.Clone(items)
+	q.currentIndex = 0
+	q.version++
+	return true
+}
+
 // JumpTo sets currentIndex to index. Returns an error if index is out of range.
 func (q *Queue) JumpTo(index int) error {
 	q.mu.Lock()

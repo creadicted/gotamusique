@@ -57,8 +57,11 @@ func TestParseMode(t *testing.T) {
 			t.Errorf("ParseMode(%q) = %q, %v; want %q", in, got, err, want)
 		}
 	}
-	if _, err := ParseMode("autoplay"); !errors.Is(err, ErrAutoplayUnavailable) {
-		t.Errorf("autoplay err = %v, want ErrAutoplayUnavailable", err)
+	if got, err := ParseMode("autoplay"); err != nil || got != ModeAutoplay {
+		t.Errorf("ParseMode(autoplay) = %q, %v; want autoplay", got, err)
+	}
+	if got, err := ParseMode("  AutoPlay "); err != nil || got != ModeAutoplay {
+		t.Errorf("ParseMode is case/space-insensitive: got %q, %v", got, err)
 	}
 	for _, bad := range []string{"", "shuffle", "oneshot", "loop"} {
 		if _, err := ParseMode(bad); !errors.Is(err, ErrUnknownMode) {
@@ -68,7 +71,7 @@ func TestParseMode(t *testing.T) {
 }
 
 func TestModeList(t *testing.T) {
-	if got := ModeList(); got != "one-shot, repeat, random" {
+	if got := ModeList(); got != "one-shot, repeat, random, autoplay" {
 		t.Errorf("ModeList = %q", got)
 	}
 }
@@ -408,5 +411,155 @@ func TestConcurrent_ModeShuffleNextAppend(t *testing.T) {
 	wg.Wait()
 	if idx := q.Index(); idx < 0 || idx > q.Len() {
 		t.Errorf("index %d out of range for len %d", idx, q.Len())
+	}
+}
+
+// --- autoplay inside the queue ---
+
+func TestNext_Autoplay_GoesIdleAtEndLikeOneShot(t *testing.T) {
+	q := NewQueue()
+	fill(q, 2)
+	q.SetMode(ModeAutoplay)
+	if !q.Next() || q.Index() != 1 {
+		t.Fatal("Next should advance within the queue")
+	}
+	if q.Next() || q.Current() != nil || q.Index() != q.Len() {
+		t.Errorf("at the end autoplay must go idle so the bot can refill: index=%d", q.Index())
+	}
+}
+
+func TestSetMode_Autoplay_DoesNotShuffleOrChangeItems(t *testing.T) {
+	q := NewQueue()
+	fill(q, 20)
+	before := ids(q)
+	q.SetMode(ModeAutoplay)
+	after := ids(q)
+	for i := range before {
+		if before[i] != after[i] {
+			t.Fatal("autoplay must not reorder the queue")
+		}
+	}
+}
+
+func TestAppend_Autoplay_AppendsAtEnd(t *testing.T) {
+	q := NewQueue()
+	q.SetMode(ModeAutoplay)
+	items := fill(q, 5)
+	if got := q.Items(); got[4] != items[4] {
+		t.Error("autoplay Append must add at the end")
+	}
+}
+
+// --- ReplaceIfUnchanged ---
+
+func TestReplaceIfUnchanged_ReplacesAndStartsAtFirst(t *testing.T) {
+	q := NewQueue()
+	q.SetMode(ModeAutoplay)
+	fill(q, 3)
+	q.Next()
+	q.Next()
+	q.Next() // idle
+	snap := q.Snapshot()
+
+	a, b := item("new-a"), item("new-b")
+	if !q.ReplaceIfUnchanged(snap.Version, []audio.MediaItem{a, b}) {
+		t.Fatal("unchanged queue: replace must succeed")
+	}
+	if q.Len() != 2 || q.Current() != a || q.Index() != 0 {
+		t.Errorf("len=%d index=%d current=%v", q.Len(), q.Index(), q.Current())
+	}
+	if q.Mode() != ModeAutoplay {
+		t.Error("replace must keep the mode")
+	}
+}
+
+func TestReplaceIfUnchanged_RejectsStaleVersion(t *testing.T) {
+	q := NewQueue()
+	fill(q, 2)
+	snap := q.Snapshot()
+	q.Append(item("queued-meanwhile")) // user queues something during the DB query
+	if q.ReplaceIfUnchanged(snap.Version, []audio.MediaItem{item("x")}) {
+		t.Fatal("a queue that changed must not be replaced")
+	}
+	if q.Len() != 3 {
+		t.Errorf("rejected replace altered the queue: len=%d", q.Len())
+	}
+}
+
+func TestReplaceIfUnchanged_RejectsAfterEveryKindOfChange(t *testing.T) {
+	changes := map[string]func(q *Queue){
+		"append":  func(q *Queue) { q.Append(item("n")) },
+		"next":    func(q *Queue) { q.Next() },
+		"jump":    func(q *Queue) { _ = q.JumpTo(0) },
+		"clear":   func(q *Queue) { q.Clear() },
+		"mode":    func(q *Queue) { q.SetMode(ModeRepeat) },
+		"reset":   func(q *Queue) { q.Reset() },
+		"remove":  func(q *Queue) { _ = q.Remove(0) },
+		"shuffle": func(q *Queue) { q.Randomize() },
+	}
+	for name, change := range changes {
+		q := NewQueue()
+		fill(q, 3)
+		snap := q.Snapshot()
+		change(q)
+		if q.ReplaceIfUnchanged(snap.Version, []audio.MediaItem{item("x")}) {
+			t.Errorf("%s: stale replace succeeded", name)
+		}
+	}
+}
+
+func TestReplaceIfUnchanged_RefusesEmptyList(t *testing.T) {
+	q := NewQueue()
+	fill(q, 2)
+	if q.ReplaceIfUnchanged(q.Version(), nil) || q.ReplaceIfUnchanged(q.Version(), []audio.MediaItem{}) {
+		t.Error("an empty replacement must be refused (it would wipe the queue)")
+	}
+	if q.Len() != 2 {
+		t.Error("queue changed")
+	}
+}
+
+func TestReplaceIfUnchanged_DoesNotAliasCallerSlice(t *testing.T) {
+	q := NewQueue()
+	fill(q, 1)
+	src := []audio.MediaItem{item("a"), item("b")}
+	q.ReplaceIfUnchanged(q.Version(), src)
+	src[0] = item("mutated")
+	if q.Current().(*testItem).id != "a" {
+		t.Error("the queue must copy the slice it is given")
+	}
+}
+
+func TestReplaceIfUnchanged_BumpsVersion(t *testing.T) {
+	q := NewQueue()
+	fill(q, 1)
+	v := q.Version()
+	q.ReplaceIfUnchanged(v, []audio.MediaItem{item("x")})
+	if q.Version() == v {
+		t.Error("a successful replace must bump the version")
+	}
+}
+
+func TestReplaceIfUnchanged_ConcurrentOnlyOneWins(t *testing.T) {
+	q := NewQueue()
+	fill(q, 2)
+	v := q.Version()
+	var wg sync.WaitGroup
+	var wins int32
+	var mu sync.Mutex
+	for i := 0; i < 16; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if q.ReplaceIfUnchanged(v, []audio.MediaItem{item("w")}) {
+				mu.Lock()
+				wins++
+				mu.Unlock()
+			}
+		}()
+	}
+	wg.Wait()
+	if wins != 1 {
+		t.Errorf("%d replacements won with the same version, want exactly 1", wins)
 	}
 }

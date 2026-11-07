@@ -1,6 +1,6 @@
 # 3-05 — Music Library (scan, DB wiring, autoplay)
 
-**Status:** todo  
+**Status:** done  
 **Depends on:** 3-01, 3-02, 3-04  
 **Unlocks:** 3-06, 3-07
 

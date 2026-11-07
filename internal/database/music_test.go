@@ -1,7 +1,9 @@
 package database
 
 import (
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -186,5 +188,83 @@ func TestMusic_QueryRandom(t *testing.T) {
 	}
 	if len(results) != 3 {
 		t.Errorf("got %d results, want 3", len(results))
+	}
+}
+
+// --- MigrateMusic ---
+
+func TestMigrateMusic_CreatesOnlyTheMusicDB(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "music.db")
+	if err := MigrateMusic(p); err != nil {
+		t.Fatalf("MigrateMusic: %v", err)
+	}
+	entries, _ := os.ReadDir(dir)
+	for _, e := range entries {
+		if strings.Contains(e.Name(), "settings") {
+			t.Errorf("MigrateMusic created a settings file: %s", e.Name())
+		}
+	}
+	db, err := OpenMusic(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err := db.Insert(sampleRecord("x")); err != nil {
+		t.Errorf("schema not usable after MigrateMusic: %v", err)
+	}
+}
+
+func TestMigrateMusic_IsIdempotent(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "music.db")
+	if err := MigrateMusic(p); err != nil {
+		t.Fatal(err)
+	}
+	db, _ := OpenMusic(p)
+	db.Insert(sampleRecord("keep"))
+	db.Close()
+
+	if err := MigrateMusic(p); err != nil {
+		t.Fatalf("second MigrateMusic: %v", err)
+	}
+	db, _ = OpenMusic(p)
+	defer db.Close()
+	if rec, _ := db.QueryByID("keep"); rec == nil {
+		t.Error("a second MigrateMusic lost data")
+	}
+}
+
+func TestMigrateMusic_BadPathErrors(t *testing.T) {
+	if err := MigrateMusic(filepath.Join(t.TempDir(), "no", "such", "dir", "music.db")); err == nil {
+		t.Error("want an error when the directory does not exist")
+	}
+}
+
+func TestMigrateMusic_RefusesNonSQLiteFile(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "music.db")
+	os.WriteFile(p, []byte("this is not a sqlite database, just text padding to exceed the header size........................"), 0o644)
+	if err := MigrateMusic(p); err == nil {
+		t.Error("want an error for a corrupt database file")
+	}
+}
+
+func TestMigrateMusic_MatchesFullMigrate(t *testing.T) {
+	dir := t.TempDir()
+	a, b := filepath.Join(dir, "a.db"), filepath.Join(dir, "b.db")
+	if err := MigrateMusic(a); err != nil {
+		t.Fatal(err)
+	}
+	if err := Migrate(filepath.Join(dir, "s.db"), b); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{a, b} {
+		db, err := OpenMusic(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := db.Insert(sampleRecord("z")); err != nil {
+			t.Errorf("%s: %v", p, err)
+		}
+		db.Close()
 	}
 }

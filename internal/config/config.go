@@ -47,7 +47,10 @@ type BotConfig struct {
 	FormattedReplies     bool
 	MaxTrackDuration     int    // minutes; 0 = no limit
 	MaxTrackPlaylist     int    // max entries added by the playlist command
-	PlaybackMode         string // startup playback mode: one-shot | repeat | random
+	PlaybackMode         string // startup playback mode: one-shot | repeat | random | autoplay
+	MusicDatabasePath    string // music library database file
+	RefreshCacheOnStart  bool   // run a library scan at startup
+	AutoplayLength       int    // tracks added per autoplay refill
 }
 
 // YoutubeDLConfig holds the [youtube_dl] section (yt-dlp settings).
@@ -69,7 +72,9 @@ type RadioPreset struct {
 }
 
 type FilesConfig struct {
-	MusicFolder string
+	MusicFolder    string
+	IgnoredFolders []string // exact folder names skipped by the scan, at any depth
+	IgnoredFiles   []string // exact file names skipped by the scan
 }
 
 type DebugConfig struct {
@@ -87,18 +92,21 @@ var sectionAllowlists = map[string]map[string]bool{
 		"username": true, "volume": true, "max_volume": true,
 		"bandwidth": true, "admin": true, "comment": true,
 		"avatar": true, "stereo": true, "logfile": true,
-		"announce_current_music": true,
-		"formatted_replies":      true,
-		"max_track_duration":     true,
-		"max_track_playlist":     true,
-		"playback_mode":          true,
+		"announce_current_music":   true,
+		"formatted_replies":        true,
+		"max_track_duration":       true,
+		"max_track_playlist":       true,
+		"playback_mode":            true,
+		"music_database_path":      true,
+		"refresh_cache_on_startup": true,
+		"autoplay_length":          true,
 	},
 	"youtube_dl": {
 		"binary": true, "cookiefile": true,
 		"source_address": true, "user_agent": true,
 	},
 	"files": {
-		"music_folder": true,
+		"music_folder": true, "ignored_folders": true, "ignored_files": true,
 	},
 	"debug": {
 		"ffmpeg": true, "mumble_connection": true,
@@ -195,6 +203,9 @@ func build(f *ini.File) (*Config, error) {
 			MaxTrackDuration:     b.Key("max_track_duration").MustInt(60),
 			MaxTrackPlaylist:     b.Key("max_track_playlist").MustInt(20),
 			PlaybackMode:         b.Key("playback_mode").MustString("one-shot"),
+			MusicDatabasePath:    b.Key("music_database_path").MustString("music.db"),
+			RefreshCacheOnStart:  b.Key("refresh_cache_on_startup").MustBool(false),
+			AutoplayLength:       b.Key("autoplay_length").MustInt(5),
 		},
 		YoutubeDL: YoutubeDLConfig{
 			Binary:        yt.Key("binary").String(),
@@ -203,7 +214,9 @@ func build(f *ini.File) (*Config, error) {
 			UserAgent:     yt.Key("user_agent").String(),
 		},
 		Files: FilesConfig{
-			MusicFolder: fi.Key("music_folder").String(),
+			MusicFolder:    fi.Key("music_folder").String(),
+			IgnoredFolders: splitComma(fi.Key("ignored_folders").String()),
+			IgnoredFiles:   splitComma(fi.Key("ignored_files").String()),
 		},
 		Debug: DebugConfig{
 			Ffmpeg:           d.Key("ffmpeg").MustBool(false),

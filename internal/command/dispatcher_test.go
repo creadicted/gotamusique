@@ -1,8 +1,10 @@
 package command
 
 import (
+	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/konradk/gotamusique/internal/audio"
 	"github.com/konradk/gotamusique/internal/config"
@@ -28,6 +30,11 @@ type mockBot struct {
 	mode         string
 	setModeErr   error
 	setModeCalls []string
+	hasLibrary   bool
+	rescanCalls  int
+	rescanResult string
+	rescanErr    error
+	rescanBlock  chan struct{}
 }
 
 func (m *mockBot) Config() *config.Config         { return m.cfg }
@@ -50,6 +57,14 @@ func (m *mockBot) PlaybackMode() string {
 		return "one-shot"
 	}
 	return m.mode
+}
+func (m *mockBot) HasLibrary() bool { return m.hasLibrary }
+func (m *mockBot) Rescan(ctx context.Context) (string, error) {
+	m.rescanCalls++
+	if m.rescanBlock != nil {
+		<-m.rescanBlock
+	}
+	return m.rescanResult, m.rescanErr
 }
 func (m *mockBot) SetPlaybackMode(name string) error {
 	m.setModeCalls = append(m.setModeCalls, name)
@@ -391,3 +406,5 @@ func TestIsAdmin_CaseSensitive(t *testing.T) {
 		t.Error("'Admin' should be recognised as admin")
 	}
 }
+
+func timeAfterSecs(n int) <-chan time.Time { return time.After(time.Duration(n) * time.Second) }

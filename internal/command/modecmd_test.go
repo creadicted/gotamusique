@@ -3,6 +3,8 @@ package command
 import (
 	"errors"
 	"testing"
+
+	"github.com/konradk/gotamusique/internal/library"
 )
 
 func TestHandleMode_NoArg_DoesNotSet(t *testing.T) {
@@ -34,14 +36,28 @@ func TestHandleMode_CaseInsensitive(t *testing.T) {
 	}
 }
 
-func TestHandleMode_Autoplay_Refused(t *testing.T) {
+func TestHandleMode_Autoplay_IsForwarded(t *testing.T) {
 	bot := defaultBot()
 	callHandler(handleMode, bot, "autoplay")
-	if len(bot.setModeCalls) != 0 {
-		t.Errorf("autoplay must not reach SetPlaybackMode, got %v", bot.setModeCalls)
+	if len(bot.setModeCalls) != 1 || bot.setModeCalls[0] != "autoplay" {
+		t.Errorf("setModeCalls = %v, want [autoplay]", bot.setModeCalls)
 	}
-	if bot.PlaybackMode() != "one-shot" {
-		t.Errorf("mode changed to %q", bot.PlaybackMode())
+	if bot.PlaybackMode() != "autoplay" {
+		t.Errorf("mode = %q, want autoplay", bot.PlaybackMode())
+	}
+}
+
+func TestHandleMode_Autoplay_LibraryErrorsLeaveModeUnchanged(t *testing.T) {
+	for name, err := range map[string]error{
+		"no library":    library.ErrUnavailable,
+		"empty library": library.ErrEmpty,
+	} {
+		bot := defaultBot()
+		bot.setModeErr = err
+		callHandler(handleMode, bot, "autoplay")
+		if bot.PlaybackMode() != "one-shot" {
+			t.Errorf("%s: mode = %q, want unchanged", name, bot.PlaybackMode())
+		}
 	}
 }
 

@@ -1,7 +1,10 @@
 package bot
 
 import (
+	"errors"
 	"testing"
+
+	"github.com/konradk/gotamusique/internal/library"
 )
 
 // mockItem is a minimal audio.MediaItem for testing bot controls.
@@ -235,7 +238,7 @@ func TestNew_StartupMode(t *testing.T) {
 		"repeat":   "repeat",
 		"random":   "random",
 		"RANDOM":   "random",
-		"autoplay": "one-shot", // not implemented yet: warn + fall back
+		"autoplay": "one-shot", // no music library configured here: warn + fall back
 		"bogus":    "one-shot",
 	}
 	for in, want := range cases {
@@ -259,8 +262,8 @@ func TestSetPlaybackMode(t *testing.T) {
 	if err := b.SetPlaybackMode("repeat"); err != nil || b.PlaybackMode() != "repeat" {
 		t.Errorf("SetPlaybackMode(repeat): err=%v mode=%q", err, b.PlaybackMode())
 	}
-	if err := b.SetPlaybackMode("autoplay"); err == nil {
-		t.Error("autoplay must be refused")
+	if err := b.SetPlaybackMode("autoplay"); !errors.Is(err, library.ErrUnavailable) {
+		t.Errorf("autoplay with no library: err = %v, want ErrUnavailable", err)
 	}
 	if b.PlaybackMode() != "repeat" {
 		t.Errorf("a refused mode must not change the mode, got %q", b.PlaybackMode())

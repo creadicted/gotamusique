@@ -3,4 +3,7 @@ services:
     build: .
     volumes:
       - ./configuration.ini:/app/configuration.ini:ro
+      # Keeps the music library database across container recreation.
+      # Set `music_database_path = data/music.db` in configuration.ini.
+      - ./data:/app/data
     restart: unless-stopped
