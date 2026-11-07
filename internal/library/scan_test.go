@@ -1074,3 +1074,40 @@ func TestScan_UnreadableSubdirectoryDoesNotAbortScan(t *testing.T) {
 	os.Chmod(locked, 0o755)
 	eq(t, f.paths(t), []string{"ok/a.mp3"})
 }
+
+func TestScanForce_EmptyWalk_ClearsLibrary(t *testing.T) {
+	f := newFixture(t)
+	p := write(t, f.root, "a.mp3", "1")
+	s := f.scanner(Config{})
+	s.Scan(context.Background())
+	os.Remove(p)
+	res, err := s.ScanForce(context.Background())
+	if err != nil || res.Removed != 1 {
+		t.Fatalf("res = %+v err = %v, want 1 removed", res, err)
+	}
+	eq(t, f.paths(t), nil)
+}
+
+func TestScan_ProbeFailureOnChangedFile_NotReprobedUntilChanged(t *testing.T) {
+	f := newFixture(t)
+	p := write(t, f.root, "a.mp3", "1")
+	calls, fail := 0, false
+	s := NewScanner(f.db, Config{MusicFolder: f.root, Probe: func(abs string) (file.Metadata, error) {
+		calls++
+		if fail {
+			return file.Metadata{}, errors.New("corrupt")
+		}
+		return file.Metadata{Title: "t"}, nil
+	}})
+	s.Scan(context.Background())
+	fail = true
+	write(t, f.root, "a.mp3", "changed!")
+	future := time.Now().Add(time.Hour)
+	os.Chtimes(p, future, future)
+	s.Scan(context.Background())
+	before := calls
+	s.Scan(context.Background())
+	if calls != before {
+		t.Errorf("probe ran again on unchanged failing file (%d -> %d)", before, calls)
+	}
+}

@@ -1,6 +1,7 @@
 package bot
 
 import (
+	"context"
 	"io"
 	"log/slog"
 	"os"
@@ -36,9 +37,11 @@ type Bot struct {
 	// Music library (nil when music_folder is unset or the database failed to open).
 	libMu          sync.Mutex
 	lib            *musicLibrary
-	autoplayActive atomic.Bool  // autoplay is running (cleared when it stops itself)
-	autoFails      atomic.Int64 // consecutive failed tracks in autoplay with none played between
-	cancel         func()       // cancels the top-level Run context (set by main)
+	autoplayActive atomic.Bool     // autoplay is running (cleared when it stops itself)
+	autoFails      atomic.Int64    // consecutive failed tracks in autoplay with none played between
+	life           context.Context // cancelled by Shutdown; stops in-flight scans
+	lifeCancel     context.CancelFunc
+	cancel         func() // cancels the top-level Run context (set by main)
 	dispatcher     *command.Dispatcher
 }
 
@@ -62,11 +65,14 @@ func New(cfg *config.Config) (*Bot, error) {
 
 	log := slog.New(slog.NewTextHandler(w, &slog.HandlerOptions{Level: level}))
 
+	life, lifeCancel := context.WithCancel(context.Background())
 	b := &Bot{
-		cfg:    cfg,
-		log:    log,
-		queue:  queue.NewQueue(),
-		wakeCh: make(chan struct{}, 1),
+		life:       life,
+		lifeCancel: lifeCancel,
+		cfg:        cfg,
+		log:        log,
+		queue:      queue.NewQueue(),
+		wakeCh:     make(chan struct{}, 1),
 	}
 	b.lib = openLibrary(b)
 	b.queue.SetMode(startupMode(cfg, log, b.lib != nil))
@@ -83,6 +89,7 @@ func (b *Bot) Queue() *queue.Queue { return b.queue }
 // Shutdown stops the audio pipeline (if running) and disconnects from Mumble.
 // Safe to call from any goroutine.
 func (b *Bot) Shutdown() {
+	b.lifeCancel()
 	defer b.closeLibrary()
 	b.mu.Lock()
 	defer b.mu.Unlock()

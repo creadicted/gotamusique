@@ -31,8 +31,8 @@ func handleMode(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg strin
 	}
 	if err := bot.SetPlaybackMode(string(m)); err != nil {
 		text := err.Error()
-		if errors.Is(err, library.ErrUnavailable) {
-			text = "library unavailable"
+		if errors.Is(err, library.ErrUnavailable) || errors.Is(err, library.ErrEmpty) {
+			text = libraryErrorText(err)
 		}
 		reply(cfg, msg, esc(text), text)
 		return

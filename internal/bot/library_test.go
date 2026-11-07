@@ -125,7 +125,7 @@ func TestNew_UnopenableDatabase_BotStillStartsWithoutLibrary(t *testing.T) {
 		t.Error("library should be disabled when the database cannot be opened")
 	}
 	// Everything library-related degrades cleanly.
-	if _, err := b.Rescan(context.Background()); !errors.Is(err, library.ErrUnavailable) {
+	if _, err := b.Rescan(context.Background(), false); !errors.Is(err, library.ErrUnavailable) {
 		t.Errorf("Rescan err = %v, want ErrUnavailable", err)
 	}
 	if err := b.SetPlaybackMode("autoplay"); !errors.Is(err, library.ErrUnavailable) {
@@ -179,7 +179,7 @@ func TestShutdown_ClosesLibrary(t *testing.T) {
 
 func TestRescan_NoLibrary(t *testing.T) {
 	b, _ := New(defaultCfg())
-	if _, err := b.Rescan(context.Background()); !errors.Is(err, library.ErrUnavailable) {
+	if _, err := b.Rescan(context.Background(), false); !errors.Is(err, library.ErrUnavailable) {
 		t.Errorf("err = %v, want ErrUnavailable", err)
 	}
 }
@@ -187,7 +187,7 @@ func TestRescan_NoLibrary(t *testing.T) {
 func TestRescan_UnavailableFolderKeepsRows(t *testing.T) {
 	lb := newLibBot(t, 3, nil)
 	os.RemoveAll(lb.root)
-	_, err := lb.Rescan(context.Background())
+	_, err := lb.Rescan(context.Background(), false)
 	if !errors.Is(err, library.ErrFolderUnavailable) {
 		t.Fatalf("err = %v, want ErrFolderUnavailable", err)
 	}

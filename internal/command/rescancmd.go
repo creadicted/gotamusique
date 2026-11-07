@@ -3,6 +3,7 @@ package command
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"time"
 
@@ -29,28 +30,35 @@ func handleRescan(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg str
 		reply(cfg, msg, "library unavailable (set <code>[files] music_folder</code>)", "library unavailable (set [files] music_folder)")
 		return
 	}
+	force := strings.EqualFold(strings.TrimSpace(arg), "force")
 	sendToChannel(msg, "Scanning…")
 	scanWG.Add(1)
 	go func() {
 		defer scanWG.Done()
 		ctx, cancel := context.WithTimeout(context.Background(), rescanTimeout)
 		defer cancel()
-		summary, err := bot.Rescan(ctx)
+		summary, err := bot.Rescan(ctx, force)
 		if err != nil {
-			text := "Scan failed: " + err.Error()
-			switch {
-			case errors.Is(err, library.ErrScanRunning):
-				text = "scan already running"
-			case errors.Is(err, library.ErrUnavailable):
-				text = "library unavailable"
-			case errors.Is(err, library.ErrFolderUnavailable):
-				text = "Scan failed: music folder is not available; nothing removed"
-			case errors.Is(err, library.ErrNoAudioFound):
-				text = err.Error()
-			}
+			text := libraryErrorText(err)
 			reply(cfg, msg, esc(text), text)
 			return
 		}
 		reply(cfg, msg, "Done: "+esc(summary), "Done: "+summary)
 	}()
+}
+
+// libraryErrorText maps library errors to the text shown in chat; shared by
+// !rescan and !mode so both word them the same way.
+func libraryErrorText(err error) string {
+	switch {
+	case errors.Is(err, library.ErrScanRunning):
+		return "scan already running"
+	case errors.Is(err, library.ErrUnavailable):
+		return "library unavailable"
+	case errors.Is(err, library.ErrFolderUnavailable):
+		return "Scan failed: music folder is not available; nothing removed"
+	case errors.Is(err, library.ErrNoAudioFound), errors.Is(err, library.ErrEmpty):
+		return err.Error()
+	}
+	return "Scan failed: " + err.Error()
 }

@@ -33,7 +33,7 @@ type BotAPI interface {
 	PlaybackMode() string
 	SetPlaybackMode(name string) error
 	HasLibrary() bool
-	Rescan(ctx context.Context) (string, error)
+	Rescan(ctx context.Context, force bool) (string, error)
 }
 
 // HandlerFunc is the signature every command handler must implement.

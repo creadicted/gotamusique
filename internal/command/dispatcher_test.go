@@ -59,7 +59,7 @@ func (m *mockBot) PlaybackMode() string {
 	return m.mode
 }
 func (m *mockBot) HasLibrary() bool { return m.hasLibrary }
-func (m *mockBot) Rescan(ctx context.Context) (string, error) {
+func (m *mockBot) Rescan(ctx context.Context, force bool) (string, error) {
 	m.rescanCalls++
 	if m.rescanBlock != nil {
 		<-m.rescanBlock

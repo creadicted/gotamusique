@@ -7,6 +7,7 @@ import (
 	"math/rand/v2"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/konradk/gotamusique/internal/audio"
@@ -22,6 +23,7 @@ type musicLibrary struct {
 	db      database.MusicDB
 	scanner *library.Scanner
 	folder  string
+	scans   sync.WaitGroup // in-flight Rescan calls; close waits for them
 }
 
 // openLibrary opens the music database when [files] music_folder is set. Any
@@ -84,12 +86,29 @@ func (b *Bot) HasLibrary() bool { return b.libraryRef() != nil }
 
 // Rescan scans the music folder into the library and returns the summary line.
 // It blocks until the scan finishes; callers run it in a goroutine.
-func (b *Bot) Rescan(ctx context.Context) (string, error) {
-	lib := b.libraryRef()
+// force clears the library when the folder holds no audio files. The scan is
+// cancelled when the bot shuts down.
+func (b *Bot) Rescan(ctx context.Context, force bool) (string, error) {
+	b.libMu.Lock()
+	lib := b.lib
+	if lib != nil {
+		lib.scans.Add(1)
+	}
+	b.libMu.Unlock()
 	if lib == nil {
 		return "", library.ErrUnavailable
 	}
-	res, err := lib.scanner.Scan(ctx)
+	defer lib.scans.Done()
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	defer context.AfterFunc(b.life, cancel)()
+
+	scan := lib.scanner.Scan
+	if force {
+		scan = lib.scanner.ScanForce
+	}
+	res, err := scan(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -104,7 +123,7 @@ func (b *Bot) startupScan(ctx context.Context) {
 		return
 	}
 	go func() {
-		if _, err := b.Rescan(ctx); err != nil {
+		if _, err := b.Rescan(ctx, false); err != nil {
 			b.log.Warn("startup library scan failed", slog.String("err", err.Error()))
 		}
 	}()
@@ -153,7 +172,9 @@ func (l *musicLibrary) randomTracks(n int) ([]audio.MediaItem, error) {
 		return nil, fmt.Errorf("reading library: %w", err)
 	}
 	items := l.playable(recs, n)
-	if len(items) >= n {
+	// A sample smaller than requested already covered the whole table, so the
+	// slow path could not find anything more.
+	if len(items) >= n || len(recs) < n*3 {
 		return items, nil
 	}
 
@@ -232,5 +253,8 @@ func (b *Bot) closeLibrary() {
 	lib := b.lib
 	b.lib = nil
 	b.libMu.Unlock()
+	if lib != nil {
+		lib.scans.Wait() // scans see b.life cancelled and return promptly
+	}
 	lib.close()
 }

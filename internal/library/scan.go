@@ -49,7 +49,7 @@ var (
 	ErrFolderUnavailable = errors.New("music folder is not a readable directory")
 	// ErrNoAudioFound is returned when the walk finds no audio files although the
 	// library has file rows; nothing is removed in that case.
-	ErrNoAudioFound = errors.New("no audio files found, is the music folder mounted? nothing removed")
+	ErrNoAudioFound = errors.New("no audio files found, is the music folder mounted? nothing removed (use rescan force to clear the library)")
 )
 
 // Prober extracts tags from one audio file. Production uses file.ExtractTags;
@@ -140,7 +140,13 @@ type found struct {
 
 // Scan walks the music folder and brings the database in line with it. It
 // returns ErrScanRunning without doing anything if another scan is in progress.
-func (s *Scanner) Scan(ctx context.Context) (Result, error) {
+func (s *Scanner) Scan(ctx context.Context) (Result, error) { return s.scan(ctx, false) }
+
+// ScanForce is Scan without the empty-walk safety: if the walk finds no audio
+// files, every file row is removed. Use it to deliberately clear the library.
+func (s *Scanner) ScanForce(ctx context.Context) (Result, error) { return s.scan(ctx, true) }
+
+func (s *Scanner) scan(ctx context.Context, force bool) (Result, error) {
 	s.mu.Lock()
 	if s.running {
 		s.mu.Unlock()
@@ -170,8 +176,8 @@ func (s *Scanner) Scan(ctx context.Context) (Result, error) {
 	}
 
 	// Safety: an empty walk over a non-empty library almost always means the folder
-	// is unmounted or emptied by accident. Remove nothing.
-	if len(files) == 0 && len(existing) > 0 {
+	// is unmounted or emptied by accident. Remove nothing (unless forced).
+	if !force && len(files) == 0 && len(existing) > 0 {
 		return Result{}, ErrNoAudioFound
 	}
 
@@ -318,8 +324,19 @@ func (s *Scanner) reconcile(ctx context.Context, files []found, existing []datab
 		if err != nil {
 			s.log.Warn("scan: ffprobe failed, skipping", slog.String("path", f.rel), slog.String("err", err.Error()))
 			res.Skipped++
-			// A previously-good row for a now-unreadable file is left in place; it
-			// is neither updated nor counted as removed.
+			// A previously-good row for a now-unreadable file keeps its tags, but
+			// its size/mtime are refreshed so it is not re-probed on every scan
+			// until the file changes again.
+			if had {
+				if old.Metadata == nil {
+					old.Metadata = map[string]any{}
+				}
+				old.Metadata["size"] = f.size
+				old.Metadata["mtime"] = f.mtime
+				if err := s.db.Insert(old); err != nil {
+					return res, fmt.Errorf("writing %s: %w", f.rel, err)
+				}
+			}
 			continue
 		}
 		if err := s.db.Insert(buildRecord(id, f, meta)); err != nil {
