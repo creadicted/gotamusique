@@ -16,18 +16,17 @@ const (
 	ModeRepeat Mode = "repeat"
 	// ModeRandom plays the queue in shuffled order and reshuffles at the end.
 	ModeRandom Mode = "random"
+	// ModeAutoplay behaves like one-shot inside the queue (Next goes idle at the
+	// end); the bot refills the idle queue with random tracks from the music
+	// library. The queue itself never touches the database.
+	ModeAutoplay Mode = "autoplay"
 )
 
 // Modes lists the modes available to users, in display order.
-var Modes = []Mode{ModeOneShot, ModeRepeat, ModeRandom}
+var Modes = []Mode{ModeOneShot, ModeRepeat, ModeRandom, ModeAutoplay}
 
-var (
-	// ErrAutoplayUnavailable is returned by ParseMode for "autoplay", which needs
-	// the music library (3-05) and is not implemented yet.
-	ErrAutoplayUnavailable = errors.New("autoplay needs the music library (not available yet)")
-	// ErrUnknownMode is returned by ParseMode for an unrecognised name.
-	ErrUnknownMode = errors.New("unknown playback mode")
-)
+// ErrUnknownMode is returned by ParseMode for an unrecognised name.
+var ErrUnknownMode = errors.New("unknown playback mode")
 
 // ParseMode converts a user- or config-supplied name to a Mode. It is
 // case-insensitive and ignores surrounding whitespace.
@@ -40,7 +39,7 @@ func ParseMode(s string) (Mode, error) {
 	case "random":
 		return ModeRandom, nil
 	case "autoplay":
-		return "", ErrAutoplayUnavailable
+		return ModeAutoplay, nil
 	}
 	return "", fmt.Errorf("%w %q", ErrUnknownMode, s)
 }

@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -91,5 +93,65 @@ func TestLoad_PlaybackModeDefault(t *testing.T) {
 	}
 	if got := cfg.Commands.Aliases["mode"]; len(got) != 1 || got[0] != "mode" {
 		t.Errorf("mode aliases = %v", got)
+	}
+}
+
+func TestLoad_LibraryDefaults(t *testing.T) {
+	cfg, err := Load("testdata/does_not_exist.ini")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Bot.MusicDatabasePath != "music.db" {
+		t.Errorf("MusicDatabasePath = %q", cfg.Bot.MusicDatabasePath)
+	}
+	if cfg.Bot.RefreshCacheOnStart {
+		t.Error("refresh_cache_on_startup must default to false")
+	}
+	if cfg.Bot.AutoplayLength != 5 {
+		t.Errorf("AutoplayLength = %d, want 5", cfg.Bot.AutoplayLength)
+	}
+	if len(cfg.Files.IgnoredFolders) != 0 || len(cfg.Files.IgnoredFiles) != 0 {
+		t.Errorf("ignore lists must default empty: %+v", cfg.Files)
+	}
+	if got := cfg.Commands.Aliases["rescan"]; len(got) != 1 || got[0] != "rescan" {
+		t.Errorf("rescan aliases = %v", got)
+	}
+}
+
+func TestLoad_LibraryOverrides(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "c.ini")
+	os.WriteFile(p, []byte(`[bot]
+music_database_path = data/lib.db
+refresh_cache_on_startup = True
+autoplay_length = 12
+[files]
+music_folder = /srv/music
+ignored_folders = tmp, @eaDir ,.Trash
+ignored_files = Thumbs.db,.DS_Store
+`), 0o644)
+	cfg, err := Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Bot.MusicDatabasePath != "data/lib.db" || !cfg.Bot.RefreshCacheOnStart || cfg.Bot.AutoplayLength != 12 {
+		t.Errorf("bot = %+v", cfg.Bot)
+	}
+	if got := strings.Join(cfg.Files.IgnoredFolders, "|"); got != "tmp|@eaDir|.Trash" {
+		t.Errorf("IgnoredFolders = %q (entries must be trimmed)", got)
+	}
+	if got := strings.Join(cfg.Files.IgnoredFiles, "|"); got != "Thumbs.db|.DS_Store" {
+		t.Errorf("IgnoredFiles = %q", got)
+	}
+}
+
+func TestLoad_BadAutoplayLengthFallsBackToDefault(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "c.ini")
+	os.WriteFile(p, []byte("[bot]\nautoplay_length = lots\n"), 0o644)
+	cfg, err := Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Bot.AutoplayLength != 5 {
+		t.Errorf("AutoplayLength = %d, want the default 5", cfg.Bot.AutoplayLength)
 	}
 }

@@ -49,6 +49,13 @@ that every mutator bumps (added in 3-04 for the play loop's failure guard, toget
 - Decide whether `Next()` should skip the bump when the index does not change (e.g. one-shot at
   the end); today it always bumps.
 
+## Thumbnails (deferred from 3-05)
+
+The 3-05 library scan runs ffprobe only and stores **no** artwork: embedded art is often hundreds
+of KB per album and would bloat the DB, and nothing before the web UI uses it. This milestone
+(or 3-08) decides how to serve thumbnails, e.g. extract on demand from the file with
+`file.ExtractThumb` and cache the result as files next to the DB, not inside it.
+
 ## Deliverables
 
 - `internal/web/server.go`

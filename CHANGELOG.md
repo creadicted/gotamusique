@@ -9,6 +9,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Music library and `!rescan`** — with `[files] music_folder` set, `!rescan` scans the folder
+  into a SQLite database (`[bot] music_database_path`, default `music.db`). The scan is
+  incremental (size and modified time are stored, only new or changed files are probed),
+  skips non-audio files, honours `ignored_folders` / `ignored_files`, never follows directory
+  symlinks, and runs ffprobe only (no artwork). It never wipes the library because the folder is
+  unavailable, and only ever deletes rows of type `file`. `[bot] refresh_cache_on_startup`
+  runs one in the background at startup. The database opens only when `music_folder` is set; if
+  it cannot be opened the bot logs an error and runs without a library.
+- **`!mode autoplay`** — plays random tracks from the library. It starts immediately on an
+  idle bot, refills the queue when it runs dry (replacing played tracks so the queue stays
+  short; `autoplay_length` tracks per refill), and stops itself after `autoplay_length`
+  consecutive failures. Skips rows whose file no longer exists. Running `!mode autoplay` again
+  restarts it.
 - **`!mode [one-shot|repeat|random]` command and `[bot] playback_mode` setting** — `repeat`
   loops the queue. `random` shuffles the upcoming items, inserts newly queued tracks at a random
   position after the current one, and reshuffles when the list ends (the track that just played
