@@ -50,6 +50,10 @@ const (
 func (b *Bot) Run(ctx context.Context) error {
 	b.cancel = func() {} // replaced by context cancel in main
 
+	// Opt-in background library scan. It does not depend on the Mumble connection,
+	// and ctx cancels it on shutdown.
+	b.startupScan(ctx)
+
 	disconnected := make(chan struct{}, 1)
 
 	gumbleCfg := b.buildGumbleConfig(disconnected)

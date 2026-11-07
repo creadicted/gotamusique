@@ -8,6 +8,22 @@
 
 Add all commands that require Phase 2 subsystems (file library, URL media, advanced playlist modes, tags, DB).
 
+## Moved in from 3-05
+
+3-05 ships only the directory scan, DB wiring, `!rescan` and `autoplay`. This milestone now also
+owns what 3-05 dropped:
+
+- **In-memory item cache** (`internal/media/cache`): `GetOrCreate`, `GetByID`, `FreeAndDelete`,
+  holding `audio.MediaItem`s so the same track is not wrapped twice. Introduce a per-item wrapper
+  only if tags need per-item state (3-04 dropped `ItemWrapper`).
+- **Tag management:** tags are stored in the DB as `"tag1,tag2,"` (trailing comma). A "recent
+  added" auto-tag is applied to items added within the last 24 h and removed automatically;
+  `ManageSpecialTags()` runs the SQL update (called after a rescan).
+- **`!listfile [regex]` and `!search <keywords>`** against the scanned library (3-05 populates it).
+  Acceptance: `!listfile` shows scanned files with correct titles; `!search beethoven` returns
+  matching tracks. For untagged files the stored title is the filename fallback (see 3-05).
+- Deleting a file from disk is handled by the 3-05 scan, not here.
+
 ## Additional commands (beyond Phase 1)
 
 ### File commands
@@ -39,7 +55,8 @@ Add all commands that require Phase 2 subsystems (file library, URL media, advan
 ### Mode commands
 | Command | Description |
 |---|---|
-| `!mode [one-shot\|repeat\|random\|autoplay]` | Get or set playback mode — **shipped in 3-04** (`autoplay` added in 3-05) |
+| `!mode [one-shot\|repeat\|random\|autoplay]` | Get or set playback mode — **shipped in 3-04** (`autoplay` in 3-05) |
+| `!rescan` | Scan `music_folder` into the DB — **shipped in 3-05** |
 | `!last` | Jump to last item in queue |
 | `!repeat [n]` | Duplicate current item n times |
 | `!random` | Shuffle queue |

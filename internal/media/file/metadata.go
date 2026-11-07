@@ -26,8 +26,20 @@ type ffprobeOutput struct {
 	} `json:"format"`
 }
 
-// ExtractMetadata runs ffprobe on absPath and returns the parsed metadata.
+// ExtractMetadata runs ffprobe on absPath and returns the parsed metadata,
+// including embedded album art (which costs an extra ffmpeg run).
 func ExtractMetadata(absPath string) (Metadata, error) {
+	m, err := ExtractTags(absPath)
+	if err != nil {
+		return Metadata{}, err
+	}
+	m.Thumb = ExtractThumb(absPath)
+	return m, nil
+}
+
+// ExtractTags runs ffprobe only and returns title, artist and duration. It does
+// not extract artwork, so it is cheap enough to run over a whole library.
+func ExtractTags(absPath string) (Metadata, error) {
 	out, err := exec.Command(
 		"ffprobe", "-v", "quiet",
 		"-print_format", "json",
@@ -64,13 +76,12 @@ func ExtractMetadata(absPath string) (Metadata, error) {
 		Title:    get("title"),
 		Artist:   get("artist"),
 		Duration: dur,
-		Thumb:    extractThumb(absPath),
 	}, nil
 }
 
-// extractThumb attempts to extract embedded album art from absPath.
+// ExtractThumb attempts to extract embedded album art from absPath.
 // Returns a base64-encoded PNG string, or "" if none is found.
-func extractThumb(absPath string) string {
+func ExtractThumb(absPath string) string {
 	tmp, err := os.CreateTemp("", "gotamusique-thumb-*.png")
 	if err != nil {
 		return ""

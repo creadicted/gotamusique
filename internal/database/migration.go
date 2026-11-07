@@ -36,6 +36,21 @@ func Migrate(settingsPath, musicPath string) error {
 	return nil
 }
 
+// MigrateMusic opens (creating if needed) only the music database at musicPath
+// and upgrades it to the current schema. Use it when the settings database is
+// not needed, so no unused settings file is created.
+func MigrateMusic(musicPath string) error {
+	mdb, err := openSQLite(musicPath)
+	if err != nil {
+		return fmt.Errorf("migration: open music db: %w", err)
+	}
+	defer mdb.Close()
+	if err := migrateMusic(mdb); err != nil {
+		return fmt.Errorf("migration: music: %w", err)
+	}
+	return nil
+}
+
 // --- settings migration ---
 
 func migrateSettings(db *sql.DB) error {

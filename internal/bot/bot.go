@@ -1,6 +1,7 @@
 package bot
 
 import (
+	"context"
 	"io"
 	"log/slog"
 	"os"
@@ -32,8 +33,16 @@ type Bot struct {
 	playEpoch     atomic.Int64  // incremented by every playback control; invalidates in-flight resolves
 	resolveCancel func()        // cancels the in-flight Resolver call (guarded by mu)
 	fails         failGuard     // distinct entries that failed since the last good track
-	cancel        func()        // cancels the top-level Run context (set by main)
-	dispatcher    *command.Dispatcher
+
+	// Music library (nil when music_folder is unset or the database failed to open).
+	libMu          sync.Mutex
+	lib            *musicLibrary
+	autoplayActive atomic.Bool     // autoplay is running (cleared when it stops itself)
+	autoFails      atomic.Int64    // consecutive failed tracks in autoplay with none played between
+	life           context.Context // cancelled by Shutdown; stops in-flight scans
+	lifeCancel     context.CancelFunc
+	cancel         func() // cancels the top-level Run context (set by main)
+	dispatcher     *command.Dispatcher
 }
 
 // New creates a Bot from cfg. The logger writes to stderr unless cfg.Bot.Logfile
@@ -56,13 +65,18 @@ func New(cfg *config.Config) (*Bot, error) {
 
 	log := slog.New(slog.NewTextHandler(w, &slog.HandlerOptions{Level: level}))
 
+	life, lifeCancel := context.WithCancel(context.Background())
 	b := &Bot{
-		cfg:    cfg,
-		log:    log,
-		queue:  queue.NewQueue(),
-		wakeCh: make(chan struct{}, 1),
+		life:       life,
+		lifeCancel: lifeCancel,
+		cfg:        cfg,
+		log:        log,
+		queue:      queue.NewQueue(),
+		wakeCh:     make(chan struct{}, 1),
 	}
-	b.queue.SetMode(startupMode(cfg, log))
+	b.lib = openLibrary(b)
+	b.queue.SetMode(startupMode(cfg, log, b.lib != nil))
+	b.autoplayActive.Store(b.queue.Mode() == queue.ModeAutoplay)
 	d := command.NewDispatcher(cfg.Commands.Symbol)
 	command.RegisterAll(b, d)
 	b.dispatcher = d
@@ -75,6 +89,8 @@ func (b *Bot) Queue() *queue.Queue { return b.queue }
 // Shutdown stops the audio pipeline (if running) and disconnects from Mumble.
 // Safe to call from any goroutine.
 func (b *Bot) Shutdown() {
+	b.lifeCancel()
+	defer b.closeLibrary()
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -87,14 +103,18 @@ func (b *Bot) Shutdown() {
 	}
 }
 
-// startupMode parses [bot] playback_mode. An invalid value (including
-// "autoplay", which is not implemented yet) logs a warning and falls back to
-// one-shot so the bot still starts, e.g. with a config copied from botamusique.
-func startupMode(cfg *config.Config, log *slog.Logger) queue.Mode {
+// startupMode parses [bot] playback_mode. An invalid value, or autoplay without
+// a music library, logs a warning and falls back to one-shot so the bot still
+// starts, e.g. with a config copied from botamusique.
+func startupMode(cfg *config.Config, log *slog.Logger, haveLibrary bool) queue.Mode {
 	m, err := queue.ParseMode(cfg.Bot.PlaybackMode)
 	if err != nil {
 		log.Warn("invalid playback_mode in config, using one-shot",
 			slog.String("value", cfg.Bot.PlaybackMode), slog.String("err", err.Error()))
+		return queue.ModeOneShot
+	}
+	if m == queue.ModeAutoplay && !haveLibrary {
+		log.Warn("playback_mode = autoplay needs a music library (set [files] music_folder); using one-shot")
 		return queue.ModeOneShot
 	}
 	return m

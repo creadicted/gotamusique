@@ -136,7 +136,10 @@ Missing keys fall back to the embedded defaults — you only have to set what yo
 | `logfile`                | *(empty)*         | Write logs to this path instead of stderr          |
 | `max_track_duration`     | `60`              | Max `!url` track length in minutes (`0` = no limit) |
 | `max_track_playlist`     | `20`              | Max tracks added by one `!playlist`                |
-| `playback_mode`          | `one-shot`        | Startup mode: `one-shot`, `repeat` or `random`     |
+| `playback_mode`          | `one-shot`        | Startup mode: `one-shot`, `repeat`, `random` or `autoplay` (needs `music_folder`) |
+| `music_database_path`    | `music.db`        | Music library database; only opened when `[files] music_folder` is set |
+| `refresh_cache_on_startup` | `False`         | Scan the music folder when the bot starts          |
+| `autoplay_length`        | `5`               | Tracks added per autoplay refill                   |
 
 ### `[youtube_dl]`
 
@@ -151,9 +154,32 @@ Settings for yt-dlp, used by `!url` and `!playlist`.
 
 ### `[files]`
 
-| Key            | Default   | Description                                                                 |
-|----------------|-----------|-----------------------------------------------------------------------------|
-| `music_folder` | *(empty)* | Root folder for `!file`. Paths are relative to it and cannot escape it, including via symlinks |
+| Key               | Default   | Description                                                                 |
+|-------------------|-----------|-----------------------------------------------------------------------------|
+| `music_folder`    | *(empty)* | Root folder for `!file` and the library scan. Paths are relative to it and cannot escape it, including via symlinks |
+| `ignored_folders` | *(empty)* | Comma-separated folder names the scan skips (exact, case-sensitive, any depth) |
+| `ignored_files`   | *(empty)* | Comma-separated file names the scan skips (exact, case-sensitive)           |
+
+### Music library
+
+With `music_folder` set, `!rescan` scans it into a SQLite database (`music_database_path`).
+The first scan runs `ffprobe` on every audio file and can take a while on a large library;
+later scans only probe new or changed files and remove rows for files that are gone. Only
+`mp3, flac, ogg, oga, opus, m4a, aac, wav, wma, ape, aiff` are scanned. Directory symlinks are
+not followed.
+
+The scan never wipes the library because the folder is unavailable: if `music_folder` is not a
+readable directory, or no audio files are found while the library has entries (e.g. an
+unmounted share), nothing is removed.
+
+**Docker:** keep the database on a volume, or every container recreation loses it and the next
+scan re-probes every file. The compose file mounts `./data`; set
+`music_database_path = data/music.db` in `configuration.ini`.
+
+`!mode autoplay` plays random library tracks. It starts immediately on an idle bot and refills
+the queue (replacing played tracks, so `!queue` stays short) whenever it runs dry. If
+`autoplay_length` tracks in a row fail to play (for example the folder was unmounted), autoplay
+stops and says so; run `!mode autoplay` again to restart it.
 
 ### `[radio]` — presets
 
@@ -207,7 +233,8 @@ Partial command names work: `!hel` dispatches to `!help` as long as it's unambig
 | `!file <path>`   | Play a local audio file by path relative to `music_folder`; title/artist/duration via ffprobe |
 | `!url <url>`     | Play one track via yt-dlp (YouTube, SoundCloud, …). Always a single track |
 | `!playlist <url>`| Queue a playlist (up to `max_track_playlist`); tracks resolve as they play |
-| `!mode [mode]`   | Show or set the playback mode: `one-shot` (stop at the end), `repeat` (loop the queue), `random` (shuffle; reshuffles and keeps going). Not saved across restarts |
+| `!mode [mode]`   | Show or set the playback mode: `one-shot` (stop at the end), `repeat` (loop the queue), `random` (shuffle; reshuffles and keeps going), `autoplay` (random library tracks; **starts playing immediately** when idle). Not saved across restarts |
+| `!rescan`        | Scan `music_folder` into the library (incremental). Open to everyone; one scan at a time |
 | `!stop`          | Stop playback and reset the queue position                               |
 | `!mute`          | Set volume to 0 — stream stays connected, no reconnect delay             |
 | `!unmute`        | Restore volume after `!mute`                                             |
@@ -306,18 +333,14 @@ permanently removed because they don't apply to a Go binary. (`music_folder`,
 | `allow_private_message`                                  | deferred | Private messages are always ignored in Phase 1       |
 | `allow_other_channel_message`                            | deferred | Phase 2                                              |
 | `auto_check_update`                                      | removed  | No update mechanism; use the GitHub release workflow |
-| `autoplay_length`                                        | deferred | Phase 2 playlist modes                               |
 | `clear_when_stop_in_oneshot`                             | deferred | Phase 2                                              |
-| `database_path` / `music_database_path`                  | deferred | Phase 2 (SQLite)                                     |
+| `database_path`                                          | deferred | Phase 2 (settings DB, 3-10); `music_database_path` is implemented |
 | `delete_allowed`                                         | deferred | Phase 2                                              |
 | `download_attempts`                                      | deferred | Phase 2 (yt-dlp)                                     |
 | `ducking` / `ducking_threshold` / `ducking_volume`       | deferred | Phase 2                                              |
 | `language`                                               | deferred | Hardcoded English in Phase 1                         |
-| `ignored_files` / `ignored_folders`                      | deferred | Phase 2 (file library scan)                          |
 | `pip3_path` / `target_version`                           | removed  | Not applicable to a Go binary                        |
 | `save_playlist` / `save_music_library`                   | deferred | Phase 2                                              |
-| `playback_mode = autoplay`                               | deferred | Needs the music library; falls back to `one-shot` with a warning |
-| `refresh_cache_on_startup`                               | deferred | Phase 2                                              |
 | `tmp_folder` / `tmp_folder_max_size`                     | deferred | Phase 2 (yt-dlp downloads)                           |
 | `when_nobody_in_channel`                                 | deferred | Phase 2                                              |
 

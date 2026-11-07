@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/konradk/gotamusique/internal/library"
 	"github.com/konradk/gotamusique/internal/queue"
 	"layeh.com/gumble/gumble"
 )
@@ -24,18 +25,16 @@ func handleMode(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg strin
 
 	m, err := queue.ParseMode(arg)
 	if err != nil {
-		var text string
-		switch {
-		case errors.Is(err, queue.ErrAutoplayUnavailable):
-			text = err.Error()
-		default:
-			text = "Unknown mode. Usage: " + symbol(cfg) + cmd + " [" + strings.ReplaceAll(queue.ModeList(), ", ", "|") + "]"
-		}
+		text := "Unknown mode. Usage: " + symbol(cfg) + cmd + " [" + strings.ReplaceAll(queue.ModeList(), ", ", "|") + "]"
 		reply(cfg, msg, esc(text), text)
 		return
 	}
 	if err := bot.SetPlaybackMode(string(m)); err != nil {
-		reply(cfg, msg, esc(err.Error()), err.Error())
+		text := err.Error()
+		if errors.Is(err, library.ErrUnavailable) || errors.Is(err, library.ErrEmpty) {
+			text = libraryErrorText(err)
+		}
+		reply(cfg, msg, esc(text), text)
 		return
 	}
 	reply(cfg, msg, "Playback mode set to <b>"+esc(string(m))+"</b>", "Playback mode set to "+string(m))

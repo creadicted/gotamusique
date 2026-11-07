@@ -5,3 +5,4 @@ bin/
 *.db-wal
 configuration.ini
 ref
+data/
