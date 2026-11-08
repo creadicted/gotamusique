@@ -9,6 +9,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Queue and file commands** — `!file <path|folder|part of a path>` (alias `!f`) now searches
+  the library: an exact path, else a folder (queues every track below it), else a
+  case-insensitive partial match (one hit is queued, several are listed for `!shortlist`);
+  without a library, or when nothing matches, it still plays the path from `music_folder`.
+  `!filematch <regex>` (alias `!fm`) queues every library track whose path or title matches.
+  `!last` jumps to the last queued item, `!random` shuffles the upcoming items without
+  interrupting the current track, and `!repeat [n]` plays the current item `n` more times
+  (1-200). Bulk commands (`!file` folder, `!filematch`, `!tag`, `!shortlist *`) queue at most
+  200 tracks at once and say so when more matched.
 - **`!listfile` (alias `!list`) `[regex] [-p page]` and `!search <keywords> [-p page]`** — browse the scanned
   music library from chat. `!listfile` lists tracks ordered by path, optionally filtered by a
   case-insensitive regex on path and title; `!search` returns tracks matching every keyword

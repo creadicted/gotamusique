@@ -257,11 +257,21 @@ func trackItem(t LibraryTrack, musicFolder string) (*fileitem.FileItem, error) {
 	return it, nil
 }
 
+// maxBulkAdd is the most tracks one command queues at once (!filematch, !file <folder>,
+// !tag, !shortlist *), so a careless pattern cannot flood the queue. Also the largest
+// !repeat count.
+const maxBulkAdd = 200
+
 // enqueueTracks queues the tracks that still exist on disk and replies with a summary.
+// At most maxBulkAdd tracks are queued; the reply says when the rest was left out.
 func enqueueTracks(bot BotAPI, cfg *config.Config, msg *gumble.TextMessage, tracks []LibraryTrack, what string) {
 	if cfg.Files.MusicFolder == "" {
 		noLibrary(cfg, msg)
 		return
+	}
+	total := len(tracks)
+	if total > maxBulkAdd {
+		tracks = tracks[:maxBulkAdd]
 	}
 	queued, missing := 0, 0
 	var last string
@@ -286,6 +296,9 @@ func enqueueTracks(bot BotAPI, cfg *config.Config, msg *gumble.TextMessage, trac
 		if missing > 0 {
 			text += fmt.Sprintf(" (%d missing, run %srescan)", missing, symbol(cfg))
 		}
+	}
+	if total > maxBulkAdd {
+		text += fmt.Sprintf(". Only the first %d of %d were queued, narrow your selection", maxBulkAdd, total)
 	}
 	reply(cfg, msg, esc(text), text)
 }

@@ -912,3 +912,64 @@ func TestTagging_NoLibrary(t *testing.T) {
 		t.Errorf("UpdateTags err = %v", err)
 	}
 }
+
+func TestLookupFile_ExactFolderPartial(t *testing.T) {
+	lb := newLibBot(t, 0, nil)
+	for _, p := range []string{"rock/a.mp3", "rock/b.mp3", "rockabilly/c.mp3", "jazz/Blue Train.mp3"} {
+		lb.addTrack(t, p, false)
+	}
+	cases := []struct {
+		arg  string
+		kind command.LookupKind
+		want string
+	}{
+		{"jazz/Blue Train.mp3", command.LookupExact, "jazz/Blue Train.mp3"},
+		{"rock", command.LookupFolder, "rock/a.mp3,rock/b.mp3"}, // not rockabilly/
+		{"rock/", command.LookupFolder, "rock/a.mp3,rock/b.mp3"},
+		{"BLUE tr", command.LookupPartial, "jazz/Blue Train.mp3"},
+		{"a.mp3", command.LookupPartial, "rock/a.mp3"},
+		{"nothing", command.LookupPartial, ""},
+	}
+	for _, c := range cases {
+		got, err := lb.LookupFile(c.arg)
+		if err != nil || got.Kind != c.kind || strings.Join(trackPaths(got.Tracks), ",") != c.want {
+			t.Errorf("LookupFile(%q) = kind %v %v err %v; want kind %v %q", c.arg, got.Kind, trackPaths(got.Tracks), err, c.kind, c.want)
+		}
+	}
+}
+
+func TestLookupFile_NoLibrary(t *testing.T) {
+	b, _ := New(defaultCfg())
+	if _, err := b.LookupFile("x"); !errors.Is(err, library.ErrUnavailable) {
+		t.Errorf("err = %v", err)
+	}
+}
+
+func TestLast_JumpsToFinalItem(t *testing.T) {
+	b, _ := New(defaultCfg())
+	if b.Last() {
+		t.Error("empty queue: Last must report false")
+	}
+	for _, id := range []string{"a", "b", "c"} {
+		b.queue.Append(file.New(id+".mp3", "/m"))
+	}
+	if !b.Last() || b.queue.Index() != 2 {
+		t.Errorf("index = %d, want 2", b.queue.Index())
+	}
+}
+
+func TestRepeatCurrentAndRandomize(t *testing.T) {
+	b, _ := New(defaultCfg())
+	if _, ok := b.RepeatCurrent(1); ok {
+		t.Error("nothing is current")
+	}
+	b.queue.Append(file.New("a.mp3", "/m"))
+	b.queue.Append(file.New("b.mp3", "/m"))
+	if _, ok := b.RepeatCurrent(2); !ok || b.queue.Len() != 4 {
+		t.Errorf("len = %d, want 4", b.queue.Len())
+	}
+	b.RandomizeQueue()
+	if b.queue.Len() != 4 {
+		t.Error("shuffle must keep every item")
+	}
+}

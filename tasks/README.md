@@ -46,12 +46,17 @@ Builds on the Phase 1 binary; each milestone is independently mergeable.
 | 3-03 | [phase3/03-url-media.md](phase3/03-url-media.md)             | done   | YouTube / yt-dlp (stream-only)             |
 | 3-04 | [phase3/04-playlist-modes.md](phase3/04-playlist-modes.md)   | done   | one-shot / repeat / random modes + `!mode` |
 | 3-05 | [phase3/05-music-library.md](phase3/05-music-library.md)     | done   | Dir scan, `!rescan`, DB wiring, autoplay   |
-| 3-06 | [phase3/06-full-commands.md](phase3/06-full-commands.md)     | in progress | listfile/search/tags/shortlist done; rest todo |
-| 3-07 | [phase3/07-web-api.md](phase3/07-web-api.md)                 | todo   | REST API for web remote control        |
-| 3-08 | [phase3/08-web-frontend.md](phase3/08-web-frontend.md)       | todo   | Serve existing frontend from binary    |
+| 3-06 | [phase3/06-full-commands.md](phase3/06-full-commands.md)     | in progress | library browse, tags, queue/file commands done; rest todo |
+| 3-07 | [phase3/07-web-api.md](phase3/07-web-api.md)                 | todo (next) | Control API (state, commands, SSE) for Kallisti |
+| 3-08 | [phase3/08-web-frontend.md](phase3/08-web-frontend.md)       | todo (next) | Music-bot panel inside Kallisti (replaces own frontend) |
 | 3-09 | [phase3/09-ducking.md](phase3/09-ducking.md)                 | todo   | Auto volume-lower on voice activity    |
 | 3-10 | [phase3/10-persistence.md](phase3/10-persistence.md)         | todo   | Save/restore playlist across restarts  |
 | 3-11 | [phase3/11-admin.md](phase3/11-admin.md)                     | todo   | Ban/whitelist, admin-only commands     |
+
+> **Priority:** 3-07 and 3-08 are the next milestones, ahead of the other todo items in this phase
+> (3-06 remainder, 3-09, 3-10, 3-11) and the open feature requests. The web UI is **not** built in this repo:
+> gotamusique exposes an API and [Kallisti](https://kallisti.chat) hosts the panel. 3-07 starts with a
+> behaviour-preserving refactor so command handlers return results instead of writing to Mumble directly.
 
 ## Feature Requests
 

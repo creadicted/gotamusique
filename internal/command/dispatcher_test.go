@@ -15,34 +15,39 @@ import (
 // --- mock BotAPI ---
 
 type mockBot struct {
-	cfg          *config.Config
-	enqueueCalls []audio.MediaItem
-	stopCalls    int
-	muteCalls    int
-	unmuteCalls  int
-	skipCalls    int
-	clearCalls   int
-	muted        bool
-	volume       float64
-	queueItems   []audio.MediaItem
-	queueIdx     int
-	currentItem  audio.MediaItem
-	killCalled   bool
-	mode         string
-	setModeErr   error
-	setModeCalls []string
-	hasLibrary   bool
-	rescanCalls  int
-	libTracks    []LibraryTrack
-	libErr       error
-	findTags     []string
-	tagErr       error
-	tagStore     map[string][]string
-	listRE       *regexp.Regexp
-	searchKW     []string
-	rescanResult string
-	rescanErr    error
-	rescanBlock  chan struct{}
+	cfg            *config.Config
+	enqueueCalls   []audio.MediaItem
+	stopCalls      int
+	muteCalls      int
+	unmuteCalls    int
+	skipCalls      int
+	clearCalls     int
+	muted          bool
+	volume         float64
+	queueItems     []audio.MediaItem
+	queueIdx       int
+	currentItem    audio.MediaItem
+	killCalled     bool
+	mode           string
+	setModeErr     error
+	setModeCalls   []string
+	hasLibrary     bool
+	rescanCalls    int
+	libTracks      []LibraryTrack
+	libErr         error
+	findTags       []string
+	lookup         FileLookup
+	lookupArg      string
+	lastCalls      int
+	randomizeCalls int
+	repeatN        int
+	tagErr         error
+	tagStore       map[string][]string
+	listRE         *regexp.Regexp
+	searchKW       []string
+	rescanResult   string
+	rescanErr      error
+	rescanBlock    chan struct{}
 }
 
 func (m *mockBot) Config() *config.Config         { return m.cfg }
@@ -81,6 +86,22 @@ func (m *mockBot) ListLibrary(re *regexp.Regexp) ([]LibraryTrack, error) {
 func (m *mockBot) SearchLibrary(kw []string) ([]LibraryTrack, error) {
 	m.searchKW = kw
 	return m.libTracks, m.libErr
+}
+func (m *mockBot) LookupFile(arg string) (FileLookup, error) {
+	m.lookupArg = arg
+	return m.lookup, m.libErr
+}
+func (m *mockBot) Last() bool {
+	m.lastCalls++
+	return len(m.queueItems) > 0
+}
+func (m *mockBot) RandomizeQueue() { m.randomizeCalls++ }
+func (m *mockBot) RepeatCurrent(n int) (audio.MediaItem, bool) {
+	m.repeatN = n
+	if m.currentItem == nil {
+		return nil, false
+	}
+	return m.currentItem, true
 }
 func (m *mockBot) FindTagged(tags []string) ([]LibraryTrack, error) {
 	m.findTags = tags

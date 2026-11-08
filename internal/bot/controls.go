@@ -180,6 +180,24 @@ func (b *Bot) enterAutoplay() error {
 	return nil
 }
 
+// Last jumps to the final queue item and plays it. False when the queue is empty.
+func (b *Bot) Last() bool {
+	n := b.queue.Len()
+	return n > 0 && b.Play(n-1) == nil
+}
+
+// RandomizeQueue shuffles the upcoming items; the current track is not interrupted.
+func (b *Bot) RandomizeQueue() { b.queue.Randomize() }
+
+// RepeatCurrent queues n more plays of the current item right after it.
+func (b *Bot) RepeatCurrent(n int) (audio.MediaItem, bool) {
+	item, ok := b.queue.RepeatCurrent(n)
+	if ok {
+		b.wakeLoop()
+	}
+	return item, ok
+}
+
 // Config returns the bot's configuration.
 func (b *Bot) Config() *config.Config { return b.cfg }
 

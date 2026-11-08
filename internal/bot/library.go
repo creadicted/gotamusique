@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -182,6 +183,38 @@ func (b *Bot) FindTagged(tags []string) ([]command.LibraryTrack, error) {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
 	return out, nil
+}
+
+// LookupFile resolves a !file argument against the library: an exact path, else
+// a folder (every track below it), else a case-insensitive partial path match.
+func (b *Bot) LookupFile(arg string) (command.FileLookup, error) {
+	lib := b.libraryRef()
+	if lib == nil {
+		return command.FileLookup{}, library.ErrUnavailable
+	}
+	recs, err := lib.db.Query((&database.Condition{}).
+		AndEqual("type", library.RecordType, true).OrderBy("path", false))
+	if err != nil {
+		return command.FileLookup{}, fmt.Errorf("reading library: %w", err)
+	}
+	arg = strings.TrimSpace(arg)
+	dir := strings.TrimSuffix(arg, "/") + "/"
+	lower := strings.ToLower(arg)
+	var folder, partial []command.LibraryTrack
+	for _, r := range recs {
+		switch {
+		case r.Path == arg:
+			return command.FileLookup{Kind: command.LookupExact, Tracks: []command.LibraryTrack{toLibraryTrack(r)}}, nil
+		case strings.HasPrefix(r.Path, dir):
+			folder = append(folder, toLibraryTrack(r))
+		case strings.Contains(strings.ToLower(r.Path), lower):
+			partial = append(partial, toLibraryTrack(r))
+		}
+	}
+	if len(folder) > 0 {
+		return command.FileLookup{Kind: command.LookupFolder, Tracks: folder}, nil
+	}
+	return command.FileLookup{Kind: command.LookupPartial, Tracks: partial}, nil
 }
 
 // UpdateTags rewrites the tags of the library file row id.

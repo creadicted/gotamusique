@@ -585,3 +585,38 @@ func TestNextIfUnchanged(t *testing.T) {
 		t.Error("stale NextIfUnchanged moved the queue")
 	}
 }
+
+func TestRepeatCurrent(t *testing.T) {
+	q := NewQueue()
+	a, b := item("a"), item("b")
+	q.Append(a)
+	q.Append(b)
+
+	got1, ok := q.RepeatCurrent(2)
+	if !ok || got1 != a {
+		t.Fatalf("got %v %v, want a", got1, ok)
+	}
+	got := q.Items()
+	if len(got) != 4 || got[0] != a || got[1] != a || got[2] != a || got[3] != b {
+		t.Errorf("items = %v, want a a a b", got)
+	}
+	if q.Index() != 0 {
+		t.Errorf("index = %d, want the current item unchanged", q.Index())
+	}
+}
+
+func TestRepeatCurrent_NothingCurrentOrBadCount(t *testing.T) {
+	q := NewQueue()
+	if _, ok := q.RepeatCurrent(1); ok {
+		t.Error("empty queue has no current item")
+	}
+	q.Append(item("a"))
+	v := q.Version()
+	if _, ok := q.RepeatCurrent(0); ok || q.Version() != v || q.Len() != 1 {
+		t.Error("n < 1 must change nothing")
+	}
+	q.Next() // past the end
+	if _, ok := q.RepeatCurrent(1); ok {
+		t.Error("past-end queue has no current item")
+	}
+}
