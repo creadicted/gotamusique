@@ -3,6 +3,7 @@ package database
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"strings"
 	"time"
 )
@@ -26,6 +27,9 @@ type MusicDB interface {
 	QueryByID(id string) (*MusicRecord, error)
 	QueryByKeywords(keywords []string) ([]MusicRecord, error)
 	QueryByTags(tags []string) ([]MusicRecord, error)
+	// UpdateTags atomically rewrites one row's tags with fn. It returns ErrNotFound
+	// when no row has that id.
+	UpdateTags(id string, fn func(tags []string) []string) error
 	QueryRandom(count int, cond *Condition) ([]MusicRecord, error)
 	Delete(cond *Condition) error
 	AllPaths() ([]string, error)
@@ -103,12 +107,63 @@ func (m *musicDB) QueryByKeywords(keywords []string) ([]MusicRecord, error) {
 	return m.Query(cond)
 }
 
+// QueryByTags returns the rows that carry every given tag. Tags match whole,
+// case-insensitively: "rock" does not find a row tagged only "hardrock".
 func (m *musicDB) QueryByTags(tags []string) ([]MusicRecord, error) {
+	if len(tags) == 0 {
+		return nil, nil
+	}
 	cond := &Condition{}
 	for _, tag := range tags {
-		cond.AndLike("tags", "%"+tag+",%", false)
+		cond.AndContains("tags", tag, false) // cheap superset; exact match is checked below
 	}
-	return m.Query(cond)
+	recs, err := m.Query(cond)
+	if err != nil {
+		return nil, err
+	}
+	out := recs[:0]
+	for _, r := range recs {
+		if hasAllTags(r.Tags, tags) {
+			out = append(out, r)
+		}
+	}
+	return out, nil
+}
+
+func hasAllTags(have, want []string) bool {
+	for _, w := range want {
+		found := false
+		for _, h := range have {
+			if strings.EqualFold(h, w) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
+func (m *musicDB) UpdateTags(id string, fn func(tags []string) []string) error {
+	tx, err := m.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() //nolint:errcheck
+	var raw sql.NullString
+	err = tx.QueryRow("SELECT tags FROM music WHERE id=? AND id != 'info'", id).Scan(&raw)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec("UPDATE music SET tags=? WHERE id=?", encodeTags(fn(decodeTags(raw.String))), id); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (m *musicDB) QueryRandom(count int, cond *Condition) ([]MusicRecord, error) {

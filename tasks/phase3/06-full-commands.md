@@ -1,6 +1,6 @@
 # 3-06 — Full Command Set
 
-**Status:** in progress — `!listfile` and `!search` shipped; the rest is todo  
+**Status:** in progress — `!listfile`, `!search`, tags and `!shortlist` shipped; cache, `!filematch`, `!delete`, URL search, mode extras, `!version` and i18n remain; the auto "recent added" tag is deferred  
 **Depends on:** 3-02, 3-03, 3-04, 3-05  
 **Unlocks:** nothing (feature-complete bot)
 

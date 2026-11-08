@@ -1111,3 +1111,24 @@ func TestScan_ProbeFailureOnChangedFile_NotReprobedUntilChanged(t *testing.T) {
 		t.Errorf("probe ran again on unchanged failing file (%d -> %d)", before, calls)
 	}
 }
+
+func TestScan_ReprobeKeepsUserTags(t *testing.T) {
+	f := newFixture(t)
+	p := write(t, f.root, "a.mp3", "1")
+	s := f.scanner(Config{})
+	s.Scan(context.Background())
+	id := file.IDFromPath("a.mp3")
+	f.db.UpdateTags(id, func([]string) []string { return []string{"fav"} })
+
+	write(t, f.root, "a.mp3", "changed!")
+	future := time.Now().Add(time.Hour)
+	os.Chtimes(p, future, future)
+	res, err := s.Scan(context.Background())
+	if err != nil || res.Updated != 1 {
+		t.Fatalf("res = %+v, err = %v; want 1 updated", res, err)
+	}
+	rec, _ := f.db.QueryByID(id)
+	if strings.Join(rec.Tags, ",") != "fav" {
+		t.Errorf("tags = %v, want fav kept after re-probe", rec.Tags)
+	}
+}

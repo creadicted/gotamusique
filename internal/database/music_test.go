@@ -1,6 +1,7 @@
 package database
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -282,5 +283,57 @@ func TestAndContains_WildcardsAreLiteral(t *testing.T) {
 		if err != nil || len(got) != want {
 			t.Errorf("AndContains(%q) = %d rows, err %v; want %d", q, len(got), err, want)
 		}
+	}
+}
+
+func TestQueryByTags_WholeTagCaseInsensitive(t *testing.T) {
+	db := openTestMusic(t)
+	for id, tags := range map[string][]string{"1": {"rock"}, "2": {"hardrock"}, "3": {"Rock", "live"}, "4": {"jazz"}} {
+		r := sampleRecord(id)
+		r.Tags = tags
+		if err := db.Insert(r); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := db.QueryByTags([]string{"ROCK"})
+	if err != nil || len(got) != 2 {
+		t.Fatalf("rock: %d rows, err %v; want 2 (not hardrock)", len(got), err)
+	}
+	got, _ = db.QueryByTags([]string{"rock", "live"})
+	if len(got) != 1 || got[0].ID != "3" {
+		t.Errorf("rock+live = %v, want only row 3", got)
+	}
+	if got, _ := db.QueryByTags(nil); len(got) != 0 {
+		t.Errorf("no tags must match nothing, got %d", len(got))
+	}
+}
+
+func TestUpdateTags(t *testing.T) {
+	db := openTestMusic(t)
+	r := sampleRecord("a")
+	r.Tags = []string{"x"}
+	db.Insert(r)
+
+	if err := db.UpdateTags("a", func(tags []string) []string { return append(tags, "y") }); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := db.QueryByID("a")
+	if strings.Join(got.Tags, ",") != "x,y" {
+		t.Errorf("tags = %v", got.Tags)
+	}
+	if got.Title != r.Title || got.Path != r.Path {
+		t.Errorf("other columns changed: %+v", got)
+	}
+	if err := db.UpdateTags("a", func([]string) []string { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ = db.QueryByID("a"); len(got.Tags) != 0 {
+		t.Errorf("tags = %v, want none", got.Tags)
+	}
+	if err := db.UpdateTags("missing", func(t []string) []string { return t }); !errors.Is(err, ErrNotFound) {
+		t.Errorf("err = %v, want ErrNotFound", err)
+	}
+	if err := db.UpdateTags("info", func(t []string) []string { return t }); !errors.Is(err, ErrNotFound) {
+		t.Errorf("info row must not be touchable, err = %v", err)
 	}
 }

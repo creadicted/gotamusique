@@ -43,6 +43,8 @@ var (
 	ErrUnavailable = errors.New("library unavailable")
 	// ErrEmpty means the library is open but holds no tracks.
 	ErrEmpty = errors.New("library is empty, run !rescan")
+	// ErrNotInLibrary means the file is not in the library database yet.
+	ErrNotInLibrary = errors.New("file is not in the library, run !rescan")
 	// ErrScanRunning is returned when a scan is already in progress.
 	ErrScanRunning = errors.New("scan already running")
 	// ErrFolderUnavailable is returned when the music folder is not a readable directory.
@@ -339,7 +341,9 @@ func (s *Scanner) reconcile(ctx context.Context, files []found, existing []datab
 			}
 			continue
 		}
-		if err := s.db.Insert(buildRecord(id, f, meta)); err != nil {
+		rec := buildRecord(id, f, meta)
+		rec.Tags = old.Tags // user tags survive a re-probe (zero value when the row is new)
+		if err := s.db.Insert(rec); err != nil {
 			return res, fmt.Errorf("writing %s: %w", f.rel, err)
 		}
 		if had {

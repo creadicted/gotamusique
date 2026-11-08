@@ -35,6 +35,9 @@ type mockBot struct {
 	rescanCalls  int
 	libTracks    []LibraryTrack
 	libErr       error
+	findTags     []string
+	tagErr       error
+	tagStore     map[string][]string
 	listRE       *regexp.Regexp
 	searchKW     []string
 	rescanResult string
@@ -78,6 +81,20 @@ func (m *mockBot) ListLibrary(re *regexp.Regexp) ([]LibraryTrack, error) {
 func (m *mockBot) SearchLibrary(kw []string) ([]LibraryTrack, error) {
 	m.searchKW = kw
 	return m.libTracks, m.libErr
+}
+func (m *mockBot) FindTagged(tags []string) ([]LibraryTrack, error) {
+	m.findTags = tags
+	return m.libTracks, m.libErr
+}
+func (m *mockBot) UpdateTags(id string, fn func([]string) []string) error {
+	if m.tagErr != nil {
+		return m.tagErr
+	}
+	if m.tagStore == nil {
+		m.tagStore = map[string][]string{}
+	}
+	m.tagStore[id] = fn(m.tagStore[id])
+	return nil
 }
 func (m *mockBot) SetPlaybackMode(name string) error {
 	m.setModeCalls = append(m.setModeCalls, name)

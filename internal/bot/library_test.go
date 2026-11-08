@@ -881,3 +881,34 @@ func TestLibraryBrowse_NoLibrary(t *testing.T) {
 		t.Errorf("SearchLibrary err = %v", err)
 	}
 }
+
+func TestUpdateTagsAndFindTagged(t *testing.T) {
+	lb := newLibBot(t, 0, nil)
+	lb.addTrack(t, "a.mp3", false)
+	lb.addTrack(t, "b.mp3", false)
+	idA := file.IDFromPath("a.mp3")
+
+	if err := lb.UpdateTags(idA, func(tags []string) []string { return append(tags, "Fav") }); err != nil {
+		t.Fatal(err)
+	}
+	got, err := lb.FindTagged([]string{"fav"})
+	if err != nil || strings.Join(trackPaths(got), ",") != "a.mp3" {
+		t.Fatalf("FindTagged = %v, %v", trackPaths(got), err)
+	}
+	if len(got[0].Tags) != 1 || got[0].Duration != 120*time.Second {
+		t.Errorf("track = %+v, want tags and duration carried over", got[0])
+	}
+	if err := lb.UpdateTags("nope", func(t []string) []string { return t }); !errors.Is(err, library.ErrNotInLibrary) {
+		t.Errorf("err = %v, want ErrNotInLibrary", err)
+	}
+}
+
+func TestTagging_NoLibrary(t *testing.T) {
+	b, _ := New(defaultCfg())
+	if _, err := b.FindTagged([]string{"x"}); !errors.Is(err, library.ErrUnavailable) {
+		t.Errorf("FindTagged err = %v", err)
+	}
+	if err := b.UpdateTags("x", nil); !errors.Is(err, library.ErrUnavailable) {
+		t.Errorf("UpdateTags err = %v", err)
+	}
+}

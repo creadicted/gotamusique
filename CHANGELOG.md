@@ -14,6 +14,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   case-insensitive regex on path and title; `!search` returns tracks matching every keyword
   (`%` and `_` match literally). Pages are sized to stay under Mumble's message limit. Paths
   shown can be played with `!file`.
+- **Tags and `!shortlist`** — `!listfile`, `!search` and `!findtagged <tag,tag>` (alias `!ft`)
+  number their results (across pages) and remember them per channel; `!shortlist <n> [n ...]|*`
+  (alias `!sl`) queues entries from that list, and queues nothing if any number is bad.
+  `!addtag [n|*] <tag,tag>` and `!untag [n|*] <tag,tag|*>` tag queued library files (current
+  item by default, `n` = queue position, `*` = all); radio, URL and stream items are skipped.
+  `!tag <tag,tag>` queues every library track carrying all the tags. Tags match whole words
+  case-insensitively and are kept when a changed file is re-probed by `!rescan`.
 
 ---
 
