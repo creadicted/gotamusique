@@ -5,6 +5,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **`!version`** — reports the running version; the startup log shows it too.
+
+### Fixed
+
+- Release binaries and Docker images reported a hard-coded `0.1.9` as their version. The version
+  is now injected at build time from the release tag (`make build` uses `git describe`); a plain
+  `go build` reports `dev (<revision>)`.
+
+---
+
 ## [0.4.0] — 2026-11-08
 
 ### Added
