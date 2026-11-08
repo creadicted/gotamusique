@@ -7,6 +7,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+---
+
+## [0.5.1] — 2026-11-08
+
 ### Added
 
 - **`!version`** — reports the running version; the startup log shows it too.
