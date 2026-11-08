@@ -49,6 +49,19 @@ Volume is a percentage of `max_volume`.
 `!rbquery <name> [-n N]` searches radio-browser.info (default 10 results, max 50).
 `!rbplay <uuid|index>` plays a station by UUID or by index from the last search.
 
+```
+You:  !rbquery soma
+Bot:  Radio-Browser results:
+      | rbplay ID                            | Station Name          | Genre       | Codec/Bitrate | Country |
+      | ------------------------------------ | --------------------- | ----------- | ------------- | ------- |
+      | 9cf19f37-35f5-11e8-a303-52543be04c81 | SomaFM: Groove Salad  | ambient     | MP3/128       | US      |
+      | 6bc2f454-f66c-11e8-b42b-52543be04c81 | SomaFM: Lush          | dream pop   | MP3/128       | US      |
+      | ...
+
+You:  !rbplay 9cf19f37-35f5-11e8-a303-52543be04c81
+Bot:  Now playing: [Radio] SomaFM: Groove Salad
+```
+
 ## Library
 
 See [Music library](../configuration/library.md).
