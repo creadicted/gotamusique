@@ -1,6 +1,7 @@
 package database
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -266,5 +267,20 @@ func TestMigrateMusic_MatchesFullMigrate(t *testing.T) {
 			t.Errorf("%s: %v", p, err)
 		}
 		db.Close()
+	}
+}
+
+func TestAndContains_WildcardsAreLiteral(t *testing.T) {
+	db := openTestMusic(t)
+	for i, kw := range []string{"100% hits", "a_b song", "axb song", "back\\slash", "plain"} {
+		if err := db.Insert(MusicRecord{ID: fmt.Sprint(i), Type: "file", Title: kw, Keywords: kw, Path: kw}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for q, want := range map[string]int{"100%": 1, "a_b": 1, "\\": 1, "SONG": 2, "x": 1} {
+		got, err := db.Query((&Condition{}).AndContains("keywords", q, false))
+		if err != nil || len(got) != want {
+			t.Errorf("AndContains(%q) = %d rows, err %v; want %d", q, len(got), err, want)
+		}
 	}
 }

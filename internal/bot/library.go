@@ -7,10 +7,12 @@ import (
 	"math/rand/v2"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sync"
 	"time"
 
 	"github.com/konradk/gotamusique/internal/audio"
+	"github.com/konradk/gotamusique/internal/command"
 	"github.com/konradk/gotamusique/internal/database"
 	"github.com/konradk/gotamusique/internal/library"
 	"github.com/konradk/gotamusique/internal/media/file"
@@ -115,6 +117,57 @@ func (b *Bot) Rescan(ctx context.Context, force bool) (string, error) {
 	b.log.Info("library scan finished", slog.String("result", res.String()),
 		slog.Int("unchanged", res.Unchanged), slog.Int("skipped", res.Skipped))
 	return res.String(), nil
+}
+
+// ListLibrary returns the scanned tracks ordered by path. A non-nil re keeps only
+// tracks whose path or title match.
+func (b *Bot) ListLibrary(re *regexp.Regexp) ([]command.LibraryTrack, error) {
+	lib := b.libraryRef()
+	if lib == nil {
+		return nil, library.ErrUnavailable
+	}
+	recs, err := lib.db.Query((&database.Condition{}).
+		AndEqual("type", library.RecordType, true).OrderBy("path", false))
+	if err != nil {
+		return nil, fmt.Errorf("reading library: %w", err)
+	}
+	var out []command.LibraryTrack
+	for _, r := range recs {
+		if re == nil || re.MatchString(r.Path) || re.MatchString(r.Title) {
+			out = append(out, toLibraryTrack(r))
+		}
+	}
+	return out, nil
+}
+
+// SearchLibrary returns the tracks whose keywords contain every given keyword
+// (case-insensitive), ordered by path.
+func (b *Bot) SearchLibrary(keywords []string) ([]command.LibraryTrack, error) {
+	lib := b.libraryRef()
+	if lib == nil {
+		return nil, library.ErrUnavailable
+	}
+	cond := (&database.Condition{}).AndEqual("type", library.RecordType, true)
+	for _, kw := range keywords {
+		cond.AndContains("keywords", kw, false)
+	}
+	recs, err := lib.db.Query(cond.OrderBy("path", false))
+	if err != nil {
+		return nil, fmt.Errorf("reading library: %w", err)
+	}
+	out := make([]command.LibraryTrack, 0, len(recs))
+	for _, r := range recs {
+		out = append(out, toLibraryTrack(r))
+	}
+	return out, nil
+}
+
+func toLibraryTrack(r database.MusicRecord) command.LibraryTrack {
+	t := command.LibraryTrack{Path: r.Path, Title: r.Title}
+	if a, ok := r.Metadata["artist"].(string); ok {
+		t.Artist = a
+	}
+	return t
 }
 
 // startupScan runs the opt-in scan in the background.

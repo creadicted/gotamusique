@@ -22,6 +22,8 @@ func RegisterAll(bot BotAPI, d *Dispatcher) {
 	d.Register(a("rb_query"), makeRBQueryHandler(rbcache, rb.Search), false, "Search radio-browser.info; [-n N] results (default 10, max 50)")
 	d.Register(a("rb_play"), makeRBPlayHandler(rbcache, rb.ByUUID), false, "Play station by UUID or by index from the last search")
 	d.Register(a("mode"), handleMode, false, "Get or set playback mode: one-shot, repeat, random, autoplay (autoplay starts playing at once)")
+	d.Register(a("listfile"), handleListFile, false, "List scanned library files: [regex] [-p page]")
+	d.Register(a("search"), handleSearch, false, "Search the library: <keywords> [-p page]; all keywords must match")
 	d.Register(a("rescan"), handleRescan, false, "Scan music_folder into the library (incremental)")
 	d.Register(a("stop"), handleStop, false, "Stop playback and reset queue")
 	d.Register(a("mute"), handleMute, false, "Silence bot (stream stays connected)")

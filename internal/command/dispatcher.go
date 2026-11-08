@@ -34,6 +34,18 @@ type BotAPI interface {
 	SetPlaybackMode(name string) error
 	HasLibrary() bool
 	Rescan(ctx context.Context, force bool) (string, error)
+	// ListLibrary returns library tracks ordered by path, optionally only those
+	// whose path or title match re (nil = all).
+	ListLibrary(re *regexp.Regexp) ([]LibraryTrack, error)
+	// SearchLibrary returns tracks whose keywords contain every keyword.
+	SearchLibrary(keywords []string) ([]LibraryTrack, error)
+}
+
+// LibraryTrack is one scanned library entry as shown in chat.
+type LibraryTrack struct {
+	Path   string // relative to music_folder; usable with !file
+	Title  string
+	Artist string
 }
 
 // HandlerFunc is the signature every command handler must implement.

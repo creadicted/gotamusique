@@ -1,6 +1,6 @@
 # 3-06 — Full Command Set
 
-**Status:** todo  
+**Status:** in progress — `!listfile` and `!search` shipped; the rest is todo  
 **Depends on:** 3-02, 3-03, 3-04, 3-05  
 **Unlocks:** nothing (feature-complete bot)
 

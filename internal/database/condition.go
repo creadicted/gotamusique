@@ -45,6 +45,15 @@ func (c *Condition) AndLike(column, pattern string, caseSensitive bool) *Conditi
 	return c.append(" AND ", col+" LIKE ?", pat)
 }
 
+// AndContains matches rows whose column contains substr literally: the LIKE
+// wildcards % and _ (and the escape character) in substr have no special meaning.
+func (c *Condition) AndContains(column, substr string, caseSensitive bool) *Condition {
+	col, val := normalize(column, substr, caseSensitive)
+	return c.append(" AND ", col+` LIKE ? ESCAPE '\'`, "%"+likeEscaper.Replace(val)+"%")
+}
+
+var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+
 func (c *Condition) OrSubCondition(sub *Condition) *Condition {
 	c.args = append(c.args, sub.args...)
 	op := " OR "
