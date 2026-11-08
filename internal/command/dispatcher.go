@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/konradk/gotamusique/internal/audio"
 	"github.com/konradk/gotamusique/internal/config"
@@ -39,13 +40,20 @@ type BotAPI interface {
 	ListLibrary(re *regexp.Regexp) ([]LibraryTrack, error)
 	// SearchLibrary returns tracks whose keywords contain every keyword.
 	SearchLibrary(keywords []string) ([]LibraryTrack, error)
+	// FindTagged returns tracks carrying every given tag (whole tag, case-insensitive).
+	FindTagged(tags []string) ([]LibraryTrack, error)
+	// UpdateTags rewrites the tags of the library row id with fn. Returns
+	// library.ErrNotInLibrary when there is no such row.
+	UpdateTags(id string, fn func(tags []string) []string) error
 }
 
 // LibraryTrack is one scanned library entry as shown in chat.
 type LibraryTrack struct {
-	Path   string // relative to music_folder; usable with !file
-	Title  string
-	Artist string
+	Path     string // relative to music_folder; usable with !file
+	Title    string
+	Artist   string
+	Tags     []string
+	Duration time.Duration
 }
 
 // HandlerFunc is the signature every command handler must implement.

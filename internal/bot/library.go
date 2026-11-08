@@ -2,12 +2,14 @@ package bot
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"sync"
 	"time"
 
@@ -162,10 +164,48 @@ func (b *Bot) SearchLibrary(keywords []string) ([]command.LibraryTrack, error) {
 	return out, nil
 }
 
+// FindTagged returns the library files carrying every given tag, ordered by path.
+func (b *Bot) FindTagged(tags []string) ([]command.LibraryTrack, error) {
+	lib := b.libraryRef()
+	if lib == nil {
+		return nil, library.ErrUnavailable
+	}
+	recs, err := lib.db.QueryByTags(tags)
+	if err != nil {
+		return nil, fmt.Errorf("reading library: %w", err)
+	}
+	out := make([]command.LibraryTrack, 0, len(recs))
+	for _, r := range recs {
+		if r.Type == library.RecordType {
+			out = append(out, toLibraryTrack(r))
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
+	return out, nil
+}
+
+// UpdateTags rewrites the tags of the library file row id.
+func (b *Bot) UpdateTags(id string, fn func(tags []string) []string) error {
+	lib := b.libraryRef()
+	if lib == nil {
+		return library.ErrUnavailable
+	}
+	if err := lib.db.UpdateTags(id, fn); err != nil {
+		if errors.Is(err, database.ErrNotFound) {
+			return library.ErrNotInLibrary
+		}
+		return err
+	}
+	return nil
+}
+
 func toLibraryTrack(r database.MusicRecord) command.LibraryTrack {
-	t := command.LibraryTrack{Path: r.Path, Title: r.Title}
+	t := command.LibraryTrack{Path: r.Path, Title: r.Title, Tags: r.Tags}
 	if a, ok := r.Metadata["artist"].(string); ok {
 		t.Artist = a
+	}
+	if d, ok := r.Metadata["duration"].(float64); ok {
+		t.Duration = durationFromSeconds(d)
 	}
 	return t
 }

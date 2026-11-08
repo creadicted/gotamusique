@@ -1,6 +1,7 @@
 package database
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -282,5 +283,101 @@ func TestAndContains_WildcardsAreLiteral(t *testing.T) {
 		if err != nil || len(got) != want {
 			t.Errorf("AndContains(%q) = %d rows, err %v; want %d", q, len(got), err, want)
 		}
+	}
+}
+
+func TestQueryByTags_WholeTagCaseInsensitive(t *testing.T) {
+	db := openTestMusic(t)
+	for id, tags := range map[string][]string{"1": {"rock"}, "2": {"hardrock"}, "3": {"Rock", "live"}, "4": {"jazz"}} {
+		r := sampleRecord(id)
+		r.Tags = tags
+		if err := db.Insert(r); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := db.QueryByTags([]string{"ROCK"})
+	if err != nil || len(got) != 2 {
+		t.Fatalf("rock: %d rows, err %v; want 2 (not hardrock)", len(got), err)
+	}
+	got, _ = db.QueryByTags([]string{"rock", "live"})
+	if len(got) != 1 || got[0].ID != "3" {
+		t.Errorf("rock+live = %v, want only row 3", got)
+	}
+	if got, _ := db.QueryByTags(nil); len(got) != 0 {
+		t.Errorf("no tags must match nothing, got %d", len(got))
+	}
+}
+
+func TestUpdateTags(t *testing.T) {
+	db := openTestMusic(t)
+	r := sampleRecord("a")
+	r.Tags = []string{"x"}
+	db.Insert(r)
+
+	if err := db.UpdateTags("a", func(tags []string) []string { return append(tags, "y") }); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := db.QueryByID("a")
+	if strings.Join(got.Tags, ",") != "x,y" {
+		t.Errorf("tags = %v", got.Tags)
+	}
+	if got.Title != r.Title || got.Path != r.Path {
+		t.Errorf("other columns changed: %+v", got)
+	}
+	if err := db.UpdateTags("a", func([]string) []string { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ = db.QueryByID("a"); len(got.Tags) != 0 {
+		t.Errorf("tags = %v, want none", got.Tags)
+	}
+	if err := db.UpdateTags("missing", func(t []string) []string { return t }); !errors.Is(err, ErrNotFound) {
+		t.Errorf("err = %v, want ErrNotFound", err)
+	}
+	if err := db.UpdateTags("info", func(t []string) []string { return t }); !errors.Is(err, ErrNotFound) {
+		t.Errorf("info row must not be touchable, err = %v", err)
+	}
+}
+
+func TestUpsertProbed_KeepsExistingTagsInsertsNewWithTags(t *testing.T) {
+	db := openTestMusic(t)
+	r := sampleRecord("a")
+	r.Tags = []string{"old"}
+	db.Insert(r)
+
+	// A tag change lands after the scan read its snapshot...
+	db.UpdateTags("a", func([]string) []string { return []string{"fresh"} })
+	// ...then the scan writes its (stale) record.
+	stale := r
+	stale.Title = "New Title"
+	if err := db.UpsertProbed(stale); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := db.QueryByID("a")
+	if got.Title != "New Title" || strings.Join(got.Tags, ",") != "fresh" {
+		t.Errorf("got title %q tags %v; want new title, tag fresh kept", got.Title, got.Tags)
+	}
+
+	n := sampleRecord("b")
+	n.Tags = []string{"seed"}
+	if err := db.UpsertProbed(n); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ = db.QueryByID("b"); got == nil || strings.Join(got.Tags, ",") != "seed" {
+		t.Errorf("new row = %+v, want tags seed", got)
+	}
+}
+
+func TestQueryByTags_NonASCIICaseInsensitive(t *testing.T) {
+	db := openTestMusic(t)
+	r := sampleRecord("1")
+	r.Tags = []string{"Ärger", "ÉTÉ"}
+	db.Insert(r)
+	for _, q := range []string{"ärger", "été", "ÄRGER"} {
+		if got, err := db.QueryByTags([]string{q}); err != nil || len(got) != 1 {
+			t.Errorf("QueryByTags(%q) = %d rows, err %v; want 1", q, len(got), err)
+		}
+	}
+	if got, _ := db.QueryByTags([]string{"arger"}); len(got) != 0 {
+		t.Error("an unaccented tag must not match an accented one")
 	}
 }

@@ -3,6 +3,7 @@ package database
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"strings"
 	"time"
 )
@@ -26,6 +27,13 @@ type MusicDB interface {
 	QueryByID(id string) (*MusicRecord, error)
 	QueryByKeywords(keywords []string) ([]MusicRecord, error)
 	QueryByTags(tags []string) ([]MusicRecord, error)
+	// UpsertProbed writes the scan-owned columns (type, title, metadata, path,
+	// keywords). A new row also gets rec.Tags; an existing row keeps its stored
+	// tags untouched, so a concurrent UpdateTags is never overwritten.
+	UpsertProbed(m MusicRecord) error
+	// UpdateTags atomically rewrites one row's tags with fn. It returns ErrNotFound
+	// when no row has that id.
+	UpdateTags(id string, fn func(tags []string) []string) error
 	QueryRandom(count int, cond *Condition) ([]MusicRecord, error)
 	Delete(cond *Condition) error
 	AllPaths() ([]string, error)
@@ -70,6 +78,30 @@ func (m *musicDB) Insert(rec MusicRecord) error {
 	return err
 }
 
+func (m *musicDB) UpsertProbed(rec MusicRecord) error {
+	meta, err := json.Marshal(rec.Metadata)
+	if err != nil {
+		return err
+	}
+	tx, err := m.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() //nolint:errcheck
+	res, err := tx.Exec("UPDATE music SET type=?, title=?, metadata=?, path=?, keywords=? WHERE id=? AND id != 'info'",
+		rec.Type, rec.Title, string(meta), rec.Path, rec.Keywords, rec.ID)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		if _, err := tx.Exec("INSERT INTO music (id, type, title, metadata, tags, path, keywords) VALUES (?, ?, ?, ?, ?, ?, ?)",
+			rec.ID, rec.Type, rec.Title, string(meta), encodeTags(rec.Tags), rec.Path, rec.Keywords); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
 func (m *musicDB) Query(cond *Condition) ([]MusicRecord, error) {
 	if cond == nil {
 		cond = &Condition{}
@@ -103,12 +135,62 @@ func (m *musicDB) QueryByKeywords(keywords []string) ([]MusicRecord, error) {
 	return m.Query(cond)
 }
 
+// QueryByTags returns the rows that carry every given tag. Tags match whole,
+// case-insensitively: "rock" does not find a row tagged only "hardrock".
 func (m *musicDB) QueryByTags(tags []string) ([]MusicRecord, error) {
-	cond := &Condition{}
-	for _, tag := range tags {
-		cond.AndLike("tags", "%"+tag+",%", false)
+	if len(tags) == 0 {
+		return nil, nil
 	}
-	return m.Query(cond)
+	// SQLite's LOWER only folds ASCII, so tag text is not filtered in SQL: only rows
+	// that have any tag (the encoding ends every tag with a comma) are fetched and
+	// the Unicode-aware match runs in Go.
+	recs, err := m.Query((&Condition{}).AndContains("tags", ",", true))
+	if err != nil {
+		return nil, err
+	}
+	out := recs[:0]
+	for _, r := range recs {
+		if hasAllTags(r.Tags, tags) {
+			out = append(out, r)
+		}
+	}
+	return out, nil
+}
+
+func hasAllTags(have, want []string) bool {
+	for _, w := range want {
+		found := false
+		for _, h := range have {
+			if strings.EqualFold(h, w) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
+func (m *musicDB) UpdateTags(id string, fn func(tags []string) []string) error {
+	tx, err := m.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() //nolint:errcheck
+	var raw sql.NullString
+	err = tx.QueryRow("SELECT tags FROM music WHERE id=? AND id != 'info'", id).Scan(&raw)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec("UPDATE music SET tags=? WHERE id=?", encodeTags(fn(decodeTags(raw.String))), id); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (m *musicDB) QueryRandom(count int, cond *Condition) ([]MusicRecord, error) {
