@@ -43,6 +43,7 @@ func RegisterAll(bot BotAPI, d *Dispatcher) {
 	d.Register(a("queue"), handleQueue, false, "List queued stations")
 	d.Register(a("current_music"), handleNP, false, "Show currently playing station")
 	d.Register(a("volume"), handleVolume, false, "Get or set volume (0–100)")
+	d.Register(a("version"), handleVersion, false, "Show the bot version")
 	d.Register(a("joinme"), handleJoinMe, false, "Move bot to your channel")
 	d.Register(a("kill"), handleKill, true, "Disconnect and exit")
 	d.Register(a("help"), d.HelpHandler(), false, "List available commands")

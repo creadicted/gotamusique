@@ -5,7 +5,8 @@ RUN apk add --no-cache gcc musl-dev opus-dev
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=1 go build -ldflags="-s -w -extldflags '-static'" -o /bin/gotamusique ./cmd/gotamusique
+ARG VERSION=
+RUN CGO_ENABLED=1 go build -ldflags="-s -w -extldflags '-static' -X github.com/konradk/gotamusique/internal/version.Version=${VERSION}" -o /bin/gotamusique ./cmd/gotamusique
 
 # Stage 2 — runtime
 # alpine >= 3.22 is required: yt-dlp needs deno >= 2.3.0 (3.19 ships 1.38).
