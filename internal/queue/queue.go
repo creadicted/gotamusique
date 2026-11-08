@@ -121,6 +121,24 @@ func (q *Queue) Insert(index int, item audio.MediaItem) error {
 	return nil
 }
 
+// RepeatCurrent inserts n copies of the current item right after it, so it plays
+// n more times. It returns the item, or false when nothing is current or n < 1.
+func (q *Queue) RepeatCurrent(n int) (audio.MediaItem, bool) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if n < 1 || q.currentIndex >= len(q.items) {
+		return nil, false
+	}
+	q.version++
+	item := q.items[q.currentIndex]
+	copies := make([]audio.MediaItem, n)
+	for i := range copies {
+		copies[i] = item
+	}
+	q.items = slices.Insert(q.items, q.currentIndex+1, copies...)
+	return item, true
+}
+
 // Remove deletes the item at index, shifting later items left.
 // If index < currentIndex, currentIndex is decremented to keep pointing at the
 // same item. Removing the current item leaves currentIndex pointing at the next one.
@@ -285,6 +303,20 @@ func (q *Queue) JumpTo(index int) error {
 	}
 	q.currentIndex = index
 	return nil
+}
+
+// JumpToLast makes the final item current under one lock and returns its index, so a
+// concurrent enqueue cannot change which item is last between the length check and the
+// jump. False when the queue is empty.
+func (q *Queue) JumpToLast() (int, bool) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if len(q.items) == 0 {
+		return 0, false
+	}
+	q.version++
+	q.currentIndex = len(q.items) - 1
+	return q.currentIndex, true
 }
 
 // Reset sets currentIndex to 0 without clearing the items.

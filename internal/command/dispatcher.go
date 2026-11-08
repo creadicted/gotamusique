@@ -40,6 +40,14 @@ type BotAPI interface {
 	ListLibrary(re *regexp.Regexp) ([]LibraryTrack, error)
 	// SearchLibrary returns tracks whose keywords contain every keyword.
 	SearchLibrary(keywords []string) ([]LibraryTrack, error)
+	// LookupFile resolves a !file argument: exact path, else folder, else partial match.
+	LookupFile(arg string) (FileLookup, error)
+	// Last jumps to and plays the final queue item; false when the queue is empty.
+	Last() bool
+	// RandomizeQueue shuffles the upcoming queue items without interrupting playback.
+	RandomizeQueue()
+	// RepeatCurrent queues n more plays of the current item right after it.
+	RepeatCurrent(n int) (audio.MediaItem, bool)
 	// FindTagged returns tracks carrying every given tag (whole tag, case-insensitive).
 	FindTagged(tags []string) ([]LibraryTrack, error)
 	// UpdateTags rewrites the tags of the library row id with fn. Returns
@@ -54,6 +62,21 @@ type LibraryTrack struct {
 	Artist   string
 	Tags     []string
 	Duration time.Duration
+}
+
+// LookupKind says how a !file argument matched the library.
+type LookupKind int
+
+const (
+	LookupExact   LookupKind = iota // the argument is a library path
+	LookupFolder                    // the argument is a folder: Tracks are all below it
+	LookupPartial                   // case-insensitive substring match on paths (may be empty)
+)
+
+// FileLookup is the result of LookupFile.
+type FileLookup struct {
+	Kind   LookupKind
+	Tracks []LibraryTrack
 }
 
 // HandlerFunc is the signature every command handler must implement.
