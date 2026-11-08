@@ -5,10 +5,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
-## [Unreleased]
+## [0.4.0] — 2026-11-08
 
 ### Added
 
+- **Documentation site** — MkDocs Material site (installation, configuration, commands,
+  migrating) published to GitHub Pages; `make docs` previews it and `make docs-build` checks it.
+  The README now points to it.
 - **Queue and file commands** — `!file <path|folder|part of a path>` (alias `!f`) now searches
   the library: an exact path, else a folder (queues every track below it), else a
   case-insensitive partial match (one hit is queued, several are listed for `!shortlist`);

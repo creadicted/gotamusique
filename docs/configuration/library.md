@@ -7,7 +7,11 @@ opus, m4a, aac, wav, wma, ape, aiff`. Directory symlinks are not followed.
 
 The scan never wipes the library because the folder is unavailable: if `music_folder` is not a
 readable directory, or no audio files are found while the library has entries (e.g. an unmounted
-share), nothing is removed.
+share), nothing is removed. To empty the library on purpose (for example after deleting every
+file), run `!rescan force`.
+
+Titles and artists come from the file's tags; an untagged file is listed by its file name. Browse
+and search the result with `!listfile`, `!search` and `!findtagged`; see [Commands](../commands/index.md#library).
 
 !!! tip "Docker"
     Keep the database on a volume, or every container recreation loses it. The compose file mounts
