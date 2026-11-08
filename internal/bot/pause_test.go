@@ -2,6 +2,7 @@ package bot
 
 import (
 	"testing"
+	"time"
 )
 
 func pauseBot(t *testing.T, autoPause bool) *Bot {
@@ -172,5 +173,79 @@ func TestOccupancy_unknownCountIgnored(t *testing.T) {
 	b.occupancyChanged(-1)
 	if b.IsPaused() {
 		t.Error("paused on an unknown occupancy")
+	}
+}
+
+// seekItem is a MediaItem that can be restarted part-way in, like a local file.
+type seekItem struct{ mockItem }
+
+func (seekItem) CanSeek() bool { return true }
+
+func TestResumePoint_takeOnlyForSameItemAndOnlyOnce(t *testing.T) {
+	var r resumePoint
+	a, other := &seekItem{mockItem{"a"}}, &seekItem{mockItem{"b"}}
+
+	r.set(a, 42*time.Second)
+	if at, ok := r.take(other); ok || at != 0 {
+		t.Errorf("take(other) = %v,%v; want 0,false", at, ok)
+	}
+	if _, ok := r.take(a); ok {
+		t.Error("take(other) must clear the point, so a later take finds nothing")
+	}
+
+	r.set(a, 42*time.Second)
+	if at, ok := r.take(a); !ok || at != 42*time.Second {
+		t.Errorf("take(a) = %v,%v; want 42s,true", at, ok)
+	}
+	if _, ok := r.take(a); ok {
+		t.Error("point must be consumed by the first take")
+	}
+}
+
+func TestRememberPosition_onlySeekableItems(t *testing.T) {
+	b := pauseBot(t, false)
+	live := &mockItem{"radio"}
+	b.rememberPosition(live, time.Minute)
+	if _, ok := b.resume.take(live); ok {
+		t.Error("a live stream must not be given a resume position")
+	}
+	file := &seekItem{mockItem{"f"}}
+	b.rememberPosition(file, 0)
+	if _, ok := b.resume.take(file); ok {
+		t.Error("position 0 means nothing to resume")
+	}
+	b.rememberPosition(file, time.Minute)
+	if at, ok := b.resume.take(file); !ok || at != time.Minute {
+		t.Errorf("take = %v,%v; want 1m,true", at, ok)
+	}
+}
+
+func TestControlsDropSavedPosition(t *testing.T) {
+	for name, act := range map[string]func(*Bot){
+		"play":  func(b *Bot) { b.Play(0) },
+		"skip":  func(b *Bot) { b.Skip() },
+		"stop":  func(b *Bot) { b.Stop() },
+		"clear": func(b *Bot) { b.Clear() },
+	} {
+		b := pauseBot(t, false)
+		f := &seekItem{mockItem{"f"}}
+		b.Enqueue(f)
+		b.Pause()
+		b.rememberPosition(f, time.Minute)
+		act(b)
+		if _, ok := b.resume.take(f); ok {
+			t.Errorf("%s left a stale resume position", name)
+		}
+	}
+}
+
+func TestClock(t *testing.T) {
+	for d, want := range map[time.Duration]string{
+		0: "0:00", 59 * time.Second: "0:59", 61 * time.Second: "1:01",
+		83*time.Second + 600*time.Millisecond: "1:24", 3725 * time.Second: "1:02:05",
+	} {
+		if got := clock(d); got != want {
+			t.Errorf("clock(%v) = %q, want %q", d, got, want)
+		}
 	}
 }

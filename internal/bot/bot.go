@@ -28,12 +28,14 @@ type Bot struct {
 	prevVol    float64 // volume saved before Mute()
 
 	queue         *queue.Queue
-	wakeCh        chan struct{} // buffered(1): non-blocking wake for the loop goroutine
-	launchVersion atomic.Int64  // incremented by Play() to suppress onTrackEnd's queue.Next()
-	playEpoch     atomic.Int64  // incremented by every playback control; invalidates in-flight resolves
-	resolveCancel func()        // cancels the in-flight Resolver call (guarded by mu)
-	fails         failGuard     // distinct entries that failed since the last good track
-	pauseState    atomic.Int32  // pauseNone / pauseManual / pauseAuto; see pause.go
+	wakeCh        chan struct{}   // buffered(1): non-blocking wake for the loop goroutine
+	launchVersion atomic.Int64    // incremented by Play() to suppress onTrackEnd's queue.Next()
+	playEpoch     atomic.Int64    // incremented by every playback control; invalidates in-flight resolves
+	resolveCancel func()          // cancels the in-flight Resolver call (guarded by mu)
+	fails         failGuard       // distinct entries that failed since the last good track
+	pauseState    atomic.Int32    // pauseNone / pauseManual / pauseAuto; see pause.go
+	resume        resumePoint     // where a paused local file stopped, for Resume
+	nowPlaying    audio.MediaItem // item handed to the pipeline last (guarded by mu)
 
 	// Music library (nil when music_folder is unset or the database failed to open).
 	libMu          sync.Mutex

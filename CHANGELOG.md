@@ -7,6 +7,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **`!resume` continues a local file from where it was paused** instead of restarting it. The bot
+  keeps the position (audio sent to Mumble) and restarts ffmpeg at that offset (`-ss`); the
+  announcement says `(resumed at m:ss)`. Auto-pause resumes the same way. Live streams still rejoin
+  live, and yt-dlp tracks still restart from the beginning. `!skip`, `!clear`, `!stop` and playing
+  something new drop the saved position.
+
 ---
 
 ## [0.5.1] — 2026-11-08

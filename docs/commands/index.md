@@ -24,13 +24,19 @@ when unambiguous: `!hel` runs `!help`. Aliases can be changed under `[commands]`
 ## Pause and resume
 
 `!pause` stops playback but leaves the queue where it is; `!stop` rewinds to the first item.
-`!resume` starts the current item again.
+`!resume` continues the current item.
 
-For a live radio or HLS stream, resuming **rejoins the live stream**: it kept broadcasting while
-you were paused, so you hear what is on air now, not where you left off. A paused bot runs no
-ffmpeg and downloads nothing.
+- **Local files** continue **from where you paused**. The bot announces it, for example
+  `Now playing: ... (resumed at 1:24)`. The position is the audio sent to Mumble, so it can be a
+  fraction of a second early, never late. It also applies to an auto-pause.
+- **Live radio and HLS streams** **rejoin the live stream**: it kept broadcasting while you were
+  paused, so you hear what is on air now. There is nothing to seek back to.
+- **yt-dlp tracks (`!url`, `!playlist`)** restart from the beginning. Seeking them is not supported yet.
 
-`!skip`, `!clear`, `!stop` and playing something new (for example `!radio`) end a pause.
+A paused bot runs no ffmpeg and downloads nothing.
+
+`!skip`, `!clear`, `!stop` and playing something new (for example `!radio`) end a pause and forget
+the saved position.
 
 ### Auto-pause
 

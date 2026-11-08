@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os/exec"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -37,6 +38,11 @@ type Pipeline struct {
 	vol    VolumeHelper
 
 	running atomic.Bool
+
+	// startAt (ns) is where in the item the current run began; frames counts the
+	// 10 ms frames handed to Mumble since. Together they give Position.
+	startAt atomic.Int64
+	frames  atomic.Int64
 
 	// outgoing opens the gumble audio channel for one stream. Replaced in tests.
 	outgoing func() chan<- gumble.AudioBuffer
@@ -79,6 +85,9 @@ func (p *Pipeline) Launch(url string, opts StreamOptions, onEnd func(error)) err
 		return ErrAlreadyRunning
 	}
 
+	p.startAt.Store(int64(opts.StartAt))
+	p.frames.Store(0)
+
 	interruptCh := make(chan struct{})
 	p.mu.Lock()
 	p.interruptCh = interruptCh
@@ -105,6 +114,14 @@ func (p *Pipeline) Launch(url string, opts StreamOptions, onEnd func(error)) err
 	p.log.Debug("ffmpeg started", slog.String("url", url))
 	go p.loop(cmd, stdout, interruptCh, onEnd)
 	return nil
+}
+
+// Position returns how far into the current item playback has reached: where the
+// run started (Options.StartAt) plus the audio sent since. running is false once
+// the run has ended; the position is then where that run stopped.
+func (p *Pipeline) Position() (pos time.Duration, running bool) {
+	pos = time.Duration(p.startAt.Load()) + time.Duration(p.frames.Load())*gumble.AudioDefaultInterval
+	return pos, p.running.Load()
 }
 
 // Interrupt signals the PCM goroutine to apply a fade-out and stop. Safe to
@@ -178,6 +195,7 @@ func (p *Pipeline) loop(cmd *exec.Cmd, stdout io.ReadCloser, interruptCh <-chan 
 		applyScalar(samples, scalar)
 
 		audioCh <- samples
+		p.frames.Add(1)
 	}
 }
 
@@ -217,6 +235,10 @@ func buildFFmpegArgs(url, verbosity string, opts StreamOptions) []string {
 		}
 		args = append(args, "-reconnect_on_http_error", "4xx,5xx")
 		args = append(args, httpInputArgs(opts)...)
+	}
+
+	if opts.StartAt > 0 {
+		args = append(args, "-ss", strconv.FormatFloat(opts.StartAt.Seconds(), 'f', 3, 64))
 	}
 
 	args = append(args, "-i", url, "-ac", "1", "-f", "s16le", "-ar", "48000", "-")
