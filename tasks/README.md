@@ -46,15 +46,16 @@ Builds on the Phase 1 binary; each milestone is independently mergeable.
 | 3-03 | [phase3/03-url-media.md](phase3/03-url-media.md)             | done   | YouTube / yt-dlp (stream-only)             |
 | 3-04 | [phase3/04-playlist-modes.md](phase3/04-playlist-modes.md)   | done   | one-shot / repeat / random modes + `!mode` |
 | 3-05 | [phase3/05-music-library.md](phase3/05-music-library.md)     | done   | Dir scan, `!rescan`, DB wiring, autoplay   |
-| 3-06 | [phase3/06-full-commands.md](phase3/06-full-commands.md)     | in progress | library browse, tags, queue/file commands done; rest todo |
+| 3-06 | [phase3/06-full-commands.md](phase3/06-full-commands.md)     | done | library browse, tags, queue/file commands; leftovers moved to 3-12 |
 | 3-07 | [phase3/07-web-api.md](phase3/07-web-api.md)                 | todo (next) | REST API for web remote control |
 | 3-08 | [phase3/08-web-frontend.md](phase3/08-web-frontend.md)       | todo (next) | Serve the existing frontend from the binary |
 | 3-09 | [phase3/09-ducking.md](phase3/09-ducking.md)                 | todo   | Auto volume-lower on voice activity    |
 | 3-10 | [phase3/10-persistence.md](phase3/10-persistence.md)         | todo   | Save/restore playlist across restarts  |
 | 3-11 | [phase3/11-admin.md](phase3/11-admin.md)                     | todo   | Ban/whitelist, admin-only commands     |
+| 3-12 | [phase3/12-command-leftovers.md](phase3/12-command-leftovers.md) | todo (parked) | `!remove`, `!ysearch`/`!yplay`, `!delete`, `!update`, item cache, i18n |
 
 > **Priority:** 3-07 and 3-08 are the next milestones, ahead of the other todo items in this phase
-> (3-06 remainder, 3-09, 3-10, 3-11) and the open feature requests. The web UI is **our own**: the Go binary
+> (3-09, 3-10, 3-11, 3-12) and the open feature requests. The web UI is **our own**: the Go binary
 > serves the REST API (3-07) and the botamusique frontend (3-08). A [Kallisti](https://kallisti.chat) panel
 > is not planned for now; keep the API UI-agnostic so one can be added later. The earlier Kallisti-first plan
 > (state endpoint, SSE, commands over the API) is in git history at `d2398ac`.
