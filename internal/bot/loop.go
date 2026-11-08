@@ -86,6 +86,8 @@ func (b *Bot) loop(ctx context.Context) {
 			continue
 		}
 
+		b.saveLastPlayed(item, opts.StartAt)
+
 		// A pause that arrived between the checks above and Launch found no running
 		// pipeline to interrupt; stop the track we just started.
 		if b.IsPaused() {

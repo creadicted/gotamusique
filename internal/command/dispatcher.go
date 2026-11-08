@@ -29,6 +29,9 @@ type BotAPI interface {
 	// Resume continues after a pause; false if the bot was not paused.
 	Resume() bool
 	IsPaused() bool
+	// RestoreLast re-queues the item remembered from the previous run (position for
+	// local files); ok is false when nothing can be restored.
+	RestoreLast() (title string, at time.Duration, ok bool)
 	QueueItems() []audio.MediaItem
 	QueueCurrentIndex() int
 	CurrentItem() audio.MediaItem

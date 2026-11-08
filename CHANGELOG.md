@@ -7,6 +7,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **`!resume` after a restart** — the bot remembers the last item it played (`last_played_path`,
+  default `last_played.json`, empty = off) and `!resume` plays it again when nothing is paused and
+  the queue is empty: a local file from the saved position, a radio or HLS stream live, a yt-dlp
+  track from the start. Once per start, never over a queue you built. Saved when a track starts,
+  on pause and on clean shutdown; a missing file or unset `music_folder` restores nothing.
+
 ### Changed
 
 - **`!resume` continues a local file from where it was paused** instead of restarting it. The bot
