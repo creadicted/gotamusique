@@ -27,6 +27,10 @@ type MusicDB interface {
 	QueryByID(id string) (*MusicRecord, error)
 	QueryByKeywords(keywords []string) ([]MusicRecord, error)
 	QueryByTags(tags []string) ([]MusicRecord, error)
+	// UpsertProbed writes the scan-owned columns (type, title, metadata, path,
+	// keywords). A new row also gets rec.Tags; an existing row keeps its stored
+	// tags untouched, so a concurrent UpdateTags is never overwritten.
+	UpsertProbed(m MusicRecord) error
 	// UpdateTags atomically rewrites one row's tags with fn. It returns ErrNotFound
 	// when no row has that id.
 	UpdateTags(id string, fn func(tags []string) []string) error
@@ -74,6 +78,30 @@ func (m *musicDB) Insert(rec MusicRecord) error {
 	return err
 }
 
+func (m *musicDB) UpsertProbed(rec MusicRecord) error {
+	meta, err := json.Marshal(rec.Metadata)
+	if err != nil {
+		return err
+	}
+	tx, err := m.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() //nolint:errcheck
+	res, err := tx.Exec("UPDATE music SET type=?, title=?, metadata=?, path=?, keywords=? WHERE id=? AND id != 'info'",
+		rec.Type, rec.Title, string(meta), rec.Path, rec.Keywords, rec.ID)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		if _, err := tx.Exec("INSERT INTO music (id, type, title, metadata, tags, path, keywords) VALUES (?, ?, ?, ?, ?, ?, ?)",
+			rec.ID, rec.Type, rec.Title, string(meta), encodeTags(rec.Tags), rec.Path, rec.Keywords); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
 func (m *musicDB) Query(cond *Condition) ([]MusicRecord, error) {
 	if cond == nil {
 		cond = &Condition{}
@@ -113,11 +141,10 @@ func (m *musicDB) QueryByTags(tags []string) ([]MusicRecord, error) {
 	if len(tags) == 0 {
 		return nil, nil
 	}
-	cond := &Condition{}
-	for _, tag := range tags {
-		cond.AndContains("tags", tag, false) // cheap superset; exact match is checked below
-	}
-	recs, err := m.Query(cond)
+	// SQLite's LOWER only folds ASCII, so tag text is not filtered in SQL: only rows
+	// that have any tag (the encoding ends every tag with a comma) are fetched and
+	// the Unicode-aware match runs in Go.
+	recs, err := m.Query((&Condition{}).AndContains("tags", ",", true))
 	if err != nil {
 		return nil, err
 	}

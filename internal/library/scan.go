@@ -326,7 +326,7 @@ func (s *Scanner) reconcile(ctx context.Context, files []found, existing []datab
 		if err != nil {
 			s.log.Warn("scan: ffprobe failed, skipping", slog.String("path", f.rel), slog.String("err", err.Error()))
 			res.Skipped++
-			// A previously-good row for a now-unreadable file keeps its tags, but
+			// A previously-good row for a now-unreadable file keeps its tags and tag text, but
 			// its size/mtime are refreshed so it is not re-probed on every scan
 			// until the file changes again.
 			if had {
@@ -335,15 +335,15 @@ func (s *Scanner) reconcile(ctx context.Context, files []found, existing []datab
 				}
 				old.Metadata["size"] = f.size
 				old.Metadata["mtime"] = f.mtime
-				if err := s.db.Insert(old); err != nil {
+				if err := s.db.UpsertProbed(old); err != nil {
 					return res, fmt.Errorf("writing %s: %w", f.rel, err)
 				}
 			}
 			continue
 		}
-		rec := buildRecord(id, f, meta)
-		rec.Tags = old.Tags // user tags survive a re-probe (zero value when the row is new)
-		if err := s.db.Insert(rec); err != nil {
+		// UpsertProbed leaves the tags column alone for an existing row, so user tags
+		// survive a re-probe even if they changed while ffprobe was running.
+		if err := s.db.UpsertProbed(buildRecord(id, f, meta)); err != nil {
 			return res, fmt.Errorf("writing %s: %w", f.rel, err)
 		}
 		if had {
