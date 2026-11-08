@@ -46,7 +46,7 @@ Builds on the Phase 1 binary; each milestone is independently mergeable.
 | 3-03 | [phase3/03-url-media.md](phase3/03-url-media.md)             | done   | YouTube / yt-dlp (stream-only)             |
 | 3-04 | [phase3/04-playlist-modes.md](phase3/04-playlist-modes.md)   | done   | one-shot / repeat / random modes + `!mode` |
 | 3-05 | [phase3/05-music-library.md](phase3/05-music-library.md)     | done   | Dir scan, `!rescan`, DB wiring, autoplay   |
-| 3-06 | [phase3/06-full-commands.md](phase3/06-full-commands.md)     | todo   | All remaining chat commands, cache, tags |
+| 3-06 | [phase3/06-full-commands.md](phase3/06-full-commands.md)     | in progress | `!listfile`/`!search` done; rest todo |
 | 3-07 | [phase3/07-web-api.md](phase3/07-web-api.md)                 | todo   | REST API for web remote control        |
 | 3-08 | [phase3/08-web-frontend.md](phase3/08-web-frontend.md)       | todo   | Serve existing frontend from binary    |
 | 3-09 | [phase3/09-ducking.md](phase3/09-ducking.md)                 | todo   | Auto volume-lower on voice activity    |

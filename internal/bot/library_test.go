@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/konradk/gotamusique/internal/audio"
+	"github.com/konradk/gotamusique/internal/command"
 	"github.com/konradk/gotamusique/internal/config"
 	"github.com/konradk/gotamusique/internal/database"
 	"github.com/konradk/gotamusique/internal/library"
@@ -798,5 +800,84 @@ func TestAutoplayCap_FollowsAutoplayLengthWithDefault(t *testing.T) {
 	lb3 := newLibBot(t, 0, func(c *config.Config) { c.Bot.AutoplayLength = -4 })
 	if lb3.autoplayCap() != 5 {
 		t.Errorf("cap = %d, want the default 5 for a negative length", lb3.autoplayCap())
+	}
+}
+
+func trackPaths(ts []command.LibraryTrack) []string {
+	var out []string
+	for _, t := range ts {
+		out = append(out, t.Path)
+	}
+	return out
+}
+
+func TestListLibrary_OrderedByPath_AllRows(t *testing.T) {
+	lb := newLibBot(t, 0, nil)
+	for _, p := range []string{"b/z.mp3", "a/y.mp3", "a/x.mp3"} {
+		lb.addTrack(t, p, false)
+	}
+	got, err := lb.ListLibrary(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(trackPaths(got), ",") != "a/x.mp3,a/y.mp3,b/z.mp3" {
+		t.Errorf("paths = %v", trackPaths(got))
+	}
+	if got[0].Artist != "Art" || got[0].Title != "Title a/x.mp3" {
+		t.Errorf("track = %+v, want artist and title carried over", got[0])
+	}
+}
+
+func TestListLibrary_RegexMatchesPathOrTitle(t *testing.T) {
+	lb := newLibBot(t, 0, nil)
+	lb.addTrack(t, "rock/one.mp3", false)
+	lb.addTrack(t, "jazz/two.mp3", false)
+	got, _ := lb.ListLibrary(regexp.MustCompile("(?i)ROCK"))
+	if strings.Join(trackPaths(got), ",") != "rock/one.mp3" {
+		t.Errorf("path match: %v", trackPaths(got))
+	}
+	got, _ = lb.ListLibrary(regexp.MustCompile("Title jazz"))
+	if strings.Join(trackPaths(got), ",") != "jazz/two.mp3" {
+		t.Errorf("title match: %v", trackPaths(got))
+	}
+}
+
+func TestListLibrary_IgnoresNonFileRows(t *testing.T) {
+	lb := newLibBot(t, 1, nil)
+	lb.libraryRef().db.Insert(database.MusicRecord{ID: "u1", Type: "url", Title: "x", Path: "http://x"})
+	got, _ := lb.ListLibrary(nil)
+	if len(got) != 1 {
+		t.Errorf("got %v, want only the file row", trackPaths(got))
+	}
+}
+
+func TestSearchLibrary_AllKeywordsMustMatch_Literally(t *testing.T) {
+	lb := newLibBot(t, 0, nil)
+	lb.addTrack(t, "beethoven/symphony.mp3", false)
+	lb.addTrack(t, "beethoven/sonata.mp3", false)
+	lb.addTrack(t, "100%/mix.mp3", false)
+	lb.addTrack(t, "100x/mix.mp3", false)
+
+	got, _ := lb.SearchLibrary([]string{"BEETHOVEN", "symphony"})
+	if strings.Join(trackPaths(got), ",") != "beethoven/symphony.mp3" {
+		t.Errorf("AND search: %v", trackPaths(got))
+	}
+	got, _ = lb.SearchLibrary([]string{"100%"})
+	if strings.Join(trackPaths(got), ",") != "100%/mix.mp3" {
+		t.Errorf("literal %%: %v", trackPaths(got))
+	}
+	got, _ = lb.SearchLibrary([]string{"nothing"})
+	if len(got) != 0 {
+		t.Errorf("no match: %v", trackPaths(got))
+	}
+}
+
+func TestLibraryBrowse_NoLibrary(t *testing.T) {
+	b, _ := New(defaultCfg())
+	if _, err := b.ListLibrary(nil); !errors.Is(err, library.ErrUnavailable) {
+		t.Errorf("ListLibrary err = %v", err)
+	}
+	if _, err := b.SearchLibrary([]string{"x"}); !errors.Is(err, library.ErrUnavailable) {
+		t.Errorf("SearchLibrary err = %v", err)
 	}
 }

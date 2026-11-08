@@ -2,6 +2,7 @@ package command
 
 import (
 	"context"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -32,6 +33,10 @@ type mockBot struct {
 	setModeCalls []string
 	hasLibrary   bool
 	rescanCalls  int
+	libTracks    []LibraryTrack
+	libErr       error
+	listRE       *regexp.Regexp
+	searchKW     []string
 	rescanResult string
 	rescanErr    error
 	rescanBlock  chan struct{}
@@ -65,6 +70,14 @@ func (m *mockBot) Rescan(ctx context.Context, force bool) (string, error) {
 		<-m.rescanBlock
 	}
 	return m.rescanResult, m.rescanErr
+}
+func (m *mockBot) ListLibrary(re *regexp.Regexp) ([]LibraryTrack, error) {
+	m.listRE = re
+	return m.libTracks, m.libErr
+}
+func (m *mockBot) SearchLibrary(kw []string) ([]LibraryTrack, error) {
+	m.searchKW = kw
+	return m.libTracks, m.libErr
 }
 func (m *mockBot) SetPlaybackMode(name string) error {
 	m.setModeCalls = append(m.setModeCalls, name)

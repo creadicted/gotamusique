@@ -5,6 +5,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **`!listfile [regex] [-p page]` and `!search <keywords> [-p page]`** — browse the scanned
+  music library from chat. `!listfile` lists tracks ordered by path, optionally filtered by a
+  case-insensitive regex on path and title; `!search` returns tracks matching every keyword
+  (`%` and `_` match literally). Pages are sized to stay under Mumble's message limit. Paths
+  shown can be played with `!file`.
+
+---
+
 ## [0.3.0] — 2026-11-07
 
 ### Added
