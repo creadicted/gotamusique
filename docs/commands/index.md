@@ -14,10 +14,29 @@ when unambiguous: `!hel` runs `!help`. Aliases can be changed under `[commands]`
 | `!url <url>` | Play one track via yt-dlp |
 | `!playlist <url>` | Queue a playlist (up to `max_track_playlist`) |
 | `!mode [mode]` | Show or set `one-shot`, `repeat`, `random`, `autoplay`. Not saved across restarts |
-| `!stop` | Stop and reset the queue position |
+| `!pause` | Halt playback and keep the queue position. See [Pause and resume](#pause-and-resume) |
+| `!resume` | Continue from the current item after a pause |
+| `!stop` | Stop and reset the queue position to the first item |
 | `!mute` / `!unmute` | Set volume to 0 / restore it |
 | `!skip` | Skip to the next queued item |
 | `!clear` | Stop and empty the queue |
+
+## Pause and resume
+
+`!pause` stops playback but leaves the queue where it is; `!stop` rewinds to the first item.
+`!resume` starts the current item again.
+
+For a live radio or HLS stream, resuming **rejoins the live stream**: it kept broadcasting while
+you were paused, so you hear what is on air now, not where you left off. A paused bot runs no
+ffmpeg and downloads nothing.
+
+`!skip`, `!clear`, `!stop` and playing something new (for example `!radio`) end a pause.
+
+### Auto-pause
+
+With `auto_pause_when_alone = True` the bot pauses when the last other user leaves its channel and
+resumes when someone is back (`auto_resume_on_join`). It only undoes its own pause: if you paused
+with `!pause`, someone joining does not resume it. It stays silent when nothing is queued.
 
 ## Queue
 

@@ -26,7 +26,7 @@ func (b *Bot) loop(ctx context.Context) {
 		pipeline := b.audio
 		b.mu.Unlock()
 
-		if pipeline == nil || pipeline.IsRunning() {
+		if pipeline == nil || pipeline.IsRunning() || b.IsPaused() {
 			continue
 		}
 
@@ -44,6 +44,12 @@ func (b *Bot) loop(ctx context.Context) {
 		}
 
 		launchVer := b.launchVersion.Load()
+		// Pause bumps launchVersion after setting its state, so a pause that lands
+		// after this point makes onTrackEnd skip queue.Next(); one that landed
+		// before it is seen here.
+		if b.IsPaused() {
+			continue
+		}
 
 		// Items such as yt-dlp URLs resolve their stream just before playback.
 		var err error
@@ -69,6 +75,13 @@ func (b *Bot) loop(ctx context.Context) {
 
 		if err != nil {
 			b.trackFailed(item, snap, failMsg, err)
+			continue
+		}
+
+		// A pause that arrived between the checks above and Launch found no running
+		// pipeline to interrupt; stop the track we just started.
+		if b.IsPaused() {
+			pipeline.Interrupt()
 			continue
 		}
 

@@ -51,6 +51,8 @@ type BotConfig struct {
 	MusicDatabasePath    string // music library database file
 	RefreshCacheOnStart  bool   // run a library scan at startup
 	AutoplayLength       int    // tracks added per autoplay refill
+	AutoPauseWhenAlone   bool   // pause when the last other user leaves the bot's channel
+	AutoResumeOnJoin     bool   // resume an auto-pause when someone is back (never a manual !pause)
 }
 
 // YoutubeDLConfig holds the [youtube_dl] section (yt-dlp settings).
@@ -100,6 +102,8 @@ var sectionAllowlists = map[string]map[string]bool{
 		"music_database_path":      true,
 		"refresh_cache_on_startup": true,
 		"autoplay_length":          true,
+		"auto_pause_when_alone":    true,
+		"auto_resume_on_join":      true,
 	},
 	"youtube_dl": {
 		"binary": true, "cookiefile": true,
@@ -206,6 +210,8 @@ func build(f *ini.File) (*Config, error) {
 			MusicDatabasePath:    b.Key("music_database_path").MustString("music.db"),
 			RefreshCacheOnStart:  b.Key("refresh_cache_on_startup").MustBool(false),
 			AutoplayLength:       b.Key("autoplay_length").MustInt(5),
+			AutoPauseWhenAlone:   b.Key("auto_pause_when_alone").MustBool(false),
+			AutoResumeOnJoin:     b.Key("auto_resume_on_join").MustBool(true),
 		},
 		YoutubeDL: YoutubeDLConfig{
 			Binary:        yt.Key("binary").String(),

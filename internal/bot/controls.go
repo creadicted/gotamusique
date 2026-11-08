@@ -25,6 +25,7 @@ func (b *Bot) Play(index int) error {
 // startCurrent interrupts the running track and wakes the loop to start the queue's
 // current item. Callers have already moved the queue position.
 func (b *Bot) startCurrent() {
+	b.pauseState.Store(pauseNone) // explicitly starting something ends a pause
 	b.invalidatePlayback()
 	// Increment version so the previous track's onTrackEnd callback does not
 	// also advance the queue after we've already set the desired index.
@@ -77,6 +78,7 @@ func (b *Bot) IsMuted() bool {
 // Stop interrupts the current track and resets the queue to the beginning
 // without clearing the items. Use Clear to also empty the queue.
 func (b *Bot) Stop() {
+	b.pauseState.Store(pauseNone) // stop is a full reset; a later !resume has nothing to continue
 	b.invalidatePlayback()
 	b.mu.Lock()
 	if b.audio != nil {
@@ -90,6 +92,7 @@ func (b *Bot) Stop() {
 // If the pipeline is not running (already idle), the queue is advanced
 // directly so the loop picks up the next item.
 func (b *Bot) Skip() {
+	b.pauseState.Store(pauseNone) // skipping while paused means "play the next one"
 	b.invalidatePlayback()
 	b.mu.Lock()
 	pipeline := b.audio
@@ -107,6 +110,7 @@ func (b *Bot) Skip() {
 
 // Clear interrupts playback and empties the queue.
 func (b *Bot) Clear() {
+	b.pauseState.Store(pauseNone) // nothing left to stay paused on
 	b.invalidatePlayback()
 	b.mu.Lock()
 	if b.audio != nil {

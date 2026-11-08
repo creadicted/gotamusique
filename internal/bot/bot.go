@@ -33,6 +33,7 @@ type Bot struct {
 	playEpoch     atomic.Int64  // incremented by every playback control; invalidates in-flight resolves
 	resolveCancel func()        // cancels the in-flight Resolver call (guarded by mu)
 	fails         failGuard     // distinct entries that failed since the last good track
+	pauseState    atomic.Int32  // pauseNone / pauseManual / pauseAuto; see pause.go
 
 	// Music library (nil when music_folder is unset or the database failed to open).
 	libMu          sync.Mutex

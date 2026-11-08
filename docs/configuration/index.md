@@ -32,6 +32,8 @@ Missing keys fall back to the embedded defaults.
 | `music_database_path`      | `music.db`        | Library database; opened only when `music_folder` is set |
 | `refresh_cache_on_startup` | `False`           | Scan the music folder at startup |
 | `autoplay_length`          | `5`               | Tracks added per autoplay refill |
+| `auto_pause_when_alone`    | `False`           | Pause when the last other user leaves the bot's channel. See [Auto-pause](../commands/index.md#auto-pause) |
+| `auto_resume_on_join`      | `True`            | Resume when someone is back, after an automatic pause only (never after `!pause`) |
 
 ## `[youtube_dl]`
 

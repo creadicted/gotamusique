@@ -24,6 +24,11 @@ type BotAPI interface {
 	IsMuted() bool
 	Skip()
 	Clear()
+	// Pause halts playback keeping the queue position; false if already paused by a user.
+	Pause() bool
+	// Resume continues after a pause; false if the bot was not paused.
+	Resume() bool
+	IsPaused() bool
 	QueueItems() []audio.MediaItem
 	QueueCurrentIndex() int
 	CurrentItem() audio.MediaItem

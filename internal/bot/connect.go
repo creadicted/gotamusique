@@ -111,6 +111,8 @@ func (b *Bot) buildGumbleConfig(disconnected chan<- struct{}) *gumble.Config {
 			b.audio = audio.New(b.client, b.cfg, b.log)
 			b.mu.Unlock()
 			b.log.Debug("connected to server")
+			// An auto-pause belongs to the previous connection's channel occupancy.
+			b.pauseState.CompareAndSwap(pauseAuto, pauseNone)
 			b.joinChannel()
 			b.setComment()
 			b.setAvatar()
@@ -128,6 +130,9 @@ func (b *Bot) buildGumbleConfig(disconnected chan<- struct{}) *gumble.Config {
 			case disconnected <- struct{}{}:
 			default:
 			}
+		},
+		UserChange: func(e *gumble.UserChangeEvent) {
+			b.onOccupancyChange()
 		},
 		TextMessage: func(e *gumble.TextMessageEvent) {
 			b.dispatcher.Dispatch(b, &e.TextMessage)
