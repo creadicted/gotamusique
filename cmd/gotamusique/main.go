@@ -10,10 +10,9 @@ import (
 
 	"github.com/konradk/gotamusique/internal/bot"
 	"github.com/konradk/gotamusique/internal/config"
+	"github.com/konradk/gotamusique/internal/version"
 	_ "layeh.com/gumble/opus" // registers Opus encoder/decoder with gumble
 )
-
-const version = "0.5.0"
 
 func main() {
 	os.Exit(run())
@@ -48,7 +47,7 @@ func run() int {
 		cancel()
 	}()
 
-	slog.Info("gotamusique starting", slog.String("version", version))
+	slog.Info("gotamusique starting", slog.String("version", version.Get()))
 
 	if err := b.Run(ctx); err != nil {
 		fmt.Fprintf(os.Stderr, "gotamusique: %v\n", err)
