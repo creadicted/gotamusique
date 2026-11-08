@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/konradk/gotamusique/internal/config"
 	"github.com/konradk/gotamusique/internal/hls"
@@ -783,5 +784,40 @@ func TestHandleResume(t *testing.T) {
 	got = callHandler(handleResume, bot, "")
 	if bot.resumeCalls != 2 || len(got) != 1 || got[0] != "Resumed." {
 		t.Errorf("replies=%v resumeCalls=%d", got, bot.resumeCalls)
+	}
+}
+
+func TestHandleResume_afterRestartRestoresLastItem(t *testing.T) {
+	bot := defaultBot()
+	bot.restoreTitle, bot.restoreAt = "Band - A", 84*time.Second
+	got := callHandler(handleResume, bot, "")
+	if len(got) != 1 || got[0] != "Resuming: Band - A (at 1:24)" {
+		t.Errorf("replies = %v", got)
+	}
+
+	bot = defaultBot()
+	bot.restoreTitle = "[Radio] Jazz"
+	got = callHandler(handleResume, bot, "")
+	if len(got) != 1 || got[0] != "Resuming: [Radio] Jazz" {
+		t.Errorf("stream replies = %v", got)
+	}
+}
+
+func TestHandleResume_nothingToRestoreSaysNotPaused(t *testing.T) {
+	bot := defaultBot()
+	got := callHandler(handleResume, bot, "")
+	if len(got) != 1 || got[0] != "Not paused." || bot.restoreCalls != 1 {
+		t.Errorf("replies=%v restoreCalls=%d", got, bot.restoreCalls)
+	}
+}
+
+func TestHandleResume_whenPausedDoesNotRestore(t *testing.T) {
+	bot := defaultBot()
+	bot.paused = true
+	bot.currentItem = &radio.RadioItem{}
+	bot.restoreTitle = "should not be used"
+	callHandler(handleResume, bot, "")
+	if bot.restoreCalls != 0 {
+		t.Error("a real pause must be resumed, not replaced by the saved item")
 	}
 }

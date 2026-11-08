@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/konradk/gotamusique/internal/config"
 	"github.com/konradk/gotamusique/internal/hls"
@@ -362,6 +363,16 @@ func handlePause(bot BotAPI, c *Ctx, cmd, arg string) {
 
 func handleResume(bot BotAPI, c *Ctx, cmd, arg string) {
 	if !bot.Resume() {
+		// Not paused: after a restart there is nothing queued, but the bot remembers
+		// what it played last.
+		if title, at, ok := bot.RestoreLast(); ok {
+			msg := "Resuming: " + title
+			if at > 0 {
+				msg += " (at " + clockText(at) + ")"
+			}
+			c.Send(msg)
+			return
+		}
 		c.Send("Not paused.")
 		return
 	}
@@ -565,4 +576,13 @@ func hostnameOf(rawURL string) string {
 		return u.Host
 	}
 	return rawURL
+}
+
+// clockText renders d as m:ss, or h:mm:ss from one hour up.
+func clockText(d time.Duration) string {
+	s := int(d.Round(time.Second) / time.Second)
+	if s >= 3600 {
+		return fmt.Sprintf("%d:%02d:%02d", s/3600, s%3600/60, s%60)
+	}
+	return fmt.Sprintf("%d:%02d", s/60, s%60)
 }

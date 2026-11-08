@@ -25,6 +25,9 @@ type mockBot struct {
 	pauseCalls     int
 	resumeCalls    int
 	paused         bool
+	restoreTitle   string
+	restoreAt      time.Duration
+	restoreCalls   int
 	muted          bool
 	volume         float64
 	queueItems     []audio.MediaItem
@@ -71,7 +74,11 @@ func (m *mockBot) Resume() bool {
 	m.paused = false
 	return was
 }
-func (m *mockBot) IsPaused() bool                 { return m.paused }
+func (m *mockBot) IsPaused() bool { return m.paused }
+func (m *mockBot) RestoreLast() (string, time.Duration, bool) {
+	m.restoreCalls++
+	return m.restoreTitle, m.restoreAt, m.restoreTitle != ""
+}
 func (m *mockBot) Skip()                          { m.skipCalls++ }
 func (m *mockBot) Clear()                         { m.clearCalls++ }
 func (m *mockBot) QueueItems() []audio.MediaItem  { return m.queueItems }

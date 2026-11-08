@@ -163,6 +163,7 @@ func (b *Bot) captureResume() {
 	}
 	if pos, running := p.Position(); running {
 		b.rememberPosition(playing, pos)
+		b.saveLastPlayed(playing, pos)
 	}
 }
 
