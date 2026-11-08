@@ -88,3 +88,34 @@ func TestLoop_LessThanOneFrame_ReportsErrNoAudio(t *testing.T) {
 		t.Errorf("onEnd err = %v, want ErrNoAudio", err)
 	}
 }
+
+func TestPosition_StartAtPlusFramesSent(t *testing.T) {
+	p, _ := newTestPipeline()
+	p.startAt.Store(int64(30 * time.Second))
+	// 50 frames of silence (480 samples * 2 bytes each), then EOF.
+	cmd := exec.Command("sh", "-c", "head -c 48000 /dev/zero")
+	stdout, _ := cmd.StdoutPipe()
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	p.running.Store(true)
+	done := make(chan struct{})
+	go p.loop(cmd, stdout, make(chan struct{}), func(error) { close(done) })
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("loop did not finish")
+	}
+	// Wait for the deferred running=false, then read the final position.
+	for i := 0; i < 100 && p.IsRunning(); i++ {
+		time.Sleep(10 * time.Millisecond)
+	}
+	pos, running := p.Position()
+	if running {
+		t.Error("still running")
+	}
+	want := 30*time.Second + 50*gumble.AudioDefaultInterval
+	if pos != want {
+		t.Errorf("Position = %v, want %v", pos, want)
+	}
+}

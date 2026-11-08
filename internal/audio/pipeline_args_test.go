@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestBuildFFmpegArgs_httpURL(t *testing.T) {
@@ -161,5 +162,23 @@ func TestBuildFFmpegArgs_FiniteWithHeadersKeepsBoth(t *testing.T) {
 	}
 	if !slices.Contains(args, "-headers") {
 		t.Errorf("headers lost: %v", args)
+	}
+}
+
+func TestBuildFFmpegArgs_StartAtSeeksBeforeInput(t *testing.T) {
+	args := buildFFmpegArgs("/music/a.flac", "warning", StreamOptions{StartAt: 83*time.Second + 250*time.Millisecond})
+	ss := slices.Index(args, "-ss")
+	in := slices.Index(args, "-i")
+	if ss == -1 || args[ss+1] != "83.250" {
+		t.Fatalf("want -ss 83.250, got %v", args)
+	}
+	if ss > in {
+		t.Errorf("-ss must come before -i (fast input seek), got %v", args)
+	}
+}
+
+func TestBuildFFmpegArgs_NoStartAtNoSeek(t *testing.T) {
+	if slices.Contains(buildFFmpegArgs("/music/a.flac", "warning", StreamOptions{}), "-ss") {
+		t.Error("unexpected -ss without StartAt")
 	}
 }

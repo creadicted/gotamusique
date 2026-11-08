@@ -1,5 +1,13 @@
 package bot
 
+import (
+	"fmt"
+	"sync"
+	"time"
+
+	"github.com/konradk/gotamusique/internal/audio"
+)
+
 // Pause state. A pause keeps the queue position (unlike Stop, which rewinds to the
 // first item) and stops ffmpeg, so nothing is decoded or downloaded while paused.
 // The reason decides who may undo it: auto-resume only undoes pauseAuto, never a
@@ -29,6 +37,7 @@ func (b *Bot) pause(reason int32) bool {
 			break
 		}
 	}
+	b.captureResume()
 	// A stale resolve must not launch, and the interrupted track's onTrackEnd must
 	// not advance the queue: bumping launchVersion is the same trick Play uses.
 	b.invalidatePlayback()
@@ -102,4 +111,73 @@ func (b *Bot) othersInChannel() int {
 		}
 	})
 	return n
+}
+
+// resumePoint is where a paused local file stopped. The loop consumes it on the
+// first launch after Resume, so a later normal replay of the same file (repeat
+// mode, say) starts from the beginning.
+type resumePoint struct {
+	mu   sync.Mutex
+	item audio.MediaItem
+	at   time.Duration
+}
+
+func (r *resumePoint) set(item audio.MediaItem, at time.Duration) {
+	r.mu.Lock()
+	r.item, r.at = item, at
+	r.mu.Unlock()
+}
+
+func (r *resumePoint) clear() { r.set(nil, 0) }
+
+// take returns the saved position if it belongs to item, and always clears it.
+func (r *resumePoint) take(item audio.MediaItem) (time.Duration, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	it, at := r.item, r.at
+	r.item, r.at = nil, 0
+	if it == nil || it != item || at <= 0 {
+		return 0, false
+	}
+	return at, true
+}
+
+// rememberPosition saves pos for item when item can be restarted part-way in.
+// Live streams and other non-seekable items are ignored: resuming them rejoins.
+func (b *Bot) rememberPosition(item audio.MediaItem, pos time.Duration) {
+	if s, ok := item.(audio.Seekable); ok && s.CanSeek() && pos > 0 {
+		b.resume.set(item, pos)
+	}
+}
+
+// captureResume records how far the current item has played, if it is playing
+// right now. It runs before the pipeline is interrupted, so the position excludes
+// the short fade-out and Resume picks up slightly before the cut, never after it.
+func (b *Bot) captureResume() {
+	b.resume.clear()
+	b.mu.Lock()
+	p, playing := b.audio, b.nowPlaying
+	b.mu.Unlock()
+	if p == nil || playing == nil || playing != b.queue.Current() {
+		return
+	}
+	if pos, running := p.Position(); running {
+		b.rememberPosition(playing, pos)
+	}
+}
+
+// endPause clears the pause state and any saved position: a control that picks
+// what plays next (play, skip, stop, clear) must not leave a stale seek behind.
+func (b *Bot) endPause() {
+	b.pauseState.Store(pauseNone)
+	b.resume.clear()
+}
+
+// clock renders d as m:ss, or h:mm:ss from one hour up.
+func clock(d time.Duration) string {
+	s := int(d.Round(time.Second) / time.Second)
+	if s >= 3600 {
+		return fmt.Sprintf("%d:%02d:%02d", s/3600, s%3600/60, s%60)
+	}
+	return fmt.Sprintf("%d:%02d", s/60, s%60)
 }

@@ -67,8 +67,16 @@ func (b *Bot) loop(ctx context.Context) {
 				failMsg = ": skipped — "
 			}
 		}
+		opts := audio.OptionsFor(item)
+		resumedAt, resumed := b.resume.take(item)
+		if resumed {
+			opts.StartAt = resumedAt
+		}
 		if err == nil {
-			err = pipeline.Launch(item.StreamURL(), audio.OptionsFor(item), func(endErr error) {
+			b.mu.Lock()
+			b.nowPlaying = item // before Launch, so a pause right after still finds it
+			b.mu.Unlock()
+			err = pipeline.Launch(item.StreamURL(), opts, func(endErr error) {
 				b.onTrackEnd(item, snap, launchVer, endErr)
 			})
 		}
@@ -86,7 +94,11 @@ func (b *Bot) loop(ctx context.Context) {
 		}
 
 		if b.cfg.Bot.AnnounceCurrentMusic {
-			b.sendChannelMessage(formatAnnouncement(item))
+			msg := formatAnnouncement(item)
+			if resumed {
+				msg += " (resumed at " + clock(resumedAt) + ")"
+			}
+			b.sendChannelMessage(msg)
 		}
 	}
 }

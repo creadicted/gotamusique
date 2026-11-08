@@ -98,6 +98,9 @@ func (f *FileItem) Prepare() error {
 // path for ffmpeg.
 func (f *FileItem) StreamURL() string { return f.effectivePath() }
 
+// CanSeek implements audio.Seekable: a local file can be restarted part-way in.
+func (f *FileItem) CanSeek() bool { return true }
+
 // FormatTitle implements audio.MediaItem.
 // Preference: "Artist - Title" > "Title" > bare filename without extension.
 func (f *FileItem) FormatTitle() string {
