@@ -348,6 +348,30 @@ func handleUnmute(bot BotAPI, c *Ctx, cmd, arg string) {
 	c.Send("Unmuted.")
 }
 
+func handlePause(bot BotAPI, c *Ctx, cmd, arg string) {
+	if bot.CurrentItem() == nil {
+		c.Send("Nothing to pause.")
+		return
+	}
+	if !bot.Pause() {
+		c.Send("Already paused.")
+		return
+	}
+	c.Send("Paused. " + symbol(bot.Config()) + "resume continues from the current item.")
+}
+
+func handleResume(bot BotAPI, c *Ctx, cmd, arg string) {
+	if !bot.Resume() {
+		c.Send("Not paused.")
+		return
+	}
+	if bot.CurrentItem() == nil {
+		c.Send("Resumed, but the queue is empty.")
+		return
+	}
+	c.Send("Resumed.")
+}
+
 func handleSkip(bot BotAPI, c *Ctx, cmd, arg string) {
 	bot.Skip()
 	c.Send("Skipped.")

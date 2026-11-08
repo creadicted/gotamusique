@@ -38,6 +38,8 @@ func RegisterAll(bot BotAPI, d *Dispatcher) {
 	d.Register(a("stop"), handleStop, false, "Stop playback and reset queue")
 	d.Register(a("mute"), handleMute, false, "Silence bot (stream stays connected)")
 	d.Register(a("unmute"), handleUnmute, false, "Restore volume after mute")
+	d.Register(a("pause"), handlePause, false, "Pause playback, keeping the queue position")
+	d.Register(a("resume"), handleResume, false, "Resume playback after a pause")
 	d.Register(a("skip"), handleSkip, false, "Skip to next queued station")
 	d.Register(a("clear"), handleClear, false, "Stop and empty the queue")
 	d.Register(a("queue"), handleQueue, false, "List queued stations")

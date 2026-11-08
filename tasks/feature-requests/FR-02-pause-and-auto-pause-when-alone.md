@@ -1,6 +1,6 @@
 # FR-02 — Pause/Resume + auto-pause when the bot is alone in its channel
 
-**Status:** open  
+**Status:** done  
 **Affects:** `internal/bot/`, `internal/command/`, `internal/config/`  
 **Related milestone:** 1-05 (audio pipeline), 1-06 (bot loop), 1-07 (command dispatcher)
 

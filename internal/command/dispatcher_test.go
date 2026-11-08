@@ -22,6 +22,9 @@ type mockBot struct {
 	unmuteCalls    int
 	skipCalls      int
 	clearCalls     int
+	pauseCalls     int
+	resumeCalls    int
+	paused         bool
 	muted          bool
 	volume         float64
 	queueItems     []audio.MediaItem
@@ -50,12 +53,25 @@ type mockBot struct {
 	rescanBlock    chan struct{}
 }
 
-func (m *mockBot) Config() *config.Config         { return m.cfg }
-func (m *mockBot) Enqueue(item audio.MediaItem)   { m.enqueueCalls = append(m.enqueueCalls, item) }
-func (m *mockBot) Stop()                          { m.stopCalls++ }
-func (m *mockBot) Mute()                          { m.muteCalls++; m.muted = true }
-func (m *mockBot) Unmute()                        { m.unmuteCalls++; m.muted = false }
-func (m *mockBot) IsMuted() bool                  { return m.muted }
+func (m *mockBot) Config() *config.Config       { return m.cfg }
+func (m *mockBot) Enqueue(item audio.MediaItem) { m.enqueueCalls = append(m.enqueueCalls, item) }
+func (m *mockBot) Stop()                        { m.stopCalls++ }
+func (m *mockBot) Mute()                        { m.muteCalls++; m.muted = true }
+func (m *mockBot) Unmute()                      { m.unmuteCalls++; m.muted = false }
+func (m *mockBot) IsMuted() bool                { return m.muted }
+func (m *mockBot) Pause() bool {
+	m.pauseCalls++
+	was := m.paused
+	m.paused = true
+	return !was
+}
+func (m *mockBot) Resume() bool {
+	m.resumeCalls++
+	was := m.paused
+	m.paused = false
+	return was
+}
+func (m *mockBot) IsPaused() bool                 { return m.paused }
 func (m *mockBot) Skip()                          { m.skipCalls++ }
 func (m *mockBot) Clear()                         { m.clearCalls++ }
 func (m *mockBot) QueueItems() []audio.MediaItem  { return m.queueItems }

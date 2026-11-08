@@ -5,6 +5,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **`!pause` and `!resume`** — halt playback without losing the queue position (`!stop` still rewinds
+  to the first item). Resuming a live stream rejoins it; there is nothing to seek back to. A paused
+  bot runs no ffmpeg. `!skip`, `!clear`, `!stop` and starting a new track end a pause.
+- **Auto-pause when alone** — `auto_pause_when_alone` (default `False`) pauses when the last other
+  user leaves the bot's channel; `auto_resume_on_join` (default `True`) resumes when someone is
+  back. Only an automatic pause is undone, never one from `!pause`.
+
+---
+
 ## [0.4.0] — 2026-11-08
 
 ### Added

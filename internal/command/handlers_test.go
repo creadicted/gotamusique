@@ -752,3 +752,36 @@ func TestHandleFile_ValidFile_EnqueuesFileItem(t *testing.T) {
 		t.Errorf("enqueued item is %T, want *file.FileItem", bot.enqueueCalls[0])
 	}
 }
+
+func TestHandlePause(t *testing.T) {
+	bot := defaultBot()
+	got := callHandler(handlePause, bot, "")
+	if len(got) != 1 || got[0] != "Nothing to pause." || bot.pauseCalls != 0 {
+		t.Errorf("empty queue: replies=%v pauseCalls=%d", got, bot.pauseCalls)
+	}
+
+	bot.currentItem = &radio.RadioItem{}
+	got = callHandler(handlePause, bot, "")
+	if bot.pauseCalls != 1 || len(got) != 1 || !strings.HasPrefix(got[0], "Paused.") {
+		t.Errorf("replies=%v pauseCalls=%d", got, bot.pauseCalls)
+	}
+	got = callHandler(handlePause, bot, "")
+	if len(got) != 1 || got[0] != "Already paused." {
+		t.Errorf("second pause replies=%v", got)
+	}
+}
+
+func TestHandleResume(t *testing.T) {
+	bot := defaultBot()
+	got := callHandler(handleResume, bot, "")
+	if len(got) != 1 || got[0] != "Not paused." {
+		t.Errorf("not paused: replies=%v", got)
+	}
+
+	bot.paused = true
+	bot.currentItem = &radio.RadioItem{}
+	got = callHandler(handleResume, bot, "")
+	if bot.resumeCalls != 2 || len(got) != 1 || got[0] != "Resumed." {
+		t.Errorf("replies=%v resumeCalls=%d", got, bot.resumeCalls)
+	}
+}

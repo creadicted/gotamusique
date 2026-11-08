@@ -155,3 +155,29 @@ func TestLoad_BadAutoplayLengthFallsBackToDefault(t *testing.T) {
 		t.Errorf("AutoplayLength = %d, want the default 5", cfg.Bot.AutoplayLength)
 	}
 }
+
+func TestLoad_AutoPauseDefaultsAndOverride(t *testing.T) {
+	cfg, err := Load("testdata/valid.ini")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Bot.AutoPauseWhenAlone {
+		t.Error("auto_pause_when_alone default = true, want false")
+	}
+	if !cfg.Bot.AutoResumeOnJoin {
+		t.Error("auto_resume_on_join default = false, want true")
+	}
+
+	p := filepath.Join(t.TempDir(), "c.ini")
+	os.WriteFile(p, []byte("[bot]\nauto_pause_when_alone = True\nauto_resume_on_join = False\n"), 0o644)
+	cfg, err = Load(p)
+	if err != nil {
+		t.Fatalf("new keys rejected: %v", err)
+	}
+	if !cfg.Bot.AutoPauseWhenAlone || cfg.Bot.AutoResumeOnJoin {
+		t.Errorf("override not applied: %+v", cfg.Bot)
+	}
+	if got := cfg.Commands.Aliases["pause"]; len(got) == 0 || got[0] != "pause" {
+		t.Errorf("pause alias = %v", got)
+	}
+}
