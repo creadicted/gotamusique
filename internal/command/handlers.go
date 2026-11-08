@@ -14,7 +14,6 @@ import (
 	"github.com/konradk/gotamusique/internal/hls"
 	fileitem "github.com/konradk/gotamusique/internal/media/file"
 	"github.com/konradk/gotamusique/internal/radio"
-	"layeh.com/gumble/gumble"
 )
 
 // format returns the html string when formatted is true, otherwise plain.
@@ -28,24 +27,24 @@ func format(formatted bool, htmlText, plainText string) string {
 func esc(s string) string { return html.EscapeString(s) }
 
 // handleRadio: no arg → list presets; name → play preset; URL → play direct stream.
-func handleRadio(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
+func handleRadio(bot BotAPI, c *Ctx, cmd, arg string) {
 	cfg := bot.Config()
 	if arg == "" {
-		listPresets(bot, cfg, msg)
+		listPresets(bot, cfg, c)
 		return
 	}
 
 	if u, err := url.Parse(arg); err == nil && (u.Scheme == "http" || u.Scheme == "https") {
-		playURL(bot, cfg, msg, arg)
+		playURL(bot, cfg, c, arg)
 	} else {
-		playPreset(bot, cfg, msg, cmd, arg)
+		playPreset(bot, cfg, c, cmd, arg)
 	}
 }
 
-func listPresets(bot BotAPI, cfg *config.Config, msg *gumble.TextMessage) {
+func listPresets(bot BotAPI, cfg *config.Config, c *Ctx) {
 	presets := cfg.Radio
 	if len(presets) == 0 {
-		sendToChannel(msg, "No presets configured.")
+		c.Send("No presets configured.")
 		return
 	}
 	keys := make([]string, 0, len(presets))
@@ -67,33 +66,33 @@ func listPresets(bot BotAPI, cfg *config.Config, msg *gumble.TextMessage) {
 		}
 	}
 	if cfg.Bot.FormattedReplies {
-		sendToChannel(msg, "<b>Radio presets:</b><br>"+sb.String())
+		c.Send("<b>Radio presets:</b><br>" + sb.String())
 	} else {
-		sendToChannel(msg, "Radio presets:\n"+sb.String())
+		c.Send("Radio presets:\n" + sb.String())
 	}
 }
 
-func playURL(bot BotAPI, cfg *config.Config, msg *gumble.TextMessage, rawURL string) {
+func playURL(bot BotAPI, cfg *config.Config, c *Ctx, rawURL string) {
 	item := radio.NewRadioItemFromURL(rawURL)
 	if err := item.Validate(); err != nil {
-		sendToChannel(msg, format(cfg.Bot.FormattedReplies,
+		c.Send(format(cfg.Bot.FormattedReplies,
 			"Could not reach stream: "+esc(err.Error()),
 			"Could not reach stream: "+err.Error(),
 		))
 		return
 	}
 	bot.Enqueue(item)
-	sendToChannel(msg, format(cfg.Bot.FormattedReplies,
+	c.Send(format(cfg.Bot.FormattedReplies,
 		"Queued: <b>"+esc(item.Name)+"</b>",
 		"Queued: "+item.Name,
 	))
 }
 
-func playPreset(bot BotAPI, cfg *config.Config, msg *gumble.TextMessage, cmd, name string) {
+func playPreset(bot BotAPI, cfg *config.Config, c *Ctx, cmd, name string) {
 	preset, ok := cfg.Radio[name]
 	if !ok {
 		sym := symbol(cfg)
-		sendToChannel(msg, format(cfg.Bot.FormattedReplies,
+		c.Send(format(cfg.Bot.FormattedReplies,
 			"Unknown preset <b>"+esc(name)+"</b>. Use <b>"+esc(sym+cmd)+"</b> to list presets.",
 			"Unknown preset \""+name+"\". Use "+sym+cmd+" to list presets.",
 		))
@@ -101,7 +100,7 @@ func playPreset(bot BotAPI, cfg *config.Config, msg *gumble.TextMessage, cmd, na
 	}
 	item := radio.NewRadioItemFromPreset(name, preset)
 	bot.Enqueue(item)
-	sendToChannel(msg, format(cfg.Bot.FormattedReplies,
+	c.Send(format(cfg.Bot.FormattedReplies,
 		"Queued: <b>"+esc(item.Name)+"</b>",
 		"Queued: "+item.Name,
 	))
@@ -190,39 +189,39 @@ func parseRBQueryArg(arg string) (name string, limit int, err error) {
 // makeRBQueryHandler returns a HandlerFunc that searches radio-browser.info and
 // caches results. searchFn is rb.Search in production; inject a mock in tests.
 func makeRBQueryHandler(cache *rbCache, searchFn func(string, int) ([]radio.Station, error)) HandlerFunc {
-	return func(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
+	return func(bot BotAPI, c *Ctx, cmd, arg string) {
 		cfg := bot.Config()
 		if arg == "" {
-			sendToChannel(msg, "Usage: "+symbol(cfg)+cmd+" <name> [-n N]")
+			c.Send("Usage: " + symbol(cfg) + cmd + " <name> [-n N]")
 			return
 		}
 
 		name, limit, err := parseRBQueryArg(arg)
 		if err != nil {
-			sendToChannel(msg, "Usage: "+symbol(cfg)+cmd+" <name> [-n N] (N: 1-50): "+err.Error())
+			c.Send("Usage: " + symbol(cfg) + cmd + " <name> [-n N] (N: 1-50): " + err.Error())
 			return
 		}
 
 		stations, searchErr := searchFn(name, limit)
 		if searchErr != nil {
-			sendToChannel(msg, "radio-browser search failed: "+searchErr.Error())
+			c.Send("radio-browser search failed: " + searchErr.Error())
 			return
 		}
 		if len(stations) == 0 {
-			sendToChannel(msg, format(cfg.Bot.FormattedReplies,
+			c.Send(format(cfg.Bot.FormattedReplies,
 				"No stations found for <b>"+esc(name)+"</b>.",
 				"No stations found for \""+name+"\".",
 			))
 			return
 		}
 
-		cache.set(msg.Channels[0].ID, stations)
+		cache.set(c.ChannelID, stations)
 
 		text := buildRBTable(name, stations)
 		if cfg.Bot.FormattedReplies {
-			sendToChannel(msg, "<pre>"+esc(text)+"</pre>")
+			c.Send("<pre>" + esc(text) + "</pre>")
 		} else {
-			sendToChannel(msg, text)
+			c.Send(text)
 		}
 	}
 }
@@ -230,28 +229,28 @@ func makeRBQueryHandler(cache *rbCache, searchFn func(string, int) ([]radio.Stat
 // makeRBPlayHandler returns a HandlerFunc that plays a station by UUID or cache index.
 // byUUIDFn is rb.ByUUID in production; inject a mock in tests.
 func makeRBPlayHandler(cache *rbCache, byUUIDFn func(string) (*radio.Station, error)) HandlerFunc {
-	return func(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
+	return func(bot BotAPI, c *Ctx, cmd, arg string) {
 		cfg := bot.Config()
 		if arg == "" {
-			sendToChannel(msg, "Usage: "+symbol(cfg)+cmd+" <uuid|N>")
+			c.Send("Usage: " + symbol(cfg) + cmd + " <uuid|N>")
 			return
 		}
 
 		// Integer index: resolve against the channel's cached query results.
 		if n, err := strconv.Atoi(arg); err == nil && n > 0 {
-			channelID := msg.Channels[0].ID
+			channelID := c.ChannelID
 			stations := cache.get(channelID)
 			if len(stations) == 0 {
-				sendToChannel(msg, "No recent search results for this channel.")
+				c.Send("No recent search results for this channel.")
 				return
 			}
 			if n > len(stations) {
-				sendToChannel(msg, "Index out of range — search again to see available stations.")
+				c.Send("Index out of range — search again to see available stations.")
 				return
 			}
 			item := radio.NewRadioItemFromStation(stations[n-1])
 			bot.Enqueue(item)
-			sendToChannel(msg, format(cfg.Bot.FormattedReplies,
+			c.Send(format(cfg.Bot.FormattedReplies,
 				"Queued: <b>"+esc(item.Name)+"</b>",
 				"Queued: "+item.Name,
 			))
@@ -261,7 +260,7 @@ func makeRBPlayHandler(cache *rbCache, byUUIDFn func(string) (*radio.Station, er
 		// UUID flow.
 		station, err := byUUIDFn(arg)
 		if err != nil {
-			sendToChannel(msg, format(cfg.Bot.FormattedReplies,
+			c.Send(format(cfg.Bot.FormattedReplies,
 				"Station not found: "+esc(err.Error()),
 				"Station not found: "+err.Error(),
 			))
@@ -270,7 +269,7 @@ func makeRBPlayHandler(cache *rbCache, byUUIDFn func(string) (*radio.Station, er
 
 		item := radio.NewRadioItemFromStation(*station)
 		bot.Enqueue(item)
-		sendToChannel(msg, format(cfg.Bot.FormattedReplies,
+		c.Send(format(cfg.Bot.FormattedReplies,
 			"Queued: <b>"+esc(item.Name)+"</b>",
 			"Queued: "+item.Name,
 		))
@@ -278,92 +277,92 @@ func makeRBPlayHandler(cache *rbCache, byUUIDFn func(string) (*radio.Station, er
 }
 
 // handleFile: play a local file by relative path within music_folder.
-func handleFile(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
+func handleFile(bot BotAPI, c *Ctx, cmd, arg string) {
 	cfg := bot.Config()
 	if arg == "" {
-		sendToChannel(msg, "Usage: "+symbol(cfg)+cmd+" <relative/path/to/file>")
+		c.Send("Usage: " + symbol(cfg) + cmd + " <relative/path/to/file>")
 		return
 	}
 	musicFolder := cfg.Files.MusicFolder
 	if musicFolder == "" {
-		sendToChannel(msg, "music_folder is not configured.")
+		c.Send("music_folder is not configured.")
 		return
 	}
 
 	item := fileitem.New(arg, musicFolder)
 	if err := item.Validate(); err != nil {
-		sendToChannel(msg, format(cfg.Bot.FormattedReplies,
+		c.Send(format(cfg.Bot.FormattedReplies,
 			"Invalid file: "+esc(err.Error()),
 			"Invalid file: "+err.Error(),
 		))
 		return
 	}
 	if err := item.Prepare(); err != nil {
-		sendToChannel(msg, format(cfg.Bot.FormattedReplies,
+		c.Send(format(cfg.Bot.FormattedReplies,
 			"Could not read file metadata: "+esc(err.Error()),
 			"Could not read file metadata: "+err.Error(),
 		))
 		return
 	}
 	bot.Enqueue(item)
-	sendToChannel(msg, format(cfg.Bot.FormattedReplies,
+	c.Send(format(cfg.Bot.FormattedReplies,
 		"Queued: <b>"+esc(item.FormatTitle())+"</b>",
 		"Queued: "+item.FormatTitle(),
 	))
 }
 
 // handleHLS: URL-only handler for HLS/M3U8 streams.
-func handleHLS(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
+func handleHLS(bot BotAPI, c *Ctx, cmd, arg string) {
 	cfg := bot.Config()
 	if arg == "" {
-		sendToChannel(msg, "Usage: "+symbol(cfg)+cmd+" <url>")
+		c.Send("Usage: " + symbol(cfg) + cmd + " <url>")
 		return
 	}
 
 	u, err := url.Parse(arg)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
-		sendToChannel(msg, "Usage: "+symbol(cfg)+cmd+" <url>")
+		c.Send("Usage: " + symbol(cfg) + cmd + " <url>")
 		return
 	}
 
 	item := hls.NewHLSItemFromURL(arg)
 	bot.Enqueue(item)
-	sendToChannel(msg, format(cfg.Bot.FormattedReplies,
+	c.Send(format(cfg.Bot.FormattedReplies,
 		"Queued: <b>"+esc(item.Name)+"</b>",
 		"Queued: "+item.Name,
 	))
 }
 
-func handleStop(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
+func handleStop(bot BotAPI, c *Ctx, cmd, arg string) {
 	bot.Stop()
-	sendToChannel(msg, "Stopped.")
+	c.Send("Stopped.")
 }
 
-func handleMute(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
+func handleMute(bot BotAPI, c *Ctx, cmd, arg string) {
 	bot.Mute()
-	sendToChannel(msg, "Muted.")
+	c.Send("Muted.")
 }
 
-func handleUnmute(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
+func handleUnmute(bot BotAPI, c *Ctx, cmd, arg string) {
 	bot.Unmute()
-	sendToChannel(msg, "Unmuted.")
+	c.Send("Unmuted.")
 }
 
-func handleSkip(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
+func handleSkip(bot BotAPI, c *Ctx, cmd, arg string) {
 	bot.Skip()
-	sendToChannel(msg, "Skipped.")
+	c.Send("Skipped.")
 }
 
-func handleClear(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
+func handleClear(bot BotAPI, c *Ctx, cmd, arg string) {
 	bot.Clear()
-	sendToChannel(msg, "Queue cleared.")
+	c.Send("Queue cleared.")
 }
 
-func handleQueue(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
+func handleQueue(bot BotAPI, c *Ctx, cmd, arg string) {
 	cfg := bot.Config()
 	items := bot.QueueItems()
 	if len(items) == 0 {
-		sendToChannel(msg, "Queue is empty.")
+		c.Send("Queue is empty.")
 		return
 	}
 
@@ -380,58 +379,59 @@ func handleQueue(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg stri
 	text := strings.TrimRight(sb.String(), "\n")
 
 	if cfg.Bot.FormattedReplies {
-		sendToChannel(msg, "<pre>"+esc(text)+"</pre>")
+		c.Send("<pre>" + esc(text) + "</pre>")
 	} else {
-		sendToChannel(msg, text)
+		c.Send(text)
 	}
 }
 
-func handleNP(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
+func handleNP(bot BotAPI, c *Ctx, cmd, arg string) {
 	cfg := bot.Config()
 	item := bot.CurrentItem()
 	if item == nil {
-		sendToChannel(msg, "Nothing is currently playing.")
+		c.Send("Nothing is currently playing.")
 		return
 	}
 	title := item.FormatTitle()
-	sendToChannel(msg, format(cfg.Bot.FormattedReplies,
+	c.Send(format(cfg.Bot.FormattedReplies,
 		"Now playing: <b>"+esc(title)+"</b>",
 		"Now playing: "+title,
 	))
 }
 
-func handleVolume(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
+func handleVolume(bot BotAPI, c *Ctx, cmd, arg string) {
 	cfg := bot.Config()
 	if arg == "" {
 		vol := int(math.Round(bot.TargetVolume() * 100))
-		sendToChannel(msg, fmt.Sprintf("Volume: %d", vol))
+		c.Send(fmt.Sprintf("Volume: %d", vol))
 		return
 	}
 
 	pct, err := strconv.Atoi(strings.TrimSpace(arg))
 	if err != nil || pct < 0 || pct > 100 {
-		sendToChannel(msg, "Usage: "+symbol(cfg)+cmd+" [0-100]")
+		c.Send("Usage: " + symbol(cfg) + cmd + " [0-100]")
 		return
 	}
 
 	bot.SetVolume(pct)
 	actual := int(math.Round(bot.TargetVolume() * 100))
-	sendToChannel(msg, format(cfg.Bot.FormattedReplies,
+	c.Send(format(cfg.Bot.FormattedReplies,
 		fmt.Sprintf("Volume set to <b>%d</b>", actual),
 		fmt.Sprintf("Volume set to %d", actual),
 	))
 }
 
-func handleJoinMe(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
-	if msg.Sender == nil || msg.Sender.Channel == nil {
-		sendToChannel(msg, "You are not in a channel.")
+func handleJoinMe(bot BotAPI, c *Ctx, cmd, arg string) {
+	ch := c.JoinTarget()
+	if ch == nil {
+		c.Send("You are not in a channel.")
 		return
 	}
-	bot.JoinChannel(msg.Sender.Channel)
-	sendToChannel(msg, "Joining your channel.")
+	bot.JoinChannel(ch)
+	c.Send("Joining your channel.")
 }
 
-func handleKill(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
+func handleKill(bot BotAPI, c *Ctx, cmd, arg string) {
 	bot.Kill()
 }
 

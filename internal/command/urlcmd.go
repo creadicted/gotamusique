@@ -10,7 +10,6 @@ import (
 	"github.com/konradk/gotamusique/internal/audio"
 	"github.com/konradk/gotamusique/internal/config"
 	urlitem "github.com/konradk/gotamusique/internal/media/url"
-	"layeh.com/gumble/gumble"
 )
 
 const maxConcurrentYT = 3
@@ -47,69 +46,69 @@ func runYT(fn func(ctx context.Context), busy func()) {
 }
 
 // busyReply tells the user all yt-dlp slots were occupied for the whole timeout.
-func busyReply(cfg *config.Config, msg *gumble.TextMessage) func() {
+func busyReply(cfg *config.Config, c *Ctx) func() {
 	return func() {
-		sendToChannel(msg, "Too many requests in progress, try again in a moment.")
+		c.Send("Too many requests in progress, try again in a moment.")
 	}
 }
 
-func reply(cfg *config.Config, msg *gumble.TextMessage, htmlText, plain string) {
-	sendToChannel(msg, format(cfg.Bot.FormattedReplies, htmlText, plain))
+func reply(cfg *config.Config, c *Ctx, htmlText, plain string) {
+	c.Send(format(cfg.Bot.FormattedReplies, htmlText, plain))
 }
 
-func ytError(cfg *config.Config, msg *gumble.TextMessage, err error) {
-	reply(cfg, msg, "Could not add track: "+esc(err.Error()), "Could not add track: "+err.Error())
+func ytError(cfg *config.Config, c *Ctx, err error) {
+	reply(cfg, c, "Could not add track: "+esc(err.Error()), "Could not add track: "+err.Error())
 }
 
 // handleURL: queue exactly one track resolved through yt-dlp.
-func handleURL(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
+func handleURL(bot BotAPI, c *Ctx, cmd, arg string) {
 	cfg := bot.Config()
 	if arg == "" {
-		sendToChannel(msg, "Usage: "+symbol(cfg)+cmd+" <url>")
+		c.Send("Usage: " + symbol(cfg) + cmd + " <url>")
 		return
 	}
 	if err := urlitem.CheckURL(arg); err != nil {
-		ytError(cfg, msg, err)
+		ytError(cfg, c, err)
 		return
 	}
-	sendToChannel(msg, "Resolving…")
+	c.Send("Resolving…")
 	runYT(func(ctx context.Context) {
 		item := urlitem.New(arg, cfg)
 		if err := item.ValidateCtx(ctx); err != nil {
 			if errors.Is(err, urlitem.ErrIsPlaylist) {
 				err = fmt.Errorf("that's a playlist, use %splaylist <url>", symbol(cfg))
 			}
-			ytError(cfg, msg, err)
+			ytError(cfg, c, err)
 			return
 		}
 		bot.Enqueue(item)
-		reply(cfg, msg, "Queued: <b>"+esc(item.FormatTitle())+"</b>", "Queued: "+item.FormatTitle())
-	}, busyReply(cfg, msg))
+		reply(cfg, c, "Queued: <b>"+esc(item.FormatTitle())+"</b>", "Queued: "+item.FormatTitle())
+	}, busyReply(cfg, c))
 }
 
 // handlePlaylist: expand a playlist (capped at max_track_playlist). Entries are
 // resolved lazily just before they play.
-func handlePlaylist(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
+func handlePlaylist(bot BotAPI, c *Ctx, cmd, arg string) {
 	cfg := bot.Config()
 	if arg == "" {
-		sendToChannel(msg, "Usage: "+symbol(cfg)+cmd+" <playlist url>")
+		c.Send("Usage: " + symbol(cfg) + cmd + " <playlist url>")
 		return
 	}
 	if err := urlitem.CheckURL(arg); err != nil {
-		ytError(cfg, msg, err)
+		ytError(cfg, c, err)
 		return
 	}
-	sendToChannel(msg, "Resolving…")
+	c.Send("Resolving…")
 	runYT(func(ctx context.Context) {
 		items, err := urlitem.Playlist(ctx, arg, cfg)
 		if err != nil {
-			ytError(cfg, msg, err)
+			ytError(cfg, c, err)
 			return
 		}
 		for _, it := range items {
 			bot.Enqueue(audio.MediaItem(it))
 		}
 		text := fmt.Sprintf("Queued %d track(s)", len(items))
-		reply(cfg, msg, text, text)
-	}, busyReply(cfg, msg))
+		reply(cfg, c, text, text)
+	}, busyReply(cfg, c))
 }

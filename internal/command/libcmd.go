@@ -9,7 +9,6 @@ import (
 
 	"github.com/konradk/gotamusique/internal/config"
 	fileitem "github.com/konradk/gotamusique/internal/media/file"
-	"layeh.com/gumble/gumble"
 )
 
 // pageBudget is the most characters (after HTML escaping) one page may hold. Mumble
@@ -31,14 +30,6 @@ type shortlist struct {
 }
 
 func newShortlist() *shortlist { return &shortlist{tracks: map[uint32][]LibraryTrack{}} }
-
-// channelKey identifies the channel a message came from (0 for a private message).
-func channelKey(msg *gumble.TextMessage) uint32 {
-	if len(msg.Channels) == 0 || msg.Channels[0] == nil {
-		return 0
-	}
-	return msg.Channels[0].ID
-}
 
 func (s *shortlist) set(ch uint32, tracks []LibraryTrack) {
 	s.mu.Lock()
@@ -93,8 +84,8 @@ func parseTags(s string) []string {
 	return out
 }
 
-func noLibrary(cfg *config.Config, msg *gumble.TextMessage) {
-	reply(cfg, msg, "library unavailable (set <code>[files] music_folder</code>)", "library unavailable (set [files] music_folder)")
+func noLibrary(cfg *config.Config, c *Ctx) {
+	reply(cfg, c, "library unavailable (set <code>[files] music_folder</code>)", "library unavailable (set [files] music_folder)")
 }
 
 // ---- listing ----
@@ -102,15 +93,15 @@ func noLibrary(cfg *config.Config, msg *gumble.TextMessage) {
 // makeListFileHandler: !listfile [regex] [-p N]. The regex is case-insensitive and
 // matched against path and title.
 func makeListFileHandler(sl *shortlist) HandlerFunc {
-	return func(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
+	return func(bot BotAPI, c *Ctx, cmd, arg string) {
 		cfg := bot.Config()
 		if !bot.HasLibrary() {
-			noLibrary(cfg, msg)
+			noLibrary(cfg, c)
 			return
 		}
 		pattern, page, ok := parsePageFlag(arg)
 		if !ok {
-			sendToChannel(msg, "Usage: "+symbol(cfg)+cmd+" [regex] [-p page]")
+			c.Send("Usage: " + symbol(cfg) + cmd + " [regex] [-p page]")
 			return
 		}
 		var re *regexp.Regexp
@@ -118,65 +109,65 @@ func makeListFileHandler(sl *shortlist) HandlerFunc {
 			var err error
 			if re, err = regexp.Compile("(?i)" + pattern); err != nil {
 				text := "Invalid regex: " + err.Error()
-				reply(cfg, msg, esc(text), text)
+				reply(cfg, c, esc(text), text)
 				return
 			}
 		}
 		tracks, err := bot.ListLibrary(re)
 		if err != nil {
 			text := libraryErrorText(err)
-			reply(cfg, msg, esc(text), text)
+			reply(cfg, c, esc(text), text)
 			return
 		}
-		sendTrackPage(cfg, msg, sl, tracks, page, "No files found. Run "+symbol(cfg)+"rescan first?", cmd)
+		sendTrackPage(cfg, c, sl, tracks, page, "No files found. Run "+symbol(cfg)+"rescan first?", cmd)
 	}
 }
 
 // makeSearchHandler: !search <keywords> [-p N]; every keyword must match.
 func makeSearchHandler(sl *shortlist) HandlerFunc {
-	return func(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
+	return func(bot BotAPI, c *Ctx, cmd, arg string) {
 		cfg := bot.Config()
 		if !bot.HasLibrary() {
-			noLibrary(cfg, msg)
+			noLibrary(cfg, c)
 			return
 		}
 		query, page, ok := parsePageFlag(arg)
 		keywords := strings.Fields(query)
 		if !ok || len(keywords) == 0 {
-			sendToChannel(msg, "Usage: "+symbol(cfg)+cmd+" <keywords> [-p page]")
+			c.Send("Usage: " + symbol(cfg) + cmd + " <keywords> [-p page]")
 			return
 		}
 		tracks, err := bot.SearchLibrary(keywords)
 		if err != nil {
 			text := libraryErrorText(err)
-			reply(cfg, msg, esc(text), text)
+			reply(cfg, c, esc(text), text)
 			return
 		}
-		sendTrackPage(cfg, msg, sl, tracks, page, "No matching tracks.", cmd)
+		sendTrackPage(cfg, c, sl, tracks, page, "No matching tracks.", cmd)
 	}
 }
 
 // makeFindTaggedHandler: !findtagged <tag,tag> [-p N]; a track needs every tag.
 func makeFindTaggedHandler(sl *shortlist) HandlerFunc {
-	return func(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
+	return func(bot BotAPI, c *Ctx, cmd, arg string) {
 		cfg := bot.Config()
 		if !bot.HasLibrary() {
-			noLibrary(cfg, msg)
+			noLibrary(cfg, c)
 			return
 		}
 		query, page, ok := parsePageFlag(arg)
 		tags := parseTags(query)
 		if !ok || len(tags) == 0 {
-			sendToChannel(msg, "Usage: "+symbol(cfg)+cmd+" <tag>[,<tag>...] [-p page]")
+			c.Send("Usage: " + symbol(cfg) + cmd + " <tag>[,<tag>...] [-p page]")
 			return
 		}
 		tracks, err := bot.FindTagged(tags)
 		if err != nil {
 			text := libraryErrorText(err)
-			reply(cfg, msg, esc(text), text)
+			reply(cfg, c, esc(text), text)
 			return
 		}
-		sendTrackPage(cfg, msg, sl, tracks, page, "No tracks with those tags.", cmd)
+		sendTrackPage(cfg, c, sl, tracks, page, "No tracks with those tags.", cmd)
 	}
 }
 
@@ -214,9 +205,9 @@ func paginate(lines []string) [][]string {
 
 // sendTrackPage numbers the tracks, remembers them as the channel's shortlist and
 // sends one page. Numbers run across pages, so "!shortlist 70" works from page 2.
-func sendTrackPage(cfg *config.Config, msg *gumble.TextMessage, sl *shortlist, tracks []LibraryTrack, page int, empty, cmd string) {
+func sendTrackPage(cfg *config.Config, c *Ctx, sl *shortlist, tracks []LibraryTrack, page int, empty, cmd string) {
 	if len(tracks) == 0 {
-		reply(cfg, msg, esc(empty), empty)
+		reply(cfg, c, esc(empty), empty)
 		return
 	}
 	lines := make([]string, len(tracks))
@@ -226,17 +217,17 @@ func sendTrackPage(cfg *config.Config, msg *gumble.TextMessage, sl *shortlist, t
 	pages := paginate(lines)
 	if page > len(pages) {
 		text := fmt.Sprintf("No page %d: %d tracks, %d pages.", page, len(tracks), len(pages))
-		reply(cfg, msg, esc(text), text)
+		reply(cfg, c, esc(text), text)
 		return
 	}
-	sl.set(channelKey(msg), tracks)
+	sl.set(c.ChannelID, tracks)
 	hint := fmt.Sprintf("queue with %sshortlist <n ...|*>", symbol(cfg))
 	if len(pages) > 1 {
 		hint += fmt.Sprintf(", other pages with %sshortlist -p <page>", symbol(cfg))
 	}
 	text := fmt.Sprintf("%d tracks, page %d/%d (%s):\n%s",
 		len(tracks), page, len(pages), hint, strings.Join(pages[page-1], "\n"))
-	reply(cfg, msg, "<pre>"+esc(text)+"</pre>", text)
+	reply(cfg, c, "<pre>"+esc(text)+"</pre>", text)
 }
 
 // truncateRunes shortens s to at most n runes, ending in "..." when cut.
@@ -268,9 +259,9 @@ const maxBulkAdd = 200
 
 // enqueueTracks queues the tracks that still exist on disk and replies with a summary.
 // At most maxBulkAdd tracks are queued; the reply says when the rest was left out.
-func enqueueTracks(bot BotAPI, cfg *config.Config, msg *gumble.TextMessage, tracks []LibraryTrack, what string) {
+func enqueueTracks(bot BotAPI, cfg *config.Config, c *Ctx, tracks []LibraryTrack, what string) {
 	if cfg.Files.MusicFolder == "" {
-		noLibrary(cfg, msg)
+		noLibrary(cfg, c)
 		return
 	}
 	total := len(tracks)
@@ -304,31 +295,31 @@ func enqueueTracks(bot BotAPI, cfg *config.Config, msg *gumble.TextMessage, trac
 	if total > maxBulkAdd {
 		text += fmt.Sprintf(". Only the first %d of %d were queued, narrow your selection", maxBulkAdd, total)
 	}
-	reply(cfg, msg, esc(text), text)
+	reply(cfg, c, esc(text), text)
 }
 
 // makeShortlistHandler: !shortlist <n> [n ...] | *  — queue entries from the last
 // !listfile / !search / !findtagged result of this channel. Every number is
 // checked first, so a bad number queues nothing.
 func makeShortlistHandler(sl *shortlist) HandlerFunc {
-	return func(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
+	return func(bot BotAPI, c *Ctx, cmd, arg string) {
 		cfg := bot.Config()
 		usage := "Usage: " + symbol(cfg) + cmd + " <n> [n ...] | * | -p <page>"
 		rest, page, flagOK := parsePageFlag(arg)
 		fields := strings.Fields(arg)
 		if len(fields) == 0 || (!flagOK && rest == "") {
-			sendToChannel(msg, usage)
+			c.Send(usage)
 			return
 		}
-		list := sl.get(channelKey(msg))
+		list := sl.get(c.ChannelID)
 		if len(list) == 0 {
 			text := "No list to pick from. Use " + symbol(cfg) + "listfile, " + symbol(cfg) + "search, " + symbol(cfg) + "findtagged or " + symbol(cfg) + "file first."
-			reply(cfg, msg, esc(text), text)
+			reply(cfg, c, esc(text), text)
 			return
 		}
 		if rest == "" && flagOK && pageFlagRE.MatchString(arg) {
 			// "!shortlist -p N": show another page of the saved list, queue nothing.
-			sendTrackPage(cfg, msg, sl, list, page, "", cmd)
+			sendTrackPage(cfg, c, sl, list, page, "", cmd)
 			return
 		}
 		var picked []LibraryTrack
@@ -339,39 +330,39 @@ func makeShortlistHandler(sl *shortlist) HandlerFunc {
 				n, err := strconv.Atoi(f)
 				if err != nil || n < 1 || n > len(list) {
 					text := fmt.Sprintf("Bad number %q (the list has %d entries). %s", f, len(list), usage)
-					reply(cfg, msg, esc(text), text)
+					reply(cfg, c, esc(text), text)
 					return
 				}
 				picked = append(picked, list[n-1])
 			}
 		}
-		enqueueTracks(bot, cfg, msg, picked, "")
+		enqueueTracks(bot, cfg, c, picked, "")
 	}
 }
 
 // handlePlayTag: !tag <tag,tag> — queue every library track carrying all the tags.
-func handlePlayTag(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
+func handlePlayTag(bot BotAPI, c *Ctx, cmd, arg string) {
 	cfg := bot.Config()
 	if !bot.HasLibrary() {
-		noLibrary(cfg, msg)
+		noLibrary(cfg, c)
 		return
 	}
 	tags := parseTags(arg)
 	if len(tags) == 0 {
-		sendToChannel(msg, "Usage: "+symbol(cfg)+cmd+" <tag>[,<tag>...]")
+		c.Send("Usage: " + symbol(cfg) + cmd + " <tag>[,<tag>...]")
 		return
 	}
 	tracks, err := bot.FindTagged(tags)
 	if err != nil {
 		text := libraryErrorText(err)
-		reply(cfg, msg, esc(text), text)
+		reply(cfg, c, esc(text), text)
 		return
 	}
 	if len(tracks) == 0 {
-		reply(cfg, msg, "No tracks with those tags.", "No tracks with those tags.")
+		reply(cfg, c, "No tracks with those tags.", "No tracks with those tags.")
 		return
 	}
-	enqueueTracks(bot, cfg, msg, tracks, " tagged "+strings.Join(tags, ", "))
+	enqueueTracks(bot, cfg, c, tracks, " tagged "+strings.Join(tags, ", "))
 }
 
 // ---- tagging queue items ----
@@ -453,19 +444,19 @@ func containsFold(list []string, s string) bool {
 }
 
 // handleAddTag: !addtag [n|*] <tag,tag>. Applies to queue items that are library files.
-func handleAddTag(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
-	tagQueueItems(bot, msg, cmd, arg, false)
+func handleAddTag(bot BotAPI, c *Ctx, cmd, arg string) {
+	tagQueueItems(bot, c, cmd, arg, false)
 }
 
 // handleUntag: !untag [n|*] <tag,tag|*>. A lone "*" as the tag list clears all tags.
-func handleUntag(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
-	tagQueueItems(bot, msg, cmd, arg, true)
+func handleUntag(bot BotAPI, c *Ctx, cmd, arg string) {
+	tagQueueItems(bot, c, cmd, arg, true)
 }
 
-func tagQueueItems(bot BotAPI, msg *gumble.TextMessage, cmd, arg string, remove bool) {
+func tagQueueItems(bot BotAPI, c *Ctx, cmd, arg string, remove bool) {
 	cfg := bot.Config()
 	if !bot.HasLibrary() {
-		noLibrary(cfg, msg)
+		noLibrary(cfg, c)
 		return
 	}
 	items := bot.QueueItems()
@@ -479,14 +470,14 @@ func tagQueueItems(bot BotAPI, msg *gumble.TextMessage, cmd, arg string, remove 
 		if err != nil {
 			text = err.Error() + ". " + text
 		}
-		reply(cfg, msg, esc(text), text)
+		reply(cfg, c, esc(text), text)
 		return
 	}
 	clearAll := remove && tagArg == "*"
 	tags := parseTags(tagArg)
 	if !clearAll && (len(tags) == 0 || containsFold(tags, "*")) {
 		text := "Tags cannot be empty or \"*\"."
-		reply(cfg, msg, esc(text), text)
+		reply(cfg, c, esc(text), text)
 		return
 	}
 	fn := addTags(tags)
@@ -535,5 +526,5 @@ func tagQueueItems(bot BotAPI, msg *gumble.TextMessage, cmd, arg string, remove 
 			text += fmt.Sprintf(" (%d skipped, not library files)", skipped)
 		}
 	}
-	reply(cfg, msg, esc(text), text)
+	reply(cfg, c, esc(text), text)
 }

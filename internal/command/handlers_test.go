@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/konradk/gotamusique/internal/config"
@@ -19,8 +20,37 @@ import (
 // Message replies are fire-and-forget (sendToChannel recovers from gumble panics
 // in tests), so these tests focus on side effects on the mock bot.
 
-func callHandler(fn HandlerFunc, bot *mockBot, arg string) {
-	fn(bot, "testuser", makeMsg("!cmd "+arg), "cmd", arg)
+// replies collects a handler's output. Handlers that run yt-dlp reply from a
+// background goroutine, so it is safe for concurrent use.
+type replies struct {
+	mu   sync.Mutex
+	list []string
+}
+
+func (r *replies) add(text string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.list = append(r.list, text)
+}
+
+// all returns a copy of what has been replied so far.
+func (r *replies) all() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]string(nil), r.list...)
+}
+
+// testCtx returns a context for "testuser" in channel 0 whose output goes to r.
+func testCtx(r *replies) *Ctx {
+	return &Ctx{User: "testuser", Out: r.add}
+}
+
+// callHandler runs fn as "testuser" in channel 0 and returns what it has replied so
+// far (call ytWG/scanWG.Wait first for handlers that reply asynchronously).
+func callHandler(fn HandlerFunc, bot *mockBot, arg string) []string {
+	var r replies
+	fn(bot, testCtx(&r), "cmd", arg)
+	return r.all()
 }
 
 func TestHandleStop_CallsStop(t *testing.T) {
@@ -136,7 +166,7 @@ func TestHandleJoinMe_NilSender_NoJoin(t *testing.T) {
 	bot := defaultBot()
 	msg := makeMsg("!joinme")
 	msg.Sender = nil
-	handleJoinMe(bot, "testuser", msg, "joinme", "")
+	handleJoinMe(bot, chatCtx(msg), "joinme", "")
 	// No panic and no JoinChannel call expected.
 }
 
@@ -144,7 +174,7 @@ func TestHandleJoinMe_SenderNoChannel_NoJoin(t *testing.T) {
 	msg := makeMsg("!joinme")
 	msg.Sender.Channel = nil
 	m := &joinTrackBot{mockBot: defaultBot()}
-	handleJoinMe(m, "testuser", msg, "joinme", "")
+	handleJoinMe(m, chatCtx(msg), "joinme", "")
 	if m.joinedChannel != nil {
 		t.Error("JoinChannel should not be called when sender has no channel")
 	}
@@ -157,7 +187,7 @@ func TestHandleJoinMe_SenderWithChannel_Joins(t *testing.T) {
 
 	var gotChannel *gumble.Channel
 	m := &joinTrackBot{mockBot: defaultBot()}
-	handleJoinMe(m, "testuser", msg, "joinme", "")
+	handleJoinMe(m, chatCtx(msg), "joinme", "")
 	gotChannel = m.joinedChannel
 	if gotChannel != joinCh {
 		t.Errorf("JoinChannel called with %v, want %v", gotChannel, joinCh)

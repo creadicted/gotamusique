@@ -183,7 +183,7 @@ func TestDispatch_ExactMatch(t *testing.T) {
 	d := makeDispatcher([]string{"!"})
 	bot := defaultBot()
 	called := false
-	d.Register([]string{"ping"}, func(b BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
+	d.Register([]string{"ping"}, func(b BotAPI, c *Ctx, cmd, arg string) {
 		called = true
 		if cmd != "ping" {
 			t.Errorf("cmd = %q, want %q", cmd, "ping")
@@ -200,7 +200,7 @@ func TestDispatch_ExactMatchWithArgument(t *testing.T) {
 	d := makeDispatcher([]string{"!"})
 	bot := defaultBot()
 	var gotArg string
-	d.Register([]string{"say"}, func(b BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
+	d.Register([]string{"say"}, func(b BotAPI, c *Ctx, cmd, arg string) {
 		gotArg = arg
 	}, false, "test")
 
@@ -214,7 +214,7 @@ func TestDispatch_PrefixMatch_Single(t *testing.T) {
 	d := makeDispatcher([]string{"!"})
 	bot := defaultBot()
 	called := false
-	d.Register([]string{"help"}, func(b BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
+	d.Register([]string{"help"}, func(b BotAPI, c *Ctx, cmd, arg string) {
 		called = true
 	}, false, "test")
 
@@ -229,10 +229,10 @@ func TestDispatch_PrefixMatch_Ambiguous(t *testing.T) {
 	bot := defaultBot()
 	var replies []string
 
-	d.Register([]string{"stop"}, func(b BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
+	d.Register([]string{"stop"}, func(b BotAPI, c *Ctx, cmd, arg string) {
 		replies = append(replies, "stop")
 	}, false, "test")
-	d.Register([]string{"skip"}, func(b BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
+	d.Register([]string{"skip"}, func(b BotAPI, c *Ctx, cmd, arg string) {
 		replies = append(replies, "skip")
 	}, false, "test")
 
@@ -254,7 +254,7 @@ func TestDispatch_AdminGuard_Denied(t *testing.T) {
 	d := makeDispatcher([]string{"!"})
 	bot := defaultBot()
 	called := false
-	d.Register([]string{"kill"}, func(b BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
+	d.Register([]string{"kill"}, func(b BotAPI, c *Ctx, cmd, arg string) {
 		called = true
 	}, true, "admin only")
 
@@ -268,7 +268,7 @@ func TestDispatch_AdminGuard_Allowed(t *testing.T) {
 	d := makeDispatcher([]string{"!"})
 	bot := defaultBot()
 	called := false
-	d.Register([]string{"kill"}, func(b BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
+	d.Register([]string{"kill"}, func(b BotAPI, c *Ctx, cmd, arg string) {
 		called = true
 	}, true, "admin only")
 
@@ -282,7 +282,7 @@ func TestDispatch_PrivateMessage_Ignored(t *testing.T) {
 	d := makeDispatcher([]string{"!"})
 	bot := defaultBot()
 	called := false
-	d.Register([]string{"ping"}, func(b BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
+	d.Register([]string{"ping"}, func(b BotAPI, c *Ctx, cmd, arg string) {
 		called = true
 	}, false, "test")
 
@@ -299,7 +299,7 @@ func TestDispatch_ServerMessage_Ignored(t *testing.T) {
 	d := makeDispatcher([]string{"!"})
 	bot := defaultBot()
 	called := false
-	d.Register([]string{"ping"}, func(b BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
+	d.Register([]string{"ping"}, func(b BotAPI, c *Ctx, cmd, arg string) {
 		called = true
 	}, false, "test")
 
@@ -315,7 +315,7 @@ func TestDispatch_HTMLStripped(t *testing.T) {
 	d := makeDispatcher([]string{"!"})
 	bot := defaultBot()
 	var gotCmd string
-	d.Register([]string{"stop"}, func(b BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
+	d.Register([]string{"stop"}, func(b BotAPI, c *Ctx, cmd, arg string) {
 		gotCmd = cmd
 	}, false, "test")
 
@@ -330,7 +330,7 @@ func TestDispatch_HTMLEntitiesDecoded(t *testing.T) {
 	d := makeDispatcher([]string{"!"})
 	bot := defaultBot()
 	var gotArg string
-	d.Register([]string{"say"}, func(b BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
+	d.Register([]string{"say"}, func(b BotAPI, c *Ctx, cmd, arg string) {
 		gotArg = arg
 	}, false, "test")
 
@@ -344,7 +344,7 @@ func TestDispatch_MultipleSymbols(t *testing.T) {
 	d := makeDispatcher([]string{"!", "！"})
 	bot := defaultBot()
 	calls := 0
-	d.Register([]string{"ping"}, func(b BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
+	d.Register([]string{"ping"}, func(b BotAPI, c *Ctx, cmd, arg string) {
 		calls++
 	}, false, "test")
 
@@ -359,7 +359,7 @@ func TestDispatch_NoSymbol_Ignored(t *testing.T) {
 	d := makeDispatcher([]string{"!"})
 	bot := defaultBot()
 	called := false
-	d.Register([]string{"ping"}, func(b BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
+	d.Register([]string{"ping"}, func(b BotAPI, c *Ctx, cmd, arg string) {
 		called = true
 	}, false, "test")
 
@@ -373,7 +373,7 @@ func TestDispatch_PrefixAdminGuard_Denied(t *testing.T) {
 	d := makeDispatcher([]string{"!"})
 	bot := defaultBot()
 	called := false
-	d.Register([]string{"killall"}, func(b BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
+	d.Register([]string{"killall"}, func(b BotAPI, c *Ctx, cmd, arg string) {
 		called = true
 	}, true, "admin only")
 
@@ -406,7 +406,7 @@ func TestStripHTML(t *testing.T) {
 func TestRegister_Empty_Aliases_NoOp(t *testing.T) {
 	d := makeDispatcher([]string{"!"})
 	bot := defaultBot()
-	d.Register(nil, func(b BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {}, false, "x")
+	d.Register(nil, func(b BotAPI, c *Ctx, cmd, arg string) {}, false, "x")
 	// Dispatching anything should not panic.
 	d.Dispatch(bot, makeMsg("!anything"))
 }
