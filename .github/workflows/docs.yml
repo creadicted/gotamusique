@@ -11,9 +11,11 @@ on:
 permissions:
   contents: read
 
+# PR checks get a per-PR group (newer pushes supersede older checks); publish runs
+# share one group and are never cancelled mid-deploy.
 concurrency:
-  group: pages
-  cancel-in-progress: false
+  group: ${{ github.event_name == 'pull_request' && format('docs-pr-{0}', github.event.number) || 'pages' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:

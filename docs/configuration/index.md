@@ -82,6 +82,6 @@ mumble_connection = True  # verbose gumble logging
 ## Command-line overrides
 
 ```sh
-./gotamusique --host my.mumble.server --username MusicBot --channel Radio
+./gotamusique --server my.mumble.server --username MusicBot --channel Radio
 ./gotamusique --help
 ```

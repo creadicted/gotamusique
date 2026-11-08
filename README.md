@@ -1,6 +1,6 @@
 # gotamusique
 
-A Go rewrite of [botamusique](https://github.com/azlux/botamusique), a Mumble music bot. Single statically-linked
+A Go rewrite of [botamusique](https://github.com/azlux/botamusique), a Mumble music bot. Single self-contained
 binary, no Python runtime required.
 
 📖 **Documentation: <https://creadicted.github.io/gotamusique/>**
@@ -12,7 +12,7 @@ binary, no Python runtime required.
 
 ## Download
 
-Pre-built static binaries are published automatically on every commit to `master`:
+Pre-built Linux binaries (dynamically linked against `libopus`) are published automatically on every commit to `master`:
 
 | Platform     | Binary                    |
 |--------------|---------------------------|

@@ -11,7 +11,11 @@ gotamusique is a clean rewrite, not a drop-in replacement.
 
 ## Unsupported config keys
 
-These `[bot]` keys are silently ignored.
+!!! warning "Remove these keys before starting"
+    gotamusique rejects unknown keys in the sections it knows (`[server]`, `[bot]`, `[youtube_dl]`,
+    `[files]`, `[debug]`) and exits at startup with `unknown key "..." in section [...]`. Delete
+    every key below from your `configuration.ini` before migrating. Unknown *sections*, such as
+    `[webinterface]`, are ignored.
 
 | Key | Status | Notes |
 |-----|--------|-------|
@@ -29,7 +33,7 @@ These `[bot]` keys are silently ignored.
 | `tmp_folder` / `tmp_folder_max_size` | deferred | |
 | `when_nobody_in_channel` | deferred | |
 
-The `[webinterface]` section is not implemented yet.
+The `[webinterface]` section is not implemented yet and is skipped.
 
 ## New keys
 

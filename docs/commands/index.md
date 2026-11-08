@@ -42,7 +42,9 @@ Bot:  Queued: [Radio] Jazz Yeah! (position 2)
 !volume 60    → Volume set to 60%
 ```
 
-Volume is a percentage of `max_volume`.
+The argument is an absolute percentage (`60` = 0.6). `max_volume` is a separate ceiling: the
+result is clamped to it, not scaled by it. With `max_volume = 0.5`, `!volume 40` sets 0.4 and
+`!volume 80` is capped at 0.5.
 
 ## Radio Browser
 

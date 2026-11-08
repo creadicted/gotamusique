@@ -1,7 +1,7 @@
 # gotamusique
 
 A Go rewrite of [botamusique](https://github.com/azlux/botamusique), a Mumble music bot.
-One statically-linked binary, no Python runtime required.
+One self-contained binary, no Python runtime required. The Docker image is fully static.
 
 ## Features
 

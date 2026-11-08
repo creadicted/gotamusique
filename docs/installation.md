@@ -7,7 +7,12 @@
 - A JavaScript runtime for yt-dlp's YouTube support: [`deno`](https://deno.com) >= 2.3.0 (enabled by default),
   or node/QuickJS/bun via yt-dlp's `--js-runtimes`. The Docker image bundles yt-dlp and deno.
 
-No Go toolchain, no Python runtime, no system libraries: the binary is fully static.
+No Go toolchain and no Python runtime are needed.
+
+!!! note "Native libraries"
+    The downloadable Linux binaries are built with CGO and link dynamically, so the host needs the
+    Opus library (`libopus`, e.g. `apt install libopus0`). The Docker image is statically linked
+    and needs nothing extra.
 
 ## Binary
 
@@ -45,10 +50,14 @@ services:
     image: ghcr.io/creadicted/gotamusique:latest
     volumes:
       - ./configuration.ini:/app/configuration.ini:ro
+      # keeps the music library database across container recreation
+      - ./data:/app/data
     restart: unless-stopped
 ```
 
 Only put keys you want to override in `configuration.ini`; defaults are baked into the image.
+If you use the [music library](configuration/library.md), set `music_database_path = data/music.db`
+so the database lands on the mounted volume.
 To use another config path:
 
 ```sh
