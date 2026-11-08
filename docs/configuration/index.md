@@ -24,6 +24,10 @@ Missing keys fall back to the embedded defaults.
 | `max_volume`               | `1.0`             | Upper ceiling for `!volume` |
 | `admin`                    | *(empty)*         | Comma-separated admin usernames |
 | `comment`                  | `"I play radio."` | Bot comment |
+| `avatar`                   | *(empty)*         | Path to a PNG used as the bot's Mumble avatar; an unreadable file is logged and skipped |
+| `formatted_replies`        | `True`            | Reply with HTML formatting; set `False` for plain text (for clients that don't render HTML) |
+| `bandwidth`                | `96000`           | Accepted (also as `--bandwidth`) but **not used yet** |
+| `stereo`                   | `True`            | Accepted but **not used yet**: audio is always sent as mono |
 | `announce_current_music`   | `True`            | Announce when a track starts |
 | `logfile`                  | *(empty)*         | Log to this path instead of stderr |
 | `max_track_duration`       | `60`              | Max `!url` track length in minutes (`0` = no limit) |

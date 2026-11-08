@@ -9,6 +9,7 @@ One self-contained binary, no Python runtime required. The Docker image is fully
 - Local music library with scan, search, tags, shortlists and bulk queueing (`!file` folders, `!filematch`)
 - `!url` / `!playlist` via yt-dlp
 - Playback modes: one-shot, repeat, random, autoplay
+- `!pause` / `!resume`, and optional auto-pause when the bot is alone in its channel
 - Configuration compatible with botamusique's INI schema
 
 ## Where to go next
