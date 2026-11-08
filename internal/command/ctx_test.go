@@ -82,3 +82,15 @@ func TestRun_IgnoresNonCommands(t *testing.T) {
 		t.Errorf("output = %q, want none", r.all())
 	}
 }
+
+func TestVersionCommand_RepliesWithVersion(t *testing.T) {
+	bot := defaultBot()
+	d := NewDispatcher([]string{"!"})
+	RegisterAll(bot, d)
+	var r replies
+	d.Run(bot, &Ctx{User: "u", Out: r.add}, "!version")
+	out := r.all()
+	if len(out) != 1 || !strings.HasPrefix(out[0], "gotamusique ") || len(out[0]) <= len("gotamusique ") {
+		t.Errorf("output = %q", out)
+	}
+}

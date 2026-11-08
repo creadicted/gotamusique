@@ -20,7 +20,8 @@ jobs:
       - name: Build binary
         run: |
           CGO_ENABLED=1 GOOS=linux GOARCH=amd64 \
-            go build -o gotamusique-linux-amd64 ./cmd/gotamusique
+            go build -ldflags "-X github.com/konradk/gotamusique/internal/version.Version=${GITHUB_REF_NAME#v}" \
+            -o gotamusique-linux-amd64 ./cmd/gotamusique
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v7
@@ -62,6 +63,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
+          build-args: VERSION=${{ steps.meta.outputs.version }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

@@ -149,6 +149,7 @@ command and say so when more matched; narrow the selection to get the rest.
 
 | Command | Description |
 |---------|-------------|
+| `!version` | Show the bot version |
 | `!joinme` | Move the bot to your channel |
 | `!help` | List commands |
 | `!kill` | **Admin only.** Disconnect and exit |

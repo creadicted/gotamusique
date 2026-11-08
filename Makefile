@@ -2,8 +2,12 @@ BIN := bin/gotamusique
 
 .PHONY: build test run dev clean fmt lint docs docs-build tag
 
+# VERSION comes from the nearest git tag (v0.4.0 -> 0.4.0, or 0.4.0-3-gabc123 after it);
+# empty outside a git checkout, in which case the binary reports "dev (<revision>)".
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null | sed 's/^v//')
+
 build:
-	CGO_CFLAGS="-w -O2" go build -o $(BIN) ./cmd/gotamusique
+	CGO_CFLAGS="-w -O2" go build -ldflags "-X github.com/konradk/gotamusique/internal/version.Version=$(VERSION)" -o $(BIN) ./cmd/gotamusique
 
 test:
 	go test ./...
