@@ -3,7 +3,12 @@
 A Go rewrite of [botamusique](https://github.com/azlux/botamusique), a Mumble music bot. Single statically-linked
 binary, no Python runtime required.
 
-> **Phase 1 currently focuses on radio-only support and remains in progress.** Phase 2 (file library, yt-dlp, web UI) is in planning — see [`tasks/README.md`](tasks/README.md) for current milestone status.
+📖 **Documentation: <https://creadicted.github.io/gotamusique/>**
+
+- [Installation](https://creadicted.github.io/gotamusique/installation/): binary, Docker, requirements
+- [Configuration](https://creadicted.github.io/gotamusique/configuration/): every INI section and key
+- [Commands](https://creadicted.github.io/gotamusique/commands/): chat command reference
+- [Migrating from botamusique](https://creadicted.github.io/gotamusique/migrating/)
 
 ## Download
 
@@ -13,29 +18,20 @@ Pre-built static binaries are published automatically on every commit to `master
 |--------------|---------------------------|
 | Linux x86-64 | `gotamusique-linux-amd64` |
 
-Download from the [latest release](../../releases/tag/latest) — no Go toolchain or Python runtime needed.
-
-> These are rolling pre-release builds. For stable versioned releases see the [Releases](../../releases) page.
-
-## Requirements
-
-- `ffmpeg` on PATH (`ffprobe` too, for `!file` metadata)
-- `yt-dlp` on PATH — only for `!url` / `!playlist`
-- A JavaScript runtime for yt-dlp's YouTube support — [`deno`](https://deno.com) >= 2.3.0 (enabled by default), or node/QuickJS/bun enabled via yt-dlp's `--js-runtimes` (see the [yt-dlp EJS wiki](https://github.com/yt-dlp/yt-dlp/wiki/EJS)). The Docker image bundles yt-dlp and deno.
-
-No Go toolchain, no Python runtime, no system libraries — the binary is fully static.
+Download from the [latest release](../../releases/tag/latest). For stable versioned releases see the
+[Releases](../../releases) page. A Docker image is published to
+`ghcr.io/creadicted/gotamusique` on every `v*` tag.
 
 ## Quick start
 
+Requires `ffmpeg` on PATH (see [Installation](https://creadicted.github.io/gotamusique/installation/) for the full list).
+
 ```sh
-# 1. Download the binary for your platform and make it executable
 chmod +x gotamusique-linux-amd64
 
-# 2. Create a config file next to it
 cat > configuration.ini <<'EOF'
 [server]
 host = mumble.example.com
-port = 64738
 channel = Music
 
 [bot]
@@ -43,333 +39,31 @@ username = gotamusique
 admin = YourMumbleUsername
 
 [radio]
-jazz  = http://jazz-wr04.ice.infomaniak.ch/jazz-wr04-128.mp3 "Jazz Yeah!"
-soma  = http://ice1.somafm.com/groovesalad-128-mp3 "SomaFM Groove Salad"
+jazz = http://jazz-wr04.ice.infomaniak.ch/jazz-wr04-128.mp3 "Jazz Yeah!"
 EOF
 
-# 3. Run
 ./gotamusique-linux-amd64
 ```
 
-The bot connects, joins the configured channel, and waits for commands in Mumble chat.
+The bot connects, joins the configured channel, and waits for commands in Mumble chat (`!radio jazz`, `!help`).
 
-## Docker
-
-The image is published to GHCR on every versioned release tag (`v*`). No Go toolchain or `ffmpeg` installation needed on the host — `ffmpeg` is bundled in the image.
-
-| Tag | When pushed |
-|---|---|
-| `ghcr.io/creadicted/gotamusique:1.2.3` | On `git tag v1.2.3` |
-| `ghcr.io/creadicted/gotamusique:1.2` | Same — tracks the latest patch of that minor |
-| `ghcr.io/creadicted/gotamusique:latest` | Same — tracks the latest stable release |
-
-Pre-release tags (e.g. `v1.0.0-rc.1`) publish a versioned image but do not update `:latest`.
+## Development
 
 ```sh
-# 1. Create a configuration.ini with your overrides (see Configuration below)
-cat > configuration.ini <<'EOF'
-[server]
-host = mumble.example.com
-port = 64738
-
-[bot]
-username = gotamusique
-admin = YourMumbleUsername
-EOF
-
-# 2. Create docker-compose.yml
-cat > docker-compose.yml <<'EOF'
-services:
-  gotamusique:
-    image: ghcr.io/creadicted/gotamusique:latest
-    volumes:
-      - ./configuration.ini:/app/configuration.ini:ro
-    restart: unless-stopped
-EOF
-
-# 3. Run
-docker compose up -d
-```
-
-Only put keys you want to override in `configuration.ini` — the image ships with `configuration.default.ini` baked in, so missing keys fall back to their defaults automatically.
-
-**Using a custom config path:**
-
-```sh
-docker run -v /path/to/myconfig.ini:/app/myconfig.ini ghcr.io/creadicted/gotamusique:latest --config myconfig.ini
-```
-
-**Building locally:**
-
-```sh
-make docker-build   # docker build -t gotamusique .
-make docker-run     # docker compose up
-```
-
-## Configuration
-
-Copy `configuration.default.ini` to `configuration.ini` next to the binary and edit what you need.
-Missing keys fall back to the embedded defaults — you only have to set what you want to change.
-
-### `[server]`
-
-| Key               | Default     | Description                                    |
-|-------------------|-------------|------------------------------------------------|
-| `host`            | `127.0.0.1` | Mumble server hostname or IP                   |
-| `port`            | `64738`     | Mumble server port                             |
-| `password`        | *(empty)*   | Server password                                |
-| `channel`         | *(empty)*   | Channel to join on connect (root if empty)     |
-| `certificate`     | *(empty)*   | Path to a PEM client certificate for cert-auth |
-| `tokens`          | *(empty)*   | Comma-separated access tokens                  |
-| `tls_skip_verify` | `True`      | Skip TLS certificate verification              |
-
-### `[bot]`
-
-| Key                      | Default           | Description                                        |
-|--------------------------|-------------------|----------------------------------------------------|
-| `username`               | `gotamusique`     | Display name in Mumble                             |
-| `volume`                 | `0.8`             | Initial volume (0.0–1.0)                           |
-| `max_volume`             | `1.0`             | Upper ceiling for `!volume`                        |
-| `admin`                  | *(empty)*         | Comma-separated Mumble usernames with admin access |
-| `comment`                | `"I play radio."` | Bot comment shown on hover                         |
-| `announce_current_music` | `True`            | Post station name to channel when a track starts   |
-| `logfile`                | *(empty)*         | Write logs to this path instead of stderr          |
-| `max_track_duration`     | `60`              | Max `!url` track length in minutes (`0` = no limit) |
-| `max_track_playlist`     | `20`              | Max tracks added by one `!playlist`                |
-| `playback_mode`          | `one-shot`        | Startup mode: `one-shot`, `repeat`, `random` or `autoplay` (needs `music_folder`) |
-| `music_database_path`    | `music.db`        | Music library database; only opened when `[files] music_folder` is set |
-| `refresh_cache_on_startup` | `False`         | Scan the music folder when the bot starts          |
-| `autoplay_length`        | `5`               | Tracks added per autoplay refill                   |
-
-### `[youtube_dl]`
-
-Settings for yt-dlp, used by `!url` and `!playlist`.
-
-| Key              | Default     | Description                                         |
-|------------------|-------------|-----------------------------------------------------|
-| `binary`         | *(empty)*   | Path to yt-dlp; empty = `yt-dlp` from `PATH`        |
-| `cookiefile`     | *(empty)*   | Cookies file (e.g. for age-restricted videos)       |
-| `source_address` | *(empty)*   | Local IP to bind outgoing connections to            |
-| `user_agent`     | *(empty)*   | Override the HTTP user agent                        |
-
-### `[files]`
-
-| Key               | Default   | Description                                                                 |
-|-------------------|-----------|-----------------------------------------------------------------------------|
-| `music_folder`    | *(empty)* | Root folder for `!file` and the library scan. Paths are relative to it and cannot escape it, including via symlinks |
-| `ignored_folders` | *(empty)* | Comma-separated folder names the scan skips (exact, case-sensitive, any depth) |
-| `ignored_files`   | *(empty)* | Comma-separated file names the scan skips (exact, case-sensitive)           |
-
-### Music library
-
-With `music_folder` set, `!rescan` scans it into a SQLite database (`music_database_path`).
-The first scan runs `ffprobe` on every audio file and can take a while on a large library;
-later scans only probe new or changed files and remove rows for files that are gone. Only
-`mp3, flac, ogg, oga, opus, m4a, aac, wav, wma, ape, aiff` are scanned. Directory symlinks are
-not followed.
-
-The scan never wipes the library because the folder is unavailable: if `music_folder` is not a
-readable directory, or no audio files are found while the library has entries (e.g. an
-unmounted share), nothing is removed.
-
-**Docker:** keep the database on a volume, or every container recreation loses it and the next
-scan re-probes every file. The compose file mounts `./data`; set
-`music_database_path = data/music.db` in `configuration.ini`.
-
-`!mode autoplay` plays random library tracks. It starts immediately on an idle bot and refills
-the queue (replacing played tracks, so `!queue` stays short) whenever it runs dry. If
-`autoplay_length` tracks in a row fail to play (for example the folder was unmounted), autoplay
-stops and says so; run `!mode autoplay` again to restart it.
-
-### `[radio]` — presets
-
-Each key is a short alias; the value is a URL, optionally followed by a quoted display name.
-
-```ini
-[radio]
-jazz = http://jazz-wr04.ice.infomaniak.ch/jazz-wr04-128.mp3 "Jazz Yeah!"
-soma = http://ice1.somafm.com/groovesalad-128-mp3 "SomaFM Groove Salad"
-lofi = http://stream.lofi.cafe/lofi "Lo-fi Hip-Hop"
-defiance = http://stream.wknc.org:8000/wknc128
-```
-
-`!radio jazz` plays the `jazz` preset. `!radio` with no argument lists all presets.
-
-### `[commands]` — aliases
-
-Override any command's trigger words:
-
-```ini
-[commands]
-command_symbol = !       # prefix for all commands (multiple: !:！)
-volume = vol, v  # !vol and !v now both work
-play_radio = radio, r
-```
-
-### Command-line overrides
-
-Any config value can be overridden at runtime:
-
-```sh
-./gotamusique --host my.mumble.server --username MusicBot --channel Radio
-./gotamusique --help   # full flag list
-```
-
-## Commands
-
-All commands use `!` by default (configurable via `command_symbol`). Commands can be sent in any
-channel the bot is in or moved to. Private messages are ignored.
-
-Partial command names work: `!hel` dispatches to `!help` as long as it's unambiguous.
-
-### Playback
-
-| Command          | Description                                                              |
-|------------------|--------------------------------------------------------------------------|
-| `!radio`         | List configured radio presets                                            |
-| `!radio <alias>` | Play a preset by its alias, e.g. `!radio jazz`                           |
-| `!radio <url>`   | Play any direct stream URL, e.g. `!radio http://stream.example.com/live` |
-| `!hls <url>`     | Play an HLS/M3U8 stream, announced as `[HLS] <name>` (from the `.m3u8` filename, else the hostname) |
-| `!file <path>`   | Play a local audio file by path relative to `music_folder`; title/artist/duration via ffprobe |
-| `!url <url>`     | Play one track via yt-dlp (YouTube, SoundCloud, …). Always a single track |
-| `!playlist <url>`| Queue a playlist (up to `max_track_playlist`); tracks resolve as they play |
-| `!mode [mode]`   | Show or set the playback mode: `one-shot` (stop at the end), `repeat` (loop the queue), `random` (shuffle; reshuffles and keeps going), `autoplay` (random library tracks; **starts playing immediately** when idle). Not saved across restarts |
-| `!rescan`        | Scan `music_folder` into the library (incremental). Open to everyone; one scan at a time |
-| `!stop`          | Stop playback and reset the queue position                               |
-| `!mute`          | Set volume to 0 — stream stays connected, no reconnect delay             |
-| `!unmute`        | Restore volume after `!mute`                                             |
-| `!skip`          | Stop current station and start the next one in queue                     |
-| `!clear`         | Stop playback and empty the queue                                        |
-
-### Queue
-
-| Command         | Description                                     |
-|-----------------|-------------------------------------------------|
-| `!queue`        | List all stations in the queue with their index |
-| `!np` or `!now` | Show the currently playing station              |
-
-Adding a station while one is already playing appends it to the queue — it does not interrupt the current station.
-
-Example session in Mumble chat:
-
-```
-You:  !radio soma
-Bot:  Now playing: [Radio] SomaFM Groove Salad
-You:  !radio jazz
-Bot:  Queued: [Radio] Jazz Yeah! (position 2)
-You:  !queue
-Bot:  Queue:
-      1. [Radio] SomaFM Groove Salad  ← current
-      2. [Radio] Jazz Yeah!
-You:  !skip
-Bot:  Now playing: [Radio] Jazz Yeah!
-```
-
-### Radio Browser
-
-Search [radio-browser.info](https://www.radio-browser.info) for stations by name:
-
-```
-You:  !rbquery soma
-Bot:  Radio-Browser results:
-      | rbplay ID                            | Station Name          | Genre       | Codec/Bitrate | Country |
-      | ------------------------------------ | --------------------- | ----------- | ------------- | ------- |
-      | 9cf19f37-35f5-11e8-a303-52543be04c81 | SomaFM: Groove Salad  | ambient     | MP3/128       | US      |
-      | 6bc2f454-f66c-11e8-b42b-52543be04c81 | SomaFM: Lush          | dream pop   | MP3/128       | US      |
-      | ...
-
-You:  !rbplay 9cf19f37-35f5-11e8-a303-52543be04c81
-Bot:  Now playing: [Radio] SomaFM: Groove Salad
-```
-
-### Volume
-
-```
-You:  !volume        → Bot: Volume: 80%
-You:  !volume 60     → Bot: Volume set to 60%
-You:  !volume 0      → Bot: Volume set to 0% (muted)
-```
-
-Volume is a percentage of `max_volume`. Setting it above 100 is not allowed.
-
-### Navigation
-
-| Command   | Description                       |
-|-----------|-----------------------------------|
-| `!joinme` | Bot moves to your current channel |
-| `!help`   | List all available commands       |
-
-### Admin commands
-
-These require your Mumble username to be in `config.Bot.Admin`.
-
-| Command | Description                 |
-|---------|-----------------------------|
-| `!kill` | Disconnect the bot and exit |
-
-## Diverging from botamusique
-
-gotamusique is a clean rewrite, not a drop-in replacement. If you are migrating an
-existing `configuration.ini` from the original Python bot, note the following intentional
-differences.
-
-### Changed command keys (`[commands]`)
-
-| botamusique key  | gotamusique key   | Reason                                                                                                                         |
-|------------------|-------------------|--------------------------------------------------------------------------------------------------------------------------------|
-| `pause = pause`  | `mute = mute`     | Radio streams are live and cannot be seeked. `!mute` sets volume to 0 without killing ffmpeg, avoiding reconnection on unmute. |
-| `play = p, play` | `unmute = unmute` | Counterpart to `!mute`. `!play` no longer exists as a resume command; use `!np` to see what is currently playing.              |
-
-### Removed config keys (Phase 2 or permanently dropped)
-
-The following `[bot]` keys from botamusique are **not recognised** in Phase 1 and will be
-silently ignored if present in your config file. Most are planned for Phase 2; a few are
-permanently removed because they don't apply to a Go binary. (`music_folder`,
-`max_track_duration` and `max_track_playlist` were in this list but are now implemented — see
-`[files]` and `[bot]` above.)
-
-| Key                                                      | Status   | Notes                                                |
-|----------------------------------------------------------|----------|------------------------------------------------------|
-| `allow_private_message`                                  | deferred | Private messages are always ignored in Phase 1       |
-| `allow_other_channel_message`                            | deferred | Phase 2                                              |
-| `auto_check_update`                                      | removed  | No update mechanism; use the GitHub release workflow |
-| `clear_when_stop_in_oneshot`                             | deferred | Phase 2                                              |
-| `database_path`                                          | deferred | Phase 2 (settings DB, 3-10); `music_database_path` is implemented |
-| `delete_allowed`                                         | deferred | Phase 2                                              |
-| `download_attempts`                                      | deferred | Phase 2 (yt-dlp)                                     |
-| `ducking` / `ducking_threshold` / `ducking_volume`       | deferred | Phase 2                                              |
-| `language`                                               | deferred | Hardcoded English in Phase 1                         |
-| `pip3_path` / `target_version`                           | removed  | Not applicable to a Go binary                        |
-| `save_playlist` / `save_music_library`                   | deferred | Phase 2                                              |
-| `tmp_folder` / `tmp_folder_max_size`                     | deferred | Phase 2 (yt-dlp downloads)                           |
-| `when_nobody_in_channel`                                 | deferred | Phase 2                                              |
-
-The entire `[webinterface]` and `[youtube_dl]` sections are Phase 2 and ignored for now.
-
-### New keys (not in botamusique)
-
-| Key               | Section    | Description                                                                                                |
-|-------------------|------------|------------------------------------------------------------------------------------------------------------|
-| `tls_skip_verify` | `[server]` | Skip TLS certificate verification (default `True`). Many self-hosted Murmur servers use self-signed certs. |
-
-## Debug options
-
-```ini
-[debug]
-ffmpeg = True  # log ffmpeg stderr at debug level
-mumble_connection = True  # verbose gumble connection logging
-```
-
-## Build from source
-
-```sh
-git clone https://github.com/konradk/gotamusique
+git clone https://github.com/creadicted/gotamusique
 cd gotamusique
-make build   # produces bin/gotamusique
-make test    # run all tests
+make build         # produces bin/gotamusique
+make test          # run all tests
+make docker-build  # docker build -t gotamusique .
 ```
 
-## Publishing a versioned release
+Documentation lives in [`docs/`](docs/) and is built with [MkDocs Material](https://squidfunk.github.io/mkdocs-material/):
+
+```sh
+uvx --with-requirements docs/requirements.txt mkdocs serve   # live preview at http://127.0.0.1:8000
+```
+
+### Publishing a versioned release
 
 1. Bump the version constant in `cmd/gotamusique/main.go`.
 2. Commit, push, then tag:
@@ -380,7 +74,7 @@ make test    # run all tests
 
 CI builds the binaries and publishes a GitHub release automatically.
 
-## Project structure
+### Project structure
 
 ```
 cmd/gotamusique/    main entrypoint
@@ -389,13 +83,14 @@ internal/
   bot/              Bot struct, connect/reconnect loop, graceful shutdown
   audio/            ffmpeg subprocess, PCM pipeline, volume, fade; MediaItem interface
   radio/            RadioItem, RadioBrowser (radio-browser.info client)
-  queue/            thread-safe play queue  [milestone 1-06]
-  command/          dispatcher and chat command handlers  [milestone 1-07]
+  queue/            thread-safe play queue
+  command/          dispatcher and chat command handlers
+docs/               MkDocs documentation site
 tasks/              milestone specs (see tasks/README.md)
 ref/                original Python bot Dockerfiles (reference only, do not modify)
 ```
 
 ## Roadmap
 
-See [`tasks/README.md`](tasks/README.md). Phase 1 delivers a deployable radio bot (milestones 1-01 through 1-09).
-Phase 2 adds local file playback, yt-dlp, a web UI, and full parity with the original Python bot.
+See [`tasks/README.md`](tasks/README.md). Phase 1 delivers a deployable radio bot; Phase 2 adds local file playback,
+yt-dlp, a web UI, and full parity with the original Python bot.
