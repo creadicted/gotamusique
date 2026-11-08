@@ -6,3 +6,5 @@ bin/
 configuration.ini
 ref
 data/
+site/
+.venv/
