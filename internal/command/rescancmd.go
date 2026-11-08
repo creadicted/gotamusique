@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/konradk/gotamusique/internal/library"
-	"layeh.com/gumble/gumble"
 )
 
 // scanWG tracks in-flight scans; tests wait on it.
@@ -24,14 +23,14 @@ var rescanTimeout = 2 * time.Hour
 //
 // Like !url it replies immediately and runs in a goroutine so a long scan never
 // blocks gumble's event goroutine.
-func handleRescan(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
+func handleRescan(bot BotAPI, c *Ctx, cmd, arg string) {
 	cfg := bot.Config()
 	if !bot.HasLibrary() {
-		reply(cfg, msg, "library unavailable (set <code>[files] music_folder</code>)", "library unavailable (set [files] music_folder)")
+		reply(cfg, c, "library unavailable (set <code>[files] music_folder</code>)", "library unavailable (set [files] music_folder)")
 		return
 	}
 	force := strings.EqualFold(strings.TrimSpace(arg), "force")
-	sendToChannel(msg, "Scanning…")
+	c.Send("Scanning…")
 	scanWG.Add(1)
 	go func() {
 		defer scanWG.Done()
@@ -40,10 +39,10 @@ func handleRescan(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg str
 		summary, err := bot.Rescan(ctx, force)
 		if err != nil {
 			text := libraryErrorText(err)
-			reply(cfg, msg, esc(text), text)
+			reply(cfg, c, esc(text), text)
 			return
 		}
-		reply(cfg, msg, "Done: "+esc(summary), "Done: "+summary)
+		reply(cfg, c, "Done: "+esc(summary), "Done: "+summary)
 	}()
 }
 

@@ -80,7 +80,7 @@ type FileLookup struct {
 }
 
 // HandlerFunc is the signature every command handler must implement.
-type HandlerFunc func(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg string)
+type HandlerFunc func(bot BotAPI, c *Ctx, cmd, arg string)
 
 type entry struct {
 	fn          HandlerFunc
@@ -133,8 +133,12 @@ func (d *Dispatcher) Dispatch(bot BotAPI, msg *gumble.TextMessage) {
 	if len(msg.Channels) == 0 {
 		return
 	}
+	d.Run(bot, chatCtx(msg), stripHTML(msg.Message))
+}
 
-	raw := stripHTML(msg.Message)
+// Run parses raw (a full command line such as "!volume 40") and calls the matching
+// handler with c, or replies with an error through c.
+func (d *Dispatcher) Run(bot BotAPI, c *Ctx, raw string) {
 	m := d.cmdRE.FindStringSubmatch(raw)
 	if m == nil {
 		return
@@ -150,15 +154,15 @@ func (d *Dispatcher) Dispatch(bot BotAPI, msg *gumble.TextMessage) {
 
 	cfg := bot.Config()
 	sym := symbol(cfg)
-	user := msg.Sender.Name
+	user := c.User
 
 	// 1. Exact match.
 	if e, ok := d.handlers[cmd]; ok {
 		if e.adminOnly && !isAdmin(cfg, user) {
-			sendToChannel(msg, "Permission denied: admin only.")
+			c.Send("Permission denied: admin only.")
 			return
 		}
-		e.fn(bot, user, msg, cmd, arg)
+		e.fn(bot, c, cmd, arg)
 		return
 	}
 
@@ -172,26 +176,26 @@ func (d *Dispatcher) Dispatch(bot BotAPI, msg *gumble.TextMessage) {
 
 	switch len(candidates) {
 	case 0:
-		sendToChannel(msg, "Unknown command \""+cmd+"\". Use "+sym+"help for a list of commands.")
+		c.Send("Unknown command \"" + cmd + "\". Use " + sym + "help for a list of commands.")
 	case 1:
 		e := d.handlers[candidates[0]]
 		if e.adminOnly && !isAdmin(cfg, user) {
-			sendToChannel(msg, "Permission denied: admin only.")
+			c.Send("Permission denied: admin only.")
 			return
 		}
-		e.fn(bot, user, msg, candidates[0], arg)
+		e.fn(bot, c, candidates[0], arg)
 	default:
 		sort.Strings(candidates)
-		sendToChannel(msg, "Did you mean: "+strings.Join(candidates, ", ")+"?")
+		c.Send("Did you mean: " + strings.Join(candidates, ", ") + "?")
 	}
 }
 
 // HelpHandler returns a HandlerFunc that lists all registered commands. It closes
 // over d so that commands registered after the call are also shown.
 func (d *Dispatcher) HelpHandler() HandlerFunc {
-	return func(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
+	return func(bot BotAPI, c *Ctx, cmd, arg string) {
 		cfg := bot.Config()
-		sendToChannel(msg, d.buildHelp(symbol(cfg), cfg.Bot.FormattedReplies))
+		c.Send(d.buildHelp(symbol(cfg), cfg.Bot.FormattedReplies))
 	}
 }
 
@@ -218,17 +222,6 @@ func (d *Dispatcher) buildHelp(sym string, formatted bool) string {
 		return "<pre>" + html.EscapeString(text) + "</pre>"
 	}
 	return text
-}
-
-// sendToChannel sends text to the first channel in msg.Channels.
-// It recovers silently from gumble panics that can occur when the client
-// disconnects between message receipt and the reply send.
-func sendToChannel(msg *gumble.TextMessage, text string) {
-	if len(msg.Channels) == 0 {
-		return
-	}
-	defer func() { recover() }() //nolint:errcheck
-	msg.Channels[0].Send(text, false)
 }
 
 func isAdmin(cfg *config.Config, user string) bool {

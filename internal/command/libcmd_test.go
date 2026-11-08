@@ -252,10 +252,10 @@ func TestShortlist_PerChannel(t *testing.T) {
 	bot.libTracks = tracks3()
 	msgA := makeMsg("!list")
 	msgA.Channels[0].ID = 1
-	makeListFileHandler(sl)(bot, "u", msgA, "list", "")
+	makeListFileHandler(sl)(bot, chatCtx(msgA), "list", "")
 	msgB := makeMsg("!sl 1")
 	msgB.Channels[0].ID = 2
-	makeShortlistHandler(sl)(bot, "u", msgB, "sl", "1")
+	makeShortlistHandler(sl)(bot, chatCtx(msgB), "sl", "1")
 	if len(bot.enqueueCalls) != 0 {
 		t.Error("channel 2 must not see channel 1's list")
 	}

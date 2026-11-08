@@ -6,18 +6,17 @@ import (
 
 	"github.com/konradk/gotamusique/internal/library"
 	"github.com/konradk/gotamusique/internal/queue"
-	"layeh.com/gumble/gumble"
 )
 
 // handleMode: no argument shows the current mode; one-shot|repeat|random sets it.
 // "autoplay" is recognised but refused until the music library exists.
-func handleMode(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
+func handleMode(bot BotAPI, c *Ctx, cmd, arg string) {
 	cfg := bot.Config()
 	arg = strings.TrimSpace(arg)
 
 	if arg == "" {
 		cur := bot.PlaybackMode()
-		reply(cfg, msg,
+		reply(cfg, c,
 			"Playback mode: <b>"+esc(cur)+"</b> (available: "+esc(queue.ModeList())+")",
 			"Playback mode: "+cur+" (available: "+queue.ModeList()+")")
 		return
@@ -26,7 +25,7 @@ func handleMode(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg strin
 	m, err := queue.ParseMode(arg)
 	if err != nil {
 		text := "Unknown mode. Usage: " + symbol(cfg) + cmd + " [" + strings.ReplaceAll(queue.ModeList(), ", ", "|") + "]"
-		reply(cfg, msg, esc(text), text)
+		reply(cfg, c, esc(text), text)
 		return
 	}
 	if err := bot.SetPlaybackMode(string(m)); err != nil {
@@ -34,8 +33,8 @@ func handleMode(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg strin
 		if errors.Is(err, library.ErrUnavailable) || errors.Is(err, library.ErrEmpty) {
 			text = libraryErrorText(err)
 		}
-		reply(cfg, msg, esc(text), text)
+		reply(cfg, c, esc(text), text)
 		return
 	}
-	reply(cfg, msg, "Playback mode set to <b>"+esc(string(m))+"</b>", "Playback mode set to "+string(m))
+	reply(cfg, c, "Playback mode set to <b>"+esc(string(m))+"</b>", "Playback mode set to "+string(m))
 }
