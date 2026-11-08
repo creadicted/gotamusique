@@ -1,6 +1,6 @@
 BIN := bin/gotamusique
 
-.PHONY: build test run dev clean fmt lint docs tag
+.PHONY: build test run dev clean fmt lint docs docs-build tag
 
 build:
 	CGO_CFLAGS="-w -O2" go build -o $(BIN) ./cmd/gotamusique
@@ -23,8 +23,13 @@ fmt:
 lint:
 	go vet ./...
 
+# Live preview of the documentation site at http://127.0.0.1:8000 (needs uv)
 docs:
-	go doc ./...
+	uvx --with-requirements docs/requirements.txt mkdocs serve
+
+# Same strict build CI runs; output goes to site/
+docs-build:
+	uvx --with-requirements docs/requirements.txt mkdocs build --strict
 
 # Usage: make tag VERSION=v0.2.0-beta.1   (pre-release)
 #        make tag VERSION=v0.2.0           (full release)
