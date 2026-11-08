@@ -13,7 +13,7 @@ import (
 	_ "layeh.com/gumble/opus" // registers Opus encoder/decoder with gumble
 )
 
-const version = "0.1.9"
+const version = "0.5.0"
 
 func main() {
 	os.Exit(run())
