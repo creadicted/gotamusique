@@ -178,3 +178,37 @@ func TestRepeat(t *testing.T) {
 	bot.currentItem = nil
 	callHandler(handleRepeat, bot, "2") // nothing playing: must not panic
 }
+
+func TestShortlistPaging_ShowsOtherPagesWithoutQueueing(t *testing.T) {
+	names := make([]string, 300)
+	for i := range names {
+		names[i] = fmt.Sprintf("dir/a-very-long-track-name-to-fill-the-pages-%04d.mp3", i)
+	}
+	bot := libFileBot(t, names...)
+	bot.lookup = FileLookup{Kind: LookupPartial, Tracks: tr(names...)}
+	sl := newShortlist()
+	callHandler(makeFileHandler(sl), bot, "track")
+	if len(sl.get(0)) != 300 {
+		t.Fatalf("shortlist holds %d, want all 300", len(sl.get(0)))
+	}
+	for _, arg := range []string{"-p 2", "-p 3", "-p 99", "-p", "-p 0"} {
+		callHandler(makeShortlistHandler(sl), bot, arg)
+	}
+	if len(bot.enqueueCalls) != 0 {
+		t.Errorf("paging queued %q", enqueuedPaths(bot))
+	}
+	// A number from a later page still queues the right track.
+	callHandler(makeShortlistHandler(sl), bot, "300")
+	if enqueuedPaths(bot) != names[299] {
+		t.Errorf("queued %q, want %q", enqueuedPaths(bot), names[299])
+	}
+}
+
+func TestFile_PathContainingPFlagStaysLiteral(t *testing.T) {
+	bot := libFileBot(t, "a/x -p 2.mp3")
+	bot.lookup = FileLookup{Kind: LookupExact, Tracks: tr("a/x -p 2.mp3")}
+	callHandler(makeFileHandler(newShortlist()), bot, "a/x -p 2.mp3")
+	if bot.lookupArg != "a/x -p 2.mp3" || enqueuedPaths(bot) != "a/x -p 2.mp3" {
+		t.Errorf("lookup %q queued %q; !file must not treat -p as a flag", bot.lookupArg, enqueuedPaths(bot))
+	}
+}

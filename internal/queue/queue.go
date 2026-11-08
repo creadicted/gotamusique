@@ -305,6 +305,20 @@ func (q *Queue) JumpTo(index int) error {
 	return nil
 }
 
+// JumpToLast makes the final item current under one lock and returns its index, so a
+// concurrent enqueue cannot change which item is last between the length check and the
+// jump. False when the queue is empty.
+func (q *Queue) JumpToLast() (int, bool) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if len(q.items) == 0 {
+		return 0, false
+	}
+	q.version++
+	q.currentIndex = len(q.items) - 1
+	return q.currentIndex, true
+}
+
 // Reset sets currentIndex to 0 without clearing the items.
 func (q *Queue) Reset() {
 	q.mu.Lock()

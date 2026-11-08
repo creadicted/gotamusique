@@ -973,3 +973,49 @@ func TestRepeatCurrentAndRandomize(t *testing.T) {
 		t.Error("shuffle must keep every item")
 	}
 }
+
+func TestLookupFile_ExactWinsOverFolderAndPartial(t *testing.T) {
+	lb := newLibBot(t, 0, nil)
+	for _, p := range []string{"a.mp3", "ba.mp3", "a.mp3/odd.mp3"} {
+		lb.addTrack(t, p, false)
+	}
+	got, err := lb.LookupFile("a.mp3")
+	if err != nil || got.Kind != command.LookupExact || strings.Join(trackPaths(got.Tracks), ",") != "a.mp3" {
+		t.Errorf("got kind %v %v err %v, want exact a.mp3", got.Kind, trackPaths(got.Tracks), err)
+	}
+	// An exact id match that is not a library file row is ignored.
+	lb.libraryRef().db.Insert(database.MusicRecord{ID: file.IDFromPath("http://x"), Type: "url", Path: "http://x", Title: "u"})
+	got, _ = lb.LookupFile("http://x")
+	if got.Kind == command.LookupExact {
+		t.Error("a url row must not satisfy !file")
+	}
+}
+
+func TestLast_ConcurrentEnqueueKeepsIndexValid(t *testing.T) {
+	b, _ := New(defaultCfg())
+	b.queue.SetMode(queue.ModeRandom)
+	b.queue.Append(file.New("seed.mp3", "/m"))
+	stop := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := 0; ; i++ {
+			select {
+			case <-stop:
+				return
+			default:
+				b.queue.Append(file.New(fmt.Sprintf("t%d.mp3", i), "/m"))
+			}
+		}
+	}()
+	for i := 0; i < 500; i++ {
+		if !b.Last() {
+			t.Fatal("queue is not empty")
+		}
+		if idx := b.queue.Index(); idx < 0 || idx >= b.queue.Len() {
+			t.Fatalf("index %d out of range %d", idx, b.queue.Len())
+		}
+	}
+	close(stop)
+	<-done
+}

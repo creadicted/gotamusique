@@ -18,6 +18,13 @@ func (b *Bot) Play(index int) error {
 	if err := b.queue.JumpTo(index); err != nil {
 		return fmt.Errorf("play: %w", err)
 	}
+	b.startCurrent()
+	return nil
+}
+
+// startCurrent interrupts the running track and wakes the loop to start the queue's
+// current item. Callers have already moved the queue position.
+func (b *Bot) startCurrent() {
 	b.invalidatePlayback()
 	// Increment version so the previous track's onTrackEnd callback does not
 	// also advance the queue after we've already set the desired index.
@@ -28,7 +35,6 @@ func (b *Bot) Play(index int) error {
 	}
 	b.mu.Unlock()
 	b.wakeLoop()
-	return nil
 }
 
 // Mute sets volume to 0 via VolumeHelper without killing ffmpeg.
@@ -182,8 +188,11 @@ func (b *Bot) enterAutoplay() error {
 
 // Last jumps to the final queue item and plays it. False when the queue is empty.
 func (b *Bot) Last() bool {
-	n := b.queue.Len()
-	return n > 0 && b.Play(n-1) == nil
+	if _, ok := b.queue.JumpToLast(); !ok {
+		return false
+	}
+	b.startCurrent()
+	return true
 }
 
 // RandomizeQueue shuffles the upcoming items; the current track is not interrupted.

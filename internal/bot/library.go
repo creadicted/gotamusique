@@ -192,19 +192,23 @@ func (b *Bot) LookupFile(arg string) (command.FileLookup, error) {
 	if lib == nil {
 		return command.FileLookup{}, library.ErrUnavailable
 	}
+	arg = strings.TrimSpace(arg)
+	// An exact path is one primary-key lookup; only a miss loads the library.
+	if r, err := lib.db.QueryByID(file.IDFromPath(arg)); err != nil {
+		return command.FileLookup{}, fmt.Errorf("reading library: %w", err)
+	} else if r != nil && r.Type == library.RecordType && r.Path == arg {
+		return command.FileLookup{Kind: command.LookupExact, Tracks: []command.LibraryTrack{toLibraryTrack(*r)}}, nil
+	}
 	recs, err := lib.db.Query((&database.Condition{}).
 		AndEqual("type", library.RecordType, true).OrderBy("path", false))
 	if err != nil {
 		return command.FileLookup{}, fmt.Errorf("reading library: %w", err)
 	}
-	arg = strings.TrimSpace(arg)
 	dir := strings.TrimSuffix(arg, "/") + "/"
 	lower := strings.ToLower(arg)
 	var folder, partial []command.LibraryTrack
 	for _, r := range recs {
 		switch {
-		case r.Path == arg:
-			return command.FileLookup{Kind: command.LookupExact, Tracks: []command.LibraryTrack{toLibraryTrack(r)}}, nil
 		case strings.HasPrefix(r.Path, dir):
 			folder = append(folder, toLibraryTrack(r))
 		case strings.Contains(strings.ToLower(r.Path), lower):

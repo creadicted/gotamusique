@@ -620,3 +620,53 @@ func TestRepeatCurrent_NothingCurrentOrBadCount(t *testing.T) {
 		t.Error("past-end queue has no current item")
 	}
 }
+
+func TestJumpToLast(t *testing.T) {
+	q := NewQueue()
+	if _, ok := q.JumpToLast(); ok {
+		t.Error("empty queue has no last item")
+	}
+	q.Append(item("a"))
+	q.Append(item("b"))
+	q.Append(item("c"))
+	v := q.Version()
+	idx, ok := q.JumpToLast()
+	if !ok || idx != 2 || q.Index() != 2 || q.Version() == v {
+		t.Errorf("idx=%d ok=%v index=%d, want 2 true 2 and a version bump", idx, ok, q.Index())
+	}
+}
+
+// A concurrent enqueue must never make JumpToLast land on a different item than the
+// one that was last at the moment of the jump: the returned index is always the last
+// position at that instant, so Current() equals Items()[idx] taken in the same call.
+func TestJumpToLast_ConcurrentAppend(t *testing.T) {
+	q := NewQueue()
+	q.SetMode(ModeRandom) // random mode inserts before the end, the case that raced
+	for i := 0; i < 5; i++ {
+		q.Append(item(fmt.Sprint(i)))
+	}
+	stop := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := 5; ; i++ {
+			select {
+			case <-stop:
+				return
+			default:
+				q.Append(item(fmt.Sprint(i)))
+			}
+		}
+	}()
+	for i := 0; i < 2000; i++ {
+		idx, ok := q.JumpToLast()
+		if !ok {
+			t.Fatal("queue is not empty")
+		}
+		if idx < 0 || idx >= q.Len() {
+			t.Fatalf("index %d out of range %d", idx, q.Len())
+		}
+	}
+	close(stop)
+	<-done
+}

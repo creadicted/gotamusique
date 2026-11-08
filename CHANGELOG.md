@@ -18,6 +18,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   interrupting the current track, and `!repeat [n]` plays the current item `n` more times
   (1-200). Bulk commands (`!file` folder, `!filematch`, `!tag`, `!shortlist *`) queue at most
   200 tracks at once and say so when more matched.
+  When `!file` lists several partial matches, `!shortlist -p <page>` shows the other pages.
 - **`!listfile` (alias `!list`) `[regex] [-p page]` and `!search <keywords> [-p page]`** — browse the scanned
   music library from chat. `!listfile` lists tracks ordered by path, optionally filtered by a
   case-insensitive regex on path and title; `!search` returns tracks matching every keyword

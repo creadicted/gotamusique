@@ -230,8 +230,12 @@ func sendTrackPage(cfg *config.Config, msg *gumble.TextMessage, sl *shortlist, t
 		return
 	}
 	sl.set(channelKey(msg), tracks)
-	text := fmt.Sprintf("%d tracks, page %d/%d (queue with %sshortlist <n ...|*>):\n%s",
-		len(tracks), page, len(pages), symbol(cfg), strings.Join(pages[page-1], "\n"))
+	hint := fmt.Sprintf("queue with %sshortlist <n ...|*>", symbol(cfg))
+	if len(pages) > 1 {
+		hint += fmt.Sprintf(", other pages with %sshortlist -p <page>", symbol(cfg))
+	}
+	text := fmt.Sprintf("%d tracks, page %d/%d (%s):\n%s",
+		len(tracks), page, len(pages), hint, strings.Join(pages[page-1], "\n"))
 	reply(cfg, msg, "<pre>"+esc(text)+"</pre>", text)
 }
 
@@ -309,16 +313,22 @@ func enqueueTracks(bot BotAPI, cfg *config.Config, msg *gumble.TextMessage, trac
 func makeShortlistHandler(sl *shortlist) HandlerFunc {
 	return func(bot BotAPI, user string, msg *gumble.TextMessage, cmd, arg string) {
 		cfg := bot.Config()
-		usage := "Usage: " + symbol(cfg) + cmd + " <n> [n ...] | *"
+		usage := "Usage: " + symbol(cfg) + cmd + " <n> [n ...] | * | -p <page>"
+		rest, page, flagOK := parsePageFlag(arg)
 		fields := strings.Fields(arg)
-		if len(fields) == 0 {
+		if len(fields) == 0 || (!flagOK && rest == "") {
 			sendToChannel(msg, usage)
 			return
 		}
 		list := sl.get(channelKey(msg))
 		if len(list) == 0 {
-			text := "No list to pick from. Use " + symbol(cfg) + "listfile, " + symbol(cfg) + "search or " + symbol(cfg) + "findtagged first."
+			text := "No list to pick from. Use " + symbol(cfg) + "listfile, " + symbol(cfg) + "search, " + symbol(cfg) + "findtagged or " + symbol(cfg) + "file first."
 			reply(cfg, msg, esc(text), text)
+			return
+		}
+		if rest == "" && flagOK && pageFlagRE.MatchString(arg) {
+			// "!shortlist -p N": show another page of the saved list, queue nothing.
+			sendTrackPage(cfg, msg, sl, list, page, "", cmd)
 			return
 		}
 		var picked []LibraryTrack
