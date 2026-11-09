@@ -1,8 +1,8 @@
 # 3-06 — Full Command Set
 
-**Status:** in progress — `!listfile`, `!search`, tags, `!shortlist`, `!file` folders, `!filematch`, `!last`, `!random` and `!repeat` shipped; cache, `!delete`, URL search, i18n remain; `!version` shipped; the auto "recent added" tag is deferred  
+**Status:** done — `!listfile`, `!search`, tags, `!shortlist`, `!file` folders, `!filematch`, `!last`, `!random`, `!repeat` and `!version` shipped. What was left (`!remove`, `!ysearch`/`!yplay`, `!delete`, `!update`, item cache, i18n, the "recent added" tag) moved to [3-12](12-command-leftovers.md).
 **Depends on:** 3-02, 3-03, 3-04, 3-05  
-**Unlocks:** nothing (feature-complete bot)
+**Unlocks:** 3-12 (parked leftovers)
 
 ## Objective
 
