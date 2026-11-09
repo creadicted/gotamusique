@@ -7,6 +7,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+---
+
+## [0.6.2] — 2026-11-09
+
 ### Added
 
 - **Radio track announcements** — when a station sends ICY metadata, the bot posts
