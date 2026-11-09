@@ -181,3 +181,23 @@ func TestLoad_AutoPauseDefaultsAndOverride(t *testing.T) {
 		t.Errorf("pause alias = %v", got)
 	}
 }
+
+func TestLoad_AnnounceRadioTracksDefaultAndOverride(t *testing.T) {
+	cfg, err := Load("testdata/valid.ini")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.Bot.AnnounceRadioTracks {
+		t.Error("announce_radio_tracks default = false, want true")
+	}
+
+	p := filepath.Join(t.TempDir(), "c.ini")
+	os.WriteFile(p, []byte("[bot]\nannounce_radio_tracks = False\n"), 0o644)
+	cfg, err = Load(p)
+	if err != nil {
+		t.Fatalf("key rejected: %v", err)
+	}
+	if cfg.Bot.AnnounceRadioTracks {
+		t.Error("override not applied: announce_radio_tracks still true")
+	}
+}

@@ -97,6 +97,7 @@ var sectionAllowlists = map[string]map[string]bool{
 		"bandwidth": true, "admin": true, "comment": true,
 		"avatar": true, "stereo": true, "logfile": true,
 		"announce_current_music":   true,
+		"announce_radio_tracks":    true,
 		"formatted_replies":        true,
 		"max_track_duration":       true,
 		"max_track_playlist":       true,

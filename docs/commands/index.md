@@ -108,6 +108,26 @@ You:  !rbplay 9cf19f37-35f5-11e8-a303-52543be04c81
 Bot:  Now playing: [Radio] SomaFM: Groove Salad
 ```
 
+### Song announcements
+
+On a radio stream the bot announces each new song as the station switches to it:
+
+```
+Bot:  Now playing: [Radio] SomaFM: Groove Salad
+Bot:  Now playing: Boards of Canada - Dayvan Cowboy
+      ... a few minutes later ...
+Bot:  Now playing: Tycho - Awake
+```
+
+- The song comes from the stream's ICY metadata. The bot opens a second, light connection to the
+  station to read it, so the audio is not affected.
+- A station that sends no metadata stays silent after the first message. HLS (`.m3u8`) streams are
+  not covered.
+- The same title is never announced twice in a row, and the announcements stop when the radio
+  stops, is skipped or paused.
+- Turn it off with `announce_radio_tracks = False` (see [Configuration](../configuration/index.md)).
+  It is separate from `announce_current_music`, which controls the message when a track starts.
+
 ## Library
 
 See [Music library](../configuration/library.md) for setup and the scan.
