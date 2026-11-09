@@ -38,6 +38,7 @@ Missing keys fall back to the embedded defaults.
 | `autoplay_length`          | `5`               | Tracks added per autoplay refill |
 | `auto_pause_when_alone`    | `False`           | Pause when the last other user leaves the bot's channel. See [Auto-pause](../commands/index.md#auto-pause) |
 | `auto_resume_on_join`      | `True`            | Resume when someone is back, after an automatic pause only (never after `!pause`) |
+| `last_played_path`         | `last_played.json` | File remembering the last played item, so `!resume` works after a restart. Empty = off. In Docker put it on the mounted volume, e.g. `data/last_played.json`. See [After a restart](../commands/index.md#after-a-restart) |
 
 ## `[youtube_dl]`
 

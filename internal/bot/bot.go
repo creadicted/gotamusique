@@ -28,12 +28,15 @@ type Bot struct {
 	prevVol    float64 // volume saved before Mute()
 
 	queue         *queue.Queue
-	wakeCh        chan struct{} // buffered(1): non-blocking wake for the loop goroutine
-	launchVersion atomic.Int64  // incremented by Play() to suppress onTrackEnd's queue.Next()
-	playEpoch     atomic.Int64  // incremented by every playback control; invalidates in-flight resolves
-	resolveCancel func()        // cancels the in-flight Resolver call (guarded by mu)
-	fails         failGuard     // distinct entries that failed since the last good track
-	pauseState    atomic.Int32  // pauseNone / pauseManual / pauseAuto; see pause.go
+	wakeCh        chan struct{}   // buffered(1): non-blocking wake for the loop goroutine
+	launchVersion atomic.Int64    // incremented by Play() to suppress onTrackEnd's queue.Next()
+	playEpoch     atomic.Int64    // incremented by every playback control; invalidates in-flight resolves
+	resolveCancel func()          // cancels the in-flight Resolver call (guarded by mu)
+	fails         failGuard       // distinct entries that failed since the last good track
+	pauseState    atomic.Int32    // pauseNone / pauseManual / pauseAuto; see pause.go
+	resume        resumePoint     // where a paused local file stopped, for Resume
+	nowPlaying    audio.MediaItem // item handed to the pipeline last (guarded by mu)
+	last          *lastPlayed     // item remembered from the previous run; consumed by RestoreLast (guarded by mu)
 
 	// Music library (nil when music_folder is unset or the database failed to open).
 	libMu          sync.Mutex
@@ -75,6 +78,7 @@ func New(cfg *config.Config) (*Bot, error) {
 		queue:      queue.NewQueue(),
 		wakeCh:     make(chan struct{}, 1),
 	}
+	b.last = loadLastPlayed(cfg.Bot.LastPlayedPath, log)
 	b.lib = openLibrary(b)
 	b.queue.SetMode(startupMode(cfg, log, b.lib != nil))
 	b.autoplayActive.Store(b.queue.Mode() == queue.ModeAutoplay)
@@ -90,6 +94,7 @@ func (b *Bot) Queue() *queue.Queue { return b.queue }
 // Shutdown stops the audio pipeline (if running) and disconnects from Mumble.
 // Safe to call from any goroutine.
 func (b *Bot) Shutdown() {
+	b.saveOnShutdown()
 	b.lifeCancel()
 	defer b.closeLibrary()
 	b.mu.Lock()

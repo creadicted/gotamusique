@@ -1,6 +1,9 @@
 package audio
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // MediaItem is implemented by any type the audio pipeline can stream.
 // RadioItem satisfies this interface; Phase 2 adds FileItem and URLItem.
@@ -27,6 +30,16 @@ type StreamOptions struct {
 	Headers map[string]string
 	// Cookies are Set-Cookie-formatted lines scoped to the stream URL.
 	Cookies []string
+	// StartAt starts the stream this far into the item (ffmpeg -ss before -i).
+	// Only meaningful for Seekable items; zero starts at the beginning.
+	StartAt time.Duration
+}
+
+// Seekable is implemented by items that can be restarted part-way in, such as a
+// local audio file. Live streams cannot: the source keeps broadcasting, so there
+// is no earlier position to return to.
+type Seekable interface {
+	CanSeek() bool
 }
 
 // StreamConfigurer is optionally implemented by items that need non-default

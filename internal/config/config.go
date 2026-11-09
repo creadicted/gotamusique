@@ -53,6 +53,7 @@ type BotConfig struct {
 	AutoplayLength       int    // tracks added per autoplay refill
 	AutoPauseWhenAlone   bool   // pause when the last other user leaves the bot's channel
 	AutoResumeOnJoin     bool   // resume an auto-pause when someone is back (never a manual !pause)
+	LastPlayedPath       string // file remembering the last item for !resume after a restart; empty = off
 }
 
 // YoutubeDLConfig holds the [youtube_dl] section (yt-dlp settings).
@@ -104,6 +105,7 @@ var sectionAllowlists = map[string]map[string]bool{
 		"autoplay_length":          true,
 		"auto_pause_when_alone":    true,
 		"auto_resume_on_join":      true,
+		"last_played_path":         true,
 	},
 	"youtube_dl": {
 		"binary": true, "cookiefile": true,
@@ -212,6 +214,7 @@ func build(f *ini.File) (*Config, error) {
 			AutoplayLength:       b.Key("autoplay_length").MustInt(5),
 			AutoPauseWhenAlone:   b.Key("auto_pause_when_alone").MustBool(false),
 			AutoResumeOnJoin:     b.Key("auto_resume_on_join").MustBool(true),
+			LastPlayedPath:       b.Key("last_played_path").String(),
 		},
 		YoutubeDL: YoutubeDLConfig{
 			Binary:        yt.Key("binary").String(),

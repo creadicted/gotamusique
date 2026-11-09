@@ -24,13 +24,35 @@ when unambiguous: `!hel` runs `!help`. Aliases can be changed under `[commands]`
 ## Pause and resume
 
 `!pause` stops playback but leaves the queue where it is; `!stop` rewinds to the first item.
-`!resume` starts the current item again.
+`!resume` continues the current item.
 
-For a live radio or HLS stream, resuming **rejoins the live stream**: it kept broadcasting while
-you were paused, so you hear what is on air now, not where you left off. A paused bot runs no
-ffmpeg and downloads nothing.
+- **Local files** continue **from where you paused**. The bot announces it, for example
+  `Now playing: ... (resumed at 1:24)`. The position is the audio sent to Mumble, so it can be a
+  fraction of a second early, never late. It also applies to an auto-pause.
+- **Live radio and HLS streams** **rejoin the live stream**: it kept broadcasting while you were
+  paused, so you hear what is on air now. There is nothing to seek back to.
+- **yt-dlp tracks (`!url`, `!playlist`)** restart from the beginning. Seeking them is not supported yet.
 
-`!skip`, `!clear`, `!stop` and playing something new (for example `!radio`) end a pause.
+A paused bot runs no ffmpeg and downloads nothing.
+
+### After a restart
+
+The bot remembers the last item it played. When it is **not paused** and the queue is empty,
+`!resume` plays that item again: a local file from where it stopped, a radio or HLS stream live,
+and a yt-dlp track from the start.
+
+```
+You:  !resume
+Bot:  Resuming: Band - Song (at 1:24)
+```
+
+It works once per start and only on an empty queue, so it never replaces what you queued. If the
+file was deleted or `music_folder` is not set, the reply is `Not paused.` The position is saved when
+you pause, when the bot shuts down cleanly, and when a track starts. After a crash you get the item
+back, but from the position at which it started. Set `last_played_path =` (empty) to turn this off.
+
+`!skip`, `!clear`, `!stop` and playing something new (for example `!radio`) end a pause and forget
+the saved position.
 
 ### Auto-pause
 
