@@ -3,6 +3,7 @@ package bot
 import (
 	"context"
 	"errors"
+	"html"
 	"log/slog"
 	"time"
 
@@ -76,9 +77,16 @@ func (b *Bot) loop(ctx context.Context) {
 			b.mu.Lock()
 			b.nowPlaying = item // before Launch, so a pause right after still finds it
 			b.mu.Unlock()
+			watchCtx, stopWatch := context.WithCancel(ctx)
 			err = pipeline.Launch(item.StreamURL(), opts, func(endErr error) {
+				stopWatch()
 				b.onTrackEnd(item, snap, launchVer, endErr)
 			})
+			if err != nil {
+				stopWatch()
+			} else {
+				b.watchTracks(watchCtx, item)
+			}
 		}
 
 		if err != nil {
@@ -179,6 +187,28 @@ func (b *Bot) resolveItem(ctx context.Context, item audio.MediaItem, epoch int64
 		return err, true
 	}
 	return err, false
+}
+
+// watchTracks announces each new song of a live item that reports track changes
+// (radio ICY metadata). The watcher stops when ctx is cancelled, which happens
+// when the item stops playing.
+func (b *Bot) watchTracks(ctx context.Context, item audio.MediaItem) {
+	w, ok := item.(audio.TrackWatcher)
+	if !ok || !b.cfg.Bot.AnnounceRadioTracks {
+		return
+	}
+	go w.WatchTracks(ctx, func(title string) {
+		if ctx.Err() != nil {
+			return
+		}
+		b.sendChannelMessage(formatTrackAnnouncement(title))
+	})
+}
+
+// formatTrackAnnouncement returns the channel message for a new song on a
+// radio stream. The title comes from the station, so it is HTML-escaped.
+func formatTrackAnnouncement(title string) string {
+	return "Now playing: " + html.EscapeString(title)
 }
 
 // formatAnnouncement returns the channel message for a starting track.
