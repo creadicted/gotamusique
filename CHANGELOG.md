@@ -7,6 +7,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+---
+
+## [0.6.1] — 2026-11-09
+
 ### Fixed
 
 - **radio-browser.info servers are now discovered through DNS** (`all.api.radio-browser.info`),
