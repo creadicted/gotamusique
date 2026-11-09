@@ -44,6 +44,7 @@ type BotConfig struct {
 	Stereo               bool
 	Logfile              string
 	AnnounceCurrentMusic bool
+	AnnounceRadioTracks  bool // announce each new song on radio streams that send ICY metadata
 	FormattedReplies     bool
 	MaxTrackDuration     int    // minutes; 0 = no limit
 	MaxTrackPlaylist     int    // max entries added by the playlist command
@@ -205,6 +206,7 @@ func build(f *ini.File) (*Config, error) {
 			Stereo:               b.Key("stereo").MustBool(true),
 			Logfile:              b.Key("logfile").String(),
 			AnnounceCurrentMusic: b.Key("announce_current_music").MustBool(true),
+			AnnounceRadioTracks:  b.Key("announce_radio_tracks").MustBool(true),
 			FormattedReplies:     b.Key("formatted_replies").MustBool(true),
 			MaxTrackDuration:     b.Key("max_track_duration").MustInt(60),
 			MaxTrackPlaylist:     b.Key("max_track_playlist").MustInt(20),

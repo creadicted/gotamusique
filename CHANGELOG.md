@@ -7,6 +7,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Radio track announcements** — when a station sends ICY metadata, the bot posts
+  `Now playing: Artist - Title` each time the song changes. It opens a second light connection to
+  the stream for this. Stations without metadata stay silent, and HLS streams are not covered yet.
+  Turn it off with `announce_radio_tracks = False`.
+
 ---
 
 ## [0.6.1] — 2026-11-09

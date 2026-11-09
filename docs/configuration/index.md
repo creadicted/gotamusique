@@ -29,6 +29,7 @@ Missing keys fall back to the embedded defaults.
 | `bandwidth`                | `96000`           | Accepted (also as `--bandwidth`) but **not used yet** |
 | `stereo`                   | `True`            | Accepted but **not used yet**: audio is always sent as mono |
 | `announce_current_music`   | `True`            | Announce when a track starts |
+| `announce_radio_tracks`    | `True`            | On radio streams, announce each new song (`Now playing: Artist - Title`) when the station sends ICY metadata. Uses a second, light connection to the stream |
 | `logfile`                  | *(empty)*         | Log to this path instead of stderr |
 | `max_track_duration`       | `60`              | Max `!url` track length in minutes (`0` = no limit) |
 | `max_track_playlist`       | `20`              | Max tracks added by one `!playlist` |

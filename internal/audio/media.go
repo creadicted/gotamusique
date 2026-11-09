@@ -19,6 +19,14 @@ type Resolver interface {
 	Resolve(ctx context.Context) error
 }
 
+// TrackWatcher is optionally implemented by live items whose source announces
+// track changes while playing (e.g. ICY metadata on radio streams). WatchTracks
+// blocks, calling fn with each new title, until ctx is cancelled or the source
+// ends; the caller runs it in its own goroutine.
+type TrackWatcher interface {
+	WatchTracks(ctx context.Context, fn func(title string))
+}
+
 // StreamOptions tunes how ffmpeg opens an item's stream.
 type StreamOptions struct {
 	// Finite marks a bounded track that must end at EOF, so ffmpeg's
