@@ -1,7 +1,9 @@
 package radio
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -275,6 +277,74 @@ func TestMirrorFallback_noMirrors(t *testing.T) {
 	_, err := rb.Search("test", 10)
 	if err == nil {
 		t.Fatal("expected error when single target fails and no mirrors")
+	}
+}
+
+// --- DNS discovery ---
+
+func TestResolveMirrors(t *testing.T) {
+	hosts := func(context.Context, string) ([]string, error) {
+		return []string{"1.1.1.1", "2.2.2.2", "3.3.3.3", "4.4.4.4"}, nil
+	}
+	names := map[string][]string{
+		"1.1.1.1": {"de1.api.radio-browser.info."},
+		"2.2.2.2": {"evil.example.com."},           // wrong domain: ignored
+		"3.3.3.3": {"de1.api.radio-browser.info."}, // duplicate: ignored
+		"4.4.4.4": {"fi1.api.radio-browser.info."},
+	}
+	addr := func(_ context.Context, a string) ([]string, error) { return names[a], nil }
+
+	got := resolveMirrors(context.Background(), hosts, addr)
+	if len(got) != 2 {
+		t.Fatalf("got %v, want 2 mirrors", got)
+	}
+	set := map[string]bool{got[0]: true, got[1]: true}
+	for _, w := range []string{"https://de1.api.radio-browser.info/json", "https://fi1.api.radio-browser.info/json"} {
+		if !set[w] {
+			t.Errorf("missing %s in %v", w, got)
+		}
+	}
+}
+
+func TestResolveMirrors_lookupFails(t *testing.T) {
+	hosts := func(context.Context, string) ([]string, error) { return nil, errors.New("no dns") }
+	if got := resolveMirrors(context.Background(), hosts, nil); got != nil {
+		t.Errorf("got %v, want nil", got)
+	}
+}
+
+func TestDiscoveredMirrorsTriedFirstWithStaticFallback(t *testing.T) {
+	good := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode([]Station{{UUID: "x"}}) //nolint:errcheck
+	}))
+	defer good.Close()
+	calls := 0
+	rb := &RadioBrowser{
+		client:   &http.Client{},
+		baseURL:  "http://127.0.0.1:1", // dead static server
+		discover: func() []string { calls++; return []string{good.URL} },
+	}
+	for i := 0; i < 2; i++ {
+		if _, err := rb.Search("a", 1); err != nil {
+			t.Fatalf("search %d: %v", i, err)
+		}
+	}
+	if calls != 1 {
+		t.Errorf("discover ran %d times, want 1", calls)
+	}
+	if got := rb.targets(); got[len(got)-1] != "http://127.0.0.1:1" {
+		t.Errorf("static baseURL should remain as fallback: %v", got)
+	}
+}
+
+func TestDiscoveryFailureFallsBackToStatic(t *testing.T) {
+	good := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode([]Station{{UUID: "x"}}) //nolint:errcheck
+	}))
+	defer good.Close()
+	rb := &RadioBrowser{client: &http.Client{}, baseURL: good.URL, discover: func() []string { return nil }}
+	if _, err := rb.Search("a", 1); err != nil {
+		t.Fatal(err)
 	}
 }
 

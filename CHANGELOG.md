@@ -7,6 +7,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **radio-browser.info servers are now discovered through DNS** (`all.api.radio-browser.info`),
+  shuffled, and tried before the built-in list. `nl1` and `at1` no longer resolve, so with the old
+  fixed list only `de1` still worked. The built-in list stays as a fallback if the lookup fails.
+
 ---
 
 ## [0.6.0] — 2026-11-09
