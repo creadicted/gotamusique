@@ -19,6 +19,20 @@ jobs:
       - run: go test -short ./...
       - run: go build ./...
 
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+
+      - name: Real Mumble server (Docker)
+        run: go test -tags e2e -count=1 -v ./internal/e2e/...
+
   release:
     needs: test
     if: github.ref == 'refs/heads/master'
