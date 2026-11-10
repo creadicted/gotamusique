@@ -11,7 +11,7 @@ make e2e          # needs Docker; audio tests also need ffmpeg and skip without 
 
 - Build tag `e2e`: plain `go test ./...` never starts Docker.
 - The server container binds a random localhost port and is removed afterwards.
-- Tests skip (not fail) when Docker is unavailable.
+- Locally, tests skip when Docker or ffmpeg is missing. With `CI` set they fail instead, so a broken CI setup can never pass silently. Image-pull and container-start errors always fail.
 - To add a scenario: `startMumble(t)`, `startBot(t, addr, "key = value")`,
   `joinHuman(t, addr, "alice")`, then `eventually` / `never` for assertions.
   `silenceServer(t)` gives a stream that plays until the bot stops it.

@@ -3,19 +3,11 @@
 package e2e
 
 import (
-	"os/exec"
 	"testing"
 	"time"
 
 	"github.com/konradk/gotamusique/internal/radio"
 )
-
-func needFFmpeg(t *testing.T) {
-	t.Helper()
-	if _, err := exec.LookPath("ffmpeg"); err != nil {
-		t.Skip("ffmpeg not installed")
-	}
-}
 
 func inChannelWith(h *human, n int) func() bool {
 	return func() bool {

@@ -32,6 +32,29 @@ import (
 
 const mumbleImage = "mumblevoip/mumble-server:latest"
 
+// skipUnlessAvailable skips when a prerequisite is missing on a developer
+// machine, but fails when CI is set: there a missing tool means the scenarios
+// silently did not run, and a green build would be a lie.
+func skipUnlessAvailable(t *testing.T, what string) {
+	t.Helper()
+	if os.Getenv("CI") != "" {
+		t.Fatalf("%s is required in CI", what)
+	}
+	t.Skipf("%s not available", what)
+}
+
+// requireDocker skips (locally) only when Docker itself is unavailable: no
+// binary, or no reachable daemon. Every later pull/start error is a failure.
+func requireDocker(t *testing.T) {
+	t.Helper()
+	if _, err := exec.LookPath("docker"); err != nil {
+		skipUnlessAvailable(t, "docker")
+	}
+	if err := exec.Command("docker", "info").Run(); err != nil {
+		skipUnlessAvailable(t, "docker daemon")
+	}
+}
+
 // runMumbleContainer starts the server and returns its container ID. The image
 // is pulled first and explicitly: `docker run` prints "Unable to find image ...
 // Pulling ..." progress to stderr on a cold machine (every CI runner), and that
@@ -58,12 +81,10 @@ func runMumbleContainer(publish string) (string, error) {
 // container is removed when the test ends.
 func startMumble(t *testing.T) string {
 	t.Helper()
-	if _, err := exec.LookPath("docker"); err != nil {
-		t.Skip("docker not available")
-	}
+	requireDocker(t)
 	id, err := runMumbleContainer("127.0.0.1:0:64738/tcp")
 	if err != nil {
-		t.Skipf("cannot start %s: %v", mumbleImage, err)
+		t.Fatalf("cannot start %s: %v", mumbleImage, err)
 	}
 	t.Cleanup(func() { exec.Command("docker", "rm", "-f", id).Run() }) //nolint:errcheck
 
@@ -95,9 +116,7 @@ func startMumble(t *testing.T) string {
 // that restarts the server (same port), to exercise the bot's reconnect.
 func startMumbleRestartable(t *testing.T) (addr string, restart func()) {
 	t.Helper()
-	if _, err := exec.LookPath("docker"); err != nil {
-		t.Skip("docker not available")
-	}
+	requireDocker(t)
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -109,7 +128,7 @@ func startMumbleRestartable(t *testing.T) (addr string, restart func()) {
 	publish := fmt.Sprintf("127.0.0.1:%d:64738/tcp", port)
 	id, err := runMumbleContainer(publish)
 	if err != nil {
-		t.Skipf("cannot start %s: %v", mumbleImage, err)
+		t.Fatalf("cannot start %s: %v", mumbleImage, err)
 	}
 	t.Cleanup(func() { exec.Command("docker", "rm", "-f", id).Run() }) //nolint:errcheck
 
@@ -328,9 +347,7 @@ func never(t *testing.T, d time.Duration, what string, cond func() bool) {
 // ffmpeg on the machine, otherwise the test is skipped.
 func silenceServer(t *testing.T) string {
 	t.Helper()
-	if _, err := exec.LookPath("ffmpeg"); err != nil {
-		t.Skip("ffmpeg not installed")
-	}
+	needFFmpeg(t)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hdr := []byte("RIFF\xff\xff\xff\xffWAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00" +
 			"\x80\xbb\x00\x00\x00\x77\x01\x00\x02\x00\x10\x00data\xff\xff\xff\xff")
@@ -349,7 +366,12 @@ func silenceServer(t *testing.T) string {
 			}
 		}
 	}))
-	t.Cleanup(srv.Close)
+	// The handler streams forever: drop live connections first, or Close would
+	// wait for it and teardown would hang whenever a test fails mid-stream.
+	t.Cleanup(func() {
+		srv.CloseClientConnections()
+		srv.Close()
+	})
 	return srv.URL + "/silence.wav"
 }
 
@@ -359,3 +381,10 @@ type fakeItem struct{ url string }
 
 func (f *fakeItem) StreamURL() string   { return f.url }
 func (f *fakeItem) FormatTitle() string { return "[e2e] " + f.url }
+
+func needFFmpeg(t *testing.T) {
+	t.Helper()
+	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		skipUnlessAvailable(t, "ffmpeg")
+	}
+}
