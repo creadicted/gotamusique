@@ -151,10 +151,13 @@ func icyServer(t *testing.T, titles [2]string, switchAfter time.Duration) string
 			return
 		}
 		last := ""
+		// ICY intervals count from the first body byte, WAV header included.
+		pending := metaint - len(wav)
 		for {
-			if _, err := c.Write(make([]byte, metaint)); err != nil {
+			if _, err := c.Write(make([]byte, pending)); err != nil {
 				return
 			}
+			pending = metaint
 			if wantMeta {
 				title := titles[0]
 				if time.Since(start) >= switchAfter {
