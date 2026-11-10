@@ -52,7 +52,7 @@ func (b *Bot) loop(ctx context.Context) {
 			continue
 		}
 		// Nobody to listen: pause rather than start (or advance to) a track.
-		if b.pauseIfAlone(b.othersInChannel()) {
+		if b.pauseIfAlone(b.othersInChannel) {
 			continue
 		}
 

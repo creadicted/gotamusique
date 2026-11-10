@@ -250,10 +250,12 @@ func TestClock(t *testing.T) {
 	}
 }
 
+func fixedCount(n int) func() int { return func() int { return n } }
+
 func TestPauseIfAlone_pausesBeforeLaunch(t *testing.T) {
 	b := pauseBot(t, true)
 	enqueue3(b)
-	if !b.pauseIfAlone(0) {
+	if !b.pauseIfAlone(fixedCount(0)) {
 		t.Fatal("did not pause an empty channel")
 	}
 	if b.pauseState.Load() != pauseAuto {
@@ -276,7 +278,7 @@ func TestPauseIfAlone_noOpCases(t *testing.T) {
 	for name, c := range cases {
 		b := pauseBot(t, c.on)
 		enqueue3(b)
-		if b.pauseIfAlone(c.others) || b.IsPaused() {
+		if b.pauseIfAlone(fixedCount(c.others)) || b.IsPaused() {
 			t.Errorf("%s: paused", name)
 		}
 	}
@@ -292,7 +294,44 @@ func TestPauseIfAlone_catchesPlayWhileAlone(t *testing.T) {
 	if b.IsPaused() {
 		t.Fatal("Play should have cleared the pause")
 	}
-	if !b.pauseIfAlone(0) {
+	if !b.pauseIfAlone(fixedCount(0)) {
 		t.Error("track would start in an empty channel")
+	}
+}
+
+// A listener joins after the first count but before the pause is installed. The
+// join event saw nothing to clear, so pauseIfAlone must notice and undo its own
+// pause instead of leaving the bot paused with a listener present.
+func TestPauseIfAlone_joinBetweenCountAndPause(t *testing.T) {
+	b := pauseBot(t, true)
+	enqueue3(b)
+	counts := []int{0, 1} // alone at first, someone there by the second count
+	calls := 0
+	count := func() int {
+		n := counts[min(calls, len(counts)-1)]
+		calls++
+		return n
+	}
+	if b.pauseIfAlone(count) {
+		t.Error("reported a pause although a listener joined")
+	}
+	if b.IsPaused() {
+		t.Errorf("left paused with a listener present (state %d)", b.pauseState.Load())
+	}
+}
+
+// !resume while the channel is still empty must not lose where a local file
+// stopped: the later resume (someone joins) continues from there.
+func TestPauseIfAlone_keepsResumePosition(t *testing.T) {
+	b := pauseBot(t, true)
+	item := &mockItem{"a"}
+	b.Enqueue(item)
+	b.resume.set(item, 42*time.Second)
+
+	if !b.pauseIfAlone(fixedCount(0)) {
+		t.Fatal("did not pause")
+	}
+	if at, ok := b.resume.take(item); !ok || at != 42*time.Second {
+		t.Errorf("resume position = %v (ok=%v), want 42s kept", at, ok)
 	}
 }

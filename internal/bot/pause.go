@@ -27,7 +27,12 @@ func (b *Bot) IsPaused() bool { return b.pauseState.Load() != pauseNone }
 // It reports whether the state changed (false when already paused by the user).
 func (b *Bot) Pause() bool { return b.pause(pauseManual) }
 
-func (b *Bot) pause(reason int32) bool {
+func (b *Bot) pause(reason int32) bool { return b.pauseWith(reason, true) }
+
+// pauseWith is pause with control over capturing the resume position. Capture is
+// only meaningful while the item is playing; a pause installed at launch time
+// (nothing running) must leave the saved position alone.
+func (b *Bot) pauseWith(reason int32, capture bool) bool {
 	for {
 		cur := b.pauseState.Load()
 		if cur == reason || cur == pauseManual {
@@ -37,7 +42,9 @@ func (b *Bot) pause(reason int32) bool {
 			break
 		}
 	}
-	b.captureResume()
+	if capture {
+		b.captureResume()
+	}
 	// A stale resolve must not launch, and the interrupted track's onTrackEnd must
 	// not advance the queue: bumping launchVersion is the same trick Play uses.
 	b.invalidatePlayback()
@@ -83,13 +90,29 @@ func (b *Bot) occupancyChanged(others int) {
 // only fire on a change, so a track that starts while the channel is already
 // empty (play or skip from chat, autoplay refill, a reconnect, the bot moved
 // into an empty channel) would otherwise play to nobody. It reports whether it
-// paused instead; others is the channel count (-1 = unknown, never pauses).
-func (b *Bot) pauseIfAlone(others int) bool {
-	if !b.cfg.Bot.AutoPauseWhenAlone || others != 0 {
+// paused instead. count returns the users besides the bot (-1 = unknown, never
+// pauses).
+//
+// A user can join between the count and the pause; the join event then finds no
+// pause to clear. So after pausing it counts again and undoes its own pause if
+// someone is there now. A join after the second count is seen by the event
+// handler, because the pause is already in place.
+func (b *Bot) pauseIfAlone(count func() int) bool {
+	if !b.cfg.Bot.AutoPauseWhenAlone || count() != 0 {
 		return false
 	}
-	b.occupancyChanged(0)
-	return b.IsPaused()
+	// Nothing is playing here, so there is no position to capture: keep the saved
+	// one for a later resume.
+	if !b.pauseWith(pauseAuto, false) {
+		return b.IsPaused()
+	}
+	if count() > 0 {
+		b.pauseState.CompareAndSwap(pauseAuto, pauseNone)
+		b.wakeLoop()
+		return false
+	}
+	b.sendChannelMessage("Nobody here, pausing.")
+	return true
 }
 
 // onOccupancyChange re-counts the bot's channel on every user event instead of
