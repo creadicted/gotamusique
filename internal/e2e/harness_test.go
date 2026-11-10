@@ -32,6 +32,28 @@ import (
 
 const mumbleImage = "mumblevoip/mumble-server:latest"
 
+// runMumbleContainer starts the server and returns its container ID. The image
+// is pulled first and explicitly: `docker run` prints "Unable to find image ...
+// Pulling ..." progress to stderr on a cold machine (every CI runner), and that
+// must never end up in the ID. stdout alone carries the ID.
+func runMumbleContainer(publish string) (string, error) {
+	if out, err := exec.Command("docker", "pull", "-q", mumbleImage).CombinedOutput(); err != nil {
+		return "", fmt.Errorf("docker pull: %v\n%s", err, out)
+	}
+	cmd := exec.Command("docker", "run", "-d", "--rm", "--stop-timeout", "2", "-p", publish, mumbleImage)
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("docker run: %v\n%s", err, stderr.String())
+	}
+	id := strings.TrimSpace(string(out))
+	if id == "" || strings.ContainsAny(id, " \n") {
+		return "", fmt.Errorf("docker run returned no container id: %q", out)
+	}
+	return id, nil
+}
+
 // startMumble runs a throwaway Mumble server and returns its host:port. The
 // container is removed when the test ends.
 func startMumble(t *testing.T) string {
@@ -39,12 +61,10 @@ func startMumble(t *testing.T) string {
 	if _, err := exec.LookPath("docker"); err != nil {
 		t.Skip("docker not available")
 	}
-	out, err := exec.Command("docker", "run", "-d", "--rm",
-		"-p", "127.0.0.1:0:64738/tcp", mumbleImage).CombinedOutput()
+	id, err := runMumbleContainer("127.0.0.1:0:64738/tcp")
 	if err != nil {
-		t.Skipf("cannot start %s: %v\n%s", mumbleImage, err, out)
+		t.Skipf("cannot start %s: %v", mumbleImage, err)
 	}
-	id := strings.TrimSpace(string(out))
 	t.Cleanup(func() { exec.Command("docker", "rm", "-f", id).Run() }) //nolint:errcheck
 
 	// The mapping is not published the instant `docker run -d` returns (slow on a
@@ -86,12 +106,11 @@ func startMumbleRestartable(t *testing.T) (addr string, restart func()) {
 	ln.Close()
 	addr = fmt.Sprintf("127.0.0.1:%d", port)
 
-	out, err := exec.Command("docker", "run", "-d", "--rm", "--stop-timeout", "2",
-		"-p", fmt.Sprintf("127.0.0.1:%d:64738/tcp", port), mumbleImage).CombinedOutput()
+	publish := fmt.Sprintf("127.0.0.1:%d:64738/tcp", port)
+	id, err := runMumbleContainer(publish)
 	if err != nil {
-		t.Skipf("cannot start %s: %v\n%s", mumbleImage, err, out)
+		t.Skipf("cannot start %s: %v", mumbleImage, err)
 	}
-	id := strings.TrimSpace(string(out))
 	t.Cleanup(func() { exec.Command("docker", "rm", "-f", id).Run() }) //nolint:errcheck
 
 	waitUp := func() {
@@ -108,12 +127,11 @@ func startMumbleRestartable(t *testing.T) (addr string, restart func()) {
 	return addr, func() {
 		// --rm containers vanish on stop, so start a new one on the same port.
 		exec.Command("docker", "rm", "-f", id).Run() //nolint:errcheck
-		out, err := exec.Command("docker", "run", "-d", "--rm", "--stop-timeout", "2",
-			"-p", fmt.Sprintf("127.0.0.1:%d:64738/tcp", port), mumbleImage).CombinedOutput()
+		newID, err := runMumbleContainer(publish)
 		if err != nil {
-			t.Fatalf("restart mumble: %v\n%s", err, out)
+			t.Fatalf("restart mumble: %v", err)
 		}
-		id = strings.TrimSpace(string(out))
+		id = newID
 		waitUp()
 	}
 }
