@@ -249,3 +249,50 @@ func TestClock(t *testing.T) {
 		}
 	}
 }
+
+func TestPauseIfAlone_pausesBeforeLaunch(t *testing.T) {
+	b := pauseBot(t, true)
+	enqueue3(b)
+	if !b.pauseIfAlone(0) {
+		t.Fatal("did not pause an empty channel")
+	}
+	if b.pauseState.Load() != pauseAuto {
+		t.Errorf("state = %d, want pauseAuto", b.pauseState.Load())
+	}
+	if got := b.QueueCurrentIndex(); got != 0 {
+		t.Errorf("index = %d, want unchanged 0", got)
+	}
+}
+
+func TestPauseIfAlone_noOpCases(t *testing.T) {
+	cases := map[string]struct {
+		on     bool
+		others int
+	}{
+		"someone present": {true, 2},
+		"unknown count":   {true, -1},
+		"feature off":     {false, 0},
+	}
+	for name, c := range cases {
+		b := pauseBot(t, c.on)
+		enqueue3(b)
+		if b.pauseIfAlone(c.others) || b.IsPaused() {
+			t.Errorf("%s: paused", name)
+		}
+	}
+}
+
+// The reported case: the bot is alone, someone starts a track from chat
+// (play clears the auto-pause), and no join/leave event follows.
+func TestPauseIfAlone_catchesPlayWhileAlone(t *testing.T) {
+	b := pauseBot(t, true)
+	enqueue3(b)
+	b.occupancyChanged(0)
+	b.Play(1) // clears the pause: the loop would now launch track 1
+	if b.IsPaused() {
+		t.Fatal("Play should have cleared the pause")
+	}
+	if !b.pauseIfAlone(0) {
+		t.Error("track would start in an empty channel")
+	}
+}

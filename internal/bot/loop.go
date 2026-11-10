@@ -51,6 +51,10 @@ func (b *Bot) loop(ctx context.Context) {
 		if b.IsPaused() {
 			continue
 		}
+		// Nobody to listen: pause rather than start (or advance to) a track.
+		if b.pauseIfAlone(b.othersInChannel()) {
+			continue
+		}
 
 		// Items such as yt-dlp URLs resolve their stream just before playback.
 		var err error

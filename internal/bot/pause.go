@@ -79,6 +79,19 @@ func (b *Bot) occupancyChanged(others int) {
 	}
 }
 
+// pauseIfAlone is the launch-time counterpart of occupancyChanged: user events
+// only fire on a change, so a track that starts while the channel is already
+// empty (play or skip from chat, autoplay refill, a reconnect, the bot moved
+// into an empty channel) would otherwise play to nobody. It reports whether it
+// paused instead; others is the channel count (-1 = unknown, never pauses).
+func (b *Bot) pauseIfAlone(others int) bool {
+	if !b.cfg.Bot.AutoPauseWhenAlone || others != 0 {
+		return false
+	}
+	b.occupancyChanged(0)
+	return b.IsPaused()
+}
+
 // onOccupancyChange re-counts the bot's channel on every user event instead of
 // decoding the event type, which covers joins, leaves, moves and the bot itself
 // being moved.
