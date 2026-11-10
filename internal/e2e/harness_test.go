@@ -65,6 +65,124 @@ func startMumble(t *testing.T) string {
 	return addr
 }
 
+// startMumbleRestartable is startMumble on a fixed local port, plus a function
+// that restarts the server (same port), to exercise the bot's reconnect.
+func startMumbleRestartable(t *testing.T) (addr string, restart func()) {
+	t.Helper()
+	if _, err := exec.LookPath("docker"); err != nil {
+		t.Skip("docker not available")
+	}
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := ln.Addr().(*net.TCPAddr).Port
+	ln.Close()
+	addr = fmt.Sprintf("127.0.0.1:%d", port)
+
+	out, err := exec.Command("docker", "run", "-d", "--rm", "--stop-timeout", "2",
+		"-p", fmt.Sprintf("127.0.0.1:%d:64738/tcp", port), mumbleImage).CombinedOutput()
+	if err != nil {
+		t.Skipf("cannot start %s: %v\n%s", mumbleImage, err, out)
+	}
+	id := strings.TrimSpace(string(out))
+	t.Cleanup(func() { exec.Command("docker", "rm", "-f", id).Run() }) //nolint:errcheck
+
+	waitUp := func() {
+		eventually(t, 30*time.Second, "mumble server to accept connections", func() bool {
+			c, err := dialHuman(addr, "probe", nil)
+			if err != nil {
+				return false
+			}
+			c.Disconnect() //nolint:errcheck
+			return true
+		})
+	}
+	waitUp()
+	return addr, func() {
+		// --rm containers vanish on stop, so start a new one on the same port.
+		exec.Command("docker", "rm", "-f", id).Run() //nolint:errcheck
+		out, err := exec.Command("docker", "run", "-d", "--rm", "--stop-timeout", "2",
+			"-p", fmt.Sprintf("127.0.0.1:%d:64738/tcp", port), mumbleImage).CombinedOutput()
+		if err != nil {
+			t.Fatalf("restart mumble: %v\n%s", err, out)
+		}
+		id = strings.TrimSpace(string(out))
+		waitUp()
+	}
+}
+
+// icyServer is a SHOUTcast-style radio station: it streams silence as WAV with
+// ICY metadata every 100 ms of audio, announcing titles[0] and, after switchAfter,
+// titles[1]. It speaks "ICY 200 OK" on a raw socket like a real SHOUTcast server.
+func icyServer(t *testing.T, titles [2]string, switchAfter time.Duration) string {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { ln.Close() })
+	start := time.Now()
+	const metaint = 9600 // 100 ms of 48 kHz mono s16
+
+	block := func(title string) []byte {
+		m := fmt.Sprintf("StreamTitle='%s';", title)
+		n := (len(m) + 15) / 16
+		b := make([]byte, 1+n*16)
+		b[0] = byte(n)
+		copy(b[1:], m)
+		return b
+	}
+	serve := func(c net.Conn) {
+		defer c.Close()
+		buf := make([]byte, 2048)
+		n, _ := c.Read(buf)
+		wantMeta := strings.Contains(strings.ToLower(string(buf[:n])), "icy-metadata: 1")
+		hdr := "ICY 200 OK\r\nicy-name:e2e\r\nContent-Type: audio/wav\r\n"
+		if wantMeta {
+			hdr += fmt.Sprintf("icy-metaint:%d\r\n", metaint)
+		}
+		if _, err := c.Write([]byte(hdr + "\r\n")); err != nil {
+			return
+		}
+		wav := []byte("RIFF\xff\xff\xff\xffWAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00" +
+			"\x80\xbb\x00\x00\x00\x77\x01\x00\x02\x00\x10\x00data\xff\xff\xff\xff")
+		if _, err := c.Write(wav); err != nil {
+			return
+		}
+		last := ""
+		for {
+			if _, err := c.Write(make([]byte, metaint)); err != nil {
+				return
+			}
+			if wantMeta {
+				title := titles[0]
+				if time.Since(start) >= switchAfter {
+					title = titles[1]
+				}
+				out := []byte{0}
+				if title != last {
+					out, last = block(title), title
+				}
+				if _, err := c.Write(out); err != nil {
+					return
+				}
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go serve(c)
+		}
+	}()
+	return "http://" + ln.Addr().String() + "/live"
+}
+
 // human is a plain Mumble client standing in for a person in the channel.
 type human struct {
 	client *gumble.Client
