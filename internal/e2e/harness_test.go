@@ -1,0 +1,216 @@
+//go:build e2e
+
+// Package e2e runs the real bot against a real Mumble server (the official
+// mumblevoip/mumble-server image, started with Docker) and drives it with a
+// second Mumble client that plays the part of a human listener.
+//
+// Run with: make e2e   (needs Docker; tests that decode audio also need ffmpeg)
+package e2e
+
+import (
+	"context"
+	"crypto/tls"
+	"fmt"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/konradk/gotamusique/internal/bot"
+	"github.com/konradk/gotamusique/internal/config"
+	"layeh.com/gumble/gumble"
+	"layeh.com/gumble/gumbleutil"
+	_ "layeh.com/gumble/opus"
+)
+
+const mumbleImage = "mumblevoip/mumble-server:latest"
+
+// startMumble runs a throwaway Mumble server and returns its host:port. The
+// container is removed when the test ends.
+func startMumble(t *testing.T) string {
+	t.Helper()
+	if _, err := exec.LookPath("docker"); err != nil {
+		t.Skip("docker not available")
+	}
+	out, err := exec.Command("docker", "run", "-d", "--rm",
+		"-p", "127.0.0.1:0:64738/tcp", mumbleImage).CombinedOutput()
+	if err != nil {
+		t.Skipf("cannot start %s: %v\n%s", mumbleImage, err, out)
+	}
+	id := strings.TrimSpace(string(out))
+	t.Cleanup(func() { exec.Command("docker", "rm", "-f", id).Run() }) //nolint:errcheck
+
+	portOut, err := exec.Command("docker", "port", id, "64738/tcp").Output()
+	if err != nil {
+		t.Fatalf("docker port: %v", err)
+	}
+	// "127.0.0.1:49153" (possibly several lines)
+	addr := strings.TrimSpace(strings.SplitN(string(portOut), "\n", 2)[0])
+
+	eventually(t, 30*time.Second, "mumble server to accept connections", func() bool {
+		c, err := dialHuman(addr, "probe", nil)
+		if err != nil {
+			return false
+		}
+		c.Disconnect() //nolint:errcheck
+		return true
+	})
+	return addr
+}
+
+// human is a plain Mumble client standing in for a person in the channel.
+type human struct {
+	client *gumble.Client
+	mu     sync.Mutex
+	texts  []string
+}
+
+func dialHuman(addr, name string, onText func(string)) (*gumble.Client, error) {
+	cfg := gumble.NewConfig()
+	cfg.Username = name
+	if onText != nil {
+		cfg.Attach(gumbleutil.Listener{TextMessage: func(e *gumble.TextMessageEvent) { onText(e.Message) }})
+	}
+	return gumble.DialWithDialer(&net.Dialer{Timeout: 5 * time.Second}, addr, cfg,
+		&tls.Config{InsecureSkipVerify: true}) //nolint:gosec // throwaway test server
+}
+
+// joinHuman connects a human to the server's root channel.
+func joinHuman(t *testing.T, addr, name string) *human {
+	t.Helper()
+	h := &human{}
+	c, err := dialHuman(addr, name, func(m string) {
+		h.mu.Lock()
+		h.texts = append(h.texts, m)
+		h.mu.Unlock()
+	})
+	if err != nil {
+		t.Fatalf("human %s: connect: %v", name, err)
+	}
+	h.client = c
+	t.Cleanup(func() { h.leave() })
+	return h
+}
+
+func (h *human) leave() {
+	if h.client != nil && h.client.State() != gumble.StateDisconnected {
+		h.client.Disconnect() //nolint:errcheck
+	}
+}
+
+func (h *human) say(msg string) {
+	h.client.Do(func() { h.client.Self.Channel.Send(msg, false) })
+}
+
+func (h *human) heard(substr string) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for _, m := range h.texts {
+		if strings.Contains(m, substr) {
+			return true
+		}
+	}
+	return false
+}
+
+// startBot runs the real bot against addr. extra is raw INI appended to [bot].
+func startBot(t *testing.T, addr, extraBot string) *bot.Bot {
+	t.Helper()
+	host, portStr, _ := net.SplitHostPort(addr)
+	port, _ := strconv.Atoi(portStr)
+	ini := fmt.Sprintf("[server]\nhost = %s\nport = %d\ntls_skip_verify = True\n\n"+
+		"[bot]\nusername = e2ebot\nlast_played_path =\n%s\n", host, port, extraBot)
+	path := filepath.Join(t.TempDir(), "configuration.ini")
+	if err := os.WriteFile(path, []byte(ini), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := bot.New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- b.Run(ctx) }()
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case <-done:
+		case <-time.After(10 * time.Second):
+			t.Error("bot did not shut down")
+		}
+	})
+	return b
+}
+
+// eventually polls cond until it holds or the timeout expires.
+func eventually(t *testing.T, timeout time.Duration, what string, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if cond() {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	t.Fatalf("timed out after %v waiting for %s", timeout, what)
+}
+
+// never asserts cond stays false for d.
+func never(t *testing.T, d time.Duration, what string, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(d)
+	for time.Now().Before(deadline) {
+		if cond() {
+			t.Fatalf("unexpected: %s", what)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+// silenceServer serves an endless 48 kHz mono s16 WAV of silence, throttled to
+// about real time, so ffmpeg keeps "playing" until the bot stops it. It needs
+// ffmpeg on the machine, otherwise the test is skipped.
+func silenceServer(t *testing.T) string {
+	t.Helper()
+	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		t.Skip("ffmpeg not installed")
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hdr := []byte("RIFF\xff\xff\xff\xffWAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00" +
+			"\x80\xbb\x00\x00\x00\x77\x01\x00\x02\x00\x10\x00data\xff\xff\xff\xff")
+		w.Header().Set("Content-Type", "audio/wav")
+		w.Write(hdr)                //nolint:errcheck
+		chunk := make([]byte, 9600) // 100 ms
+		for {
+			if _, err := w.Write(chunk); err != nil {
+				return
+			}
+			w.(http.Flusher).Flush()
+			select {
+			case <-r.Context().Done():
+				return
+			case <-time.After(100 * time.Millisecond):
+			}
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return srv.URL + "/silence.wav"
+}
+
+// fakeItem is a queue entry. It is never decoded unless ffmpeg is installed
+// and the URL is reachable, which the pause logic under test does not need.
+type fakeItem struct{ url string }
+
+func (f *fakeItem) StreamURL() string   { return f.url }
+func (f *fakeItem) FormatTitle() string { return "[e2e] " + f.url }
