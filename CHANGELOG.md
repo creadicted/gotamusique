@@ -7,6 +7,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+---
+
+## [0.6.3] — 2026-11-10
+
 ### Fixed
 
 - **Auto-pause now also catches a track that starts while the bot is already alone.** It only
