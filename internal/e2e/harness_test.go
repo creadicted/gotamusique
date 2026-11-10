@@ -47,12 +47,18 @@ func startMumble(t *testing.T) string {
 	id := strings.TrimSpace(string(out))
 	t.Cleanup(func() { exec.Command("docker", "rm", "-f", id).Run() }) //nolint:errcheck
 
-	portOut, err := exec.Command("docker", "port", id, "64738/tcp").Output()
-	if err != nil {
-		t.Fatalf("docker port: %v", err)
-	}
-	// "127.0.0.1:49153" (possibly several lines)
-	addr := strings.TrimSpace(strings.SplitN(string(portOut), "\n", 2)[0])
+	// The mapping is not published the instant `docker run -d` returns (slow on a
+	// cold CI runner), so poll instead of asking once.
+	var addr string
+	eventually(t, 30*time.Second, "docker to publish the server port", func() bool {
+		out, err := exec.Command("docker", "port", id, "64738/tcp").Output()
+		if err != nil {
+			return false
+		}
+		// "127.0.0.1:49153" (possibly several lines)
+		addr = strings.TrimSpace(strings.SplitN(string(out), "\n", 2)[0])
+		return addr != ""
+	})
 
 	eventually(t, 30*time.Second, "mumble server to accept connections", func() bool {
 		c, err := dialHuman(addr, "probe", nil)
