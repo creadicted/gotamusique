@@ -249,3 +249,89 @@ func TestClock(t *testing.T) {
 		}
 	}
 }
+
+func fixedCount(n int) func() int { return func() int { return n } }
+
+func TestPauseIfAlone_pausesBeforeLaunch(t *testing.T) {
+	b := pauseBot(t, true)
+	enqueue3(b)
+	if !b.pauseIfAlone(fixedCount(0)) {
+		t.Fatal("did not pause an empty channel")
+	}
+	if b.pauseState.Load() != pauseAuto {
+		t.Errorf("state = %d, want pauseAuto", b.pauseState.Load())
+	}
+	if got := b.QueueCurrentIndex(); got != 0 {
+		t.Errorf("index = %d, want unchanged 0", got)
+	}
+}
+
+func TestPauseIfAlone_noOpCases(t *testing.T) {
+	cases := map[string]struct {
+		on     bool
+		others int
+	}{
+		"someone present": {true, 2},
+		"unknown count":   {true, -1},
+		"feature off":     {false, 0},
+	}
+	for name, c := range cases {
+		b := pauseBot(t, c.on)
+		enqueue3(b)
+		if b.pauseIfAlone(fixedCount(c.others)) || b.IsPaused() {
+			t.Errorf("%s: paused", name)
+		}
+	}
+}
+
+// The reported case: the bot is alone, someone starts a track from chat
+// (play clears the auto-pause), and no join/leave event follows.
+func TestPauseIfAlone_catchesPlayWhileAlone(t *testing.T) {
+	b := pauseBot(t, true)
+	enqueue3(b)
+	b.occupancyChanged(0)
+	b.Play(1) // clears the pause: the loop would now launch track 1
+	if b.IsPaused() {
+		t.Fatal("Play should have cleared the pause")
+	}
+	if !b.pauseIfAlone(fixedCount(0)) {
+		t.Error("track would start in an empty channel")
+	}
+}
+
+// A listener joins after the first count but before the pause is installed. The
+// join event saw nothing to clear, so pauseIfAlone must notice and undo its own
+// pause instead of leaving the bot paused with a listener present.
+func TestPauseIfAlone_joinBetweenCountAndPause(t *testing.T) {
+	b := pauseBot(t, true)
+	enqueue3(b)
+	counts := []int{0, 1} // alone at first, someone there by the second count
+	calls := 0
+	count := func() int {
+		n := counts[min(calls, len(counts)-1)]
+		calls++
+		return n
+	}
+	if b.pauseIfAlone(count) {
+		t.Error("reported a pause although a listener joined")
+	}
+	if b.IsPaused() {
+		t.Errorf("left paused with a listener present (state %d)", b.pauseState.Load())
+	}
+}
+
+// !resume while the channel is still empty must not lose where a local file
+// stopped: the later resume (someone joins) continues from there.
+func TestPauseIfAlone_keepsResumePosition(t *testing.T) {
+	b := pauseBot(t, true)
+	item := &mockItem{"a"}
+	b.Enqueue(item)
+	b.resume.set(item, 42*time.Second)
+
+	if !b.pauseIfAlone(fixedCount(0)) {
+		t.Fatal("did not pause")
+	}
+	if at, ok := b.resume.take(item); !ok || at != 42*time.Second {
+		t.Errorf("resume position = %v (ok=%v), want 42s kept", at, ok)
+	}
+}

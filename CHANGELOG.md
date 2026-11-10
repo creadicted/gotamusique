@@ -7,6 +7,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Auto-pause now also catches a track that starts while the bot is already alone.** It only
+  reacted to someone leaving, so playing or skipping from chat, an autoplay refill or a reconnect
+  with an empty channel kept playing to nobody. The bot now checks the channel before each launch.
+
 ---
 
 ## [0.6.2] — 2026-11-09
