@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/konradk/gotamusique/internal/config"
+	"github.com/konradk/gotamusique/internal/database"
 	"github.com/konradk/gotamusique/internal/library"
 	"github.com/konradk/gotamusique/internal/media/file"
 	"github.com/konradk/gotamusique/internal/web"
@@ -289,5 +290,51 @@ func TestWeb_UploadAndQueueEndToEnd(t *testing.T) {
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusCreated {
 		t.Errorf("queue the upload = %d", resp.StatusCode)
+	}
+}
+
+// A real scan stores title and artist as the search keywords and adds the path
+// words only for files without a title tag. The fixtures above put the path into
+// the keywords, which hid that a query matching only the path found nothing.
+func TestLibrary_SearchMatchesThePathEvenWhenTheKeywordsDoNot(t *testing.T) {
+	lb := browseBot(t)
+	lib := lb.libraryRef()
+	err := lib.db.Insert(database.MusicRecord{
+		ID: file.IDFromPath("metal/heavy/song.mp3"), Type: library.RecordType, Title: "Thunder", Path: "metal/heavy/song.mp3",
+		Keywords: "thunder dark band", // what the scan stores: title and artist, no path
+		Metadata: map[string]any{"artist": "Dark Band", "duration": float64(200)},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		search string
+		want   string
+	}{
+		{"metal", "metal/heavy/song.mp3,rock/metal/z.mp3"}, // a folder name, only in the path (z.mp3 lives in rock/metal)
+		{"heavy song", "metal/heavy/song.mp3"},             // words from different path parts
+		{"THUNDER", "metal/heavy/song.mp3"},                // the title, any case
+		{"dark band", "metal/heavy/song.mp3"},              // the artist
+		{"metal thunder", "metal/heavy/song.mp3"},          // path word and title word together
+		{"metal nothing", ""},                              // every word must match
+	} {
+		p, err := lb.Library(web.LibraryQuery{Search: c.search, Limit: 100})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := strings.Join(paths(p.Tracks), ","); got != c.want {
+			t.Errorf("search %q = %q, want %q", c.search, got, c.want)
+		}
+	}
+
+	// A tag filter and a path-only search work together, tags matching as whole words.
+	if err := lib.db.UpdateTags(file.IDFromPath("metal/heavy/song.mp3"), func([]string) []string { return []string{"HardRock"} }); err != nil {
+		t.Fatal(err)
+	}
+	if p, _ := lb.Library(web.LibraryQuery{Search: "heavy", Tags: []string{"hardrock"}, Limit: 100}); len(p.Tracks) != 1 {
+		t.Errorf("tag (any case) + path search = %v", paths(p.Tracks))
+	}
+	if p, _ := lb.Library(web.LibraryQuery{Search: "heavy", Tags: []string{"rock"}, Limit: 100}); len(p.Tracks) != 0 {
+		t.Errorf("a tag must match whole: %v", paths(p.Tracks))
 	}
 }

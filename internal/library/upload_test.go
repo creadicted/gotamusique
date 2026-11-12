@@ -280,6 +280,21 @@ func TestStore_RejectsFilesWithoutAnAudioStream(t *testing.T) {
 	eq(t, f.paths(t), nil)
 }
 
+// entries lists everything directly in dir, folders included: leftovers only sees
+// files, which is how a stray directory created through a symlink once slipped by.
+func entries(t *testing.T, dir string) []string {
+	t.Helper()
+	es, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []string
+	for _, e := range es {
+		out = append(out, e.Name())
+	}
+	return out
+}
+
 // spyReader reports what is in dir at the moment the upload body is first read.
 // Store cleans up after a failure, so only looking while the bytes arrive can tell
 // whether anything was ever created there.
@@ -320,11 +335,12 @@ func TestStore_RefusesASymlinkedUploadFolder(t *testing.T) {
 	if spy.read {
 		t.Errorf("the body was read although the destination is outside the music folder; outside held %v", spy.present)
 	}
-	if got := leftovers(t, outside); len(got) != 0 {
-		t.Errorf("files were written outside the music folder: %v", got)
+	if got := entries(t, outside); len(got) != 0 {
+		t.Errorf("something was created outside the music folder: %v", got)
 	}
 
-	// The same for a symlinked uploads/ itself.
+	// The same for a symlinked uploads/ itself. uploads/bob does not exist yet, so
+	// a MkdirAll would create it inside the link's target before any check ran.
 	f2 := newFixture(t)
 	outside2 := t.TempDir()
 	if err := os.Symlink(outside2, filepath.Join(f2.root, "uploads")); err != nil {
@@ -334,8 +350,15 @@ func TestStore_RefusesASymlinkedUploadFolder(t *testing.T) {
 	if _, err := f2.scanner(Config{}).Store(context.Background(), "bob", "a.mp3", spy2, bigLimit); !errors.Is(err, ErrNotIndexable) {
 		t.Errorf("symlinked uploads/ = %v, want ErrNotIndexable", err)
 	}
-	if spy2.read || len(leftovers(t, outside2)) != 0 {
-		t.Errorf("something was written through the symlinked uploads/ (body read: %v, outside: %v)", spy2.read, spy2.present)
+	if spy2.read || len(entries(t, outside2)) != 0 {
+		t.Errorf("something was created through the symlinked uploads/ (body read: %v, outside now holds %v)", spy2.read, entries(t, outside2))
+	}
+
+	// uploads/ being a plain file, or uploads/bob a symlink to a file, is refused too.
+	f3 := newFixture(t)
+	write(t, f3.root, "uploads", "i am a file")
+	if err := store(t, f3.scanner(Config{}), "bob", "a.mp3", "data"); !errors.Is(err, ErrNotIndexable) {
+		t.Errorf("uploads/ is a file: err = %v, want ErrNotIndexable", err)
 	}
 }
 

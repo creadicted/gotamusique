@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path"
@@ -107,12 +108,12 @@ func (s *Scanner) Store(ctx context.Context, owner, filename string, r io.Reader
 		return nil, fmt.Errorf("%w: uploads go to a folder the library ignores", ErrNotIndexable)
 	}
 
-	dir := filepath.Join(root, UploadDir, user)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return nil, fmt.Errorf("creating upload folder: %w", err)
+	dir, err := ensureUploadDir(root, user)
+	if err != nil {
+		return nil, err
 	}
-	// A symlink at uploads/ or uploads/<user> could point outside the music folder.
-	// IndexFile checks symlinks too, but only after the bytes are written.
+	// Defence in depth: whatever is on disk now, the folder must resolve inside
+	// the music folder.
 	if real, err := filepath.EvalSymlinks(dir); err != nil || !within(root, real) {
 		return nil, fmt.Errorf("%w: the upload folder is not inside the music folder", ErrNotIndexable)
 	}
@@ -162,6 +163,35 @@ func (s *Scanner) Store(ctx context.Context, owner, filename string, r io.Reader
 	}
 	keep = true
 	return rec, nil
+}
+
+// ensureUploadDir returns <root>/uploads/<user>, creating what is missing one level
+// at a time. Each level that already exists must be a real directory: a symlink
+// (or a file) is refused before anything is created below it. os.MkdirAll must not
+// be used here, because it follows symlinks, so a symlinked uploads/ would get its
+// <user> folder created in the link's target before any check could run. Folders
+// that are symlinks would not be scanned either (the scan does not follow them), so
+// their files would vanish from the library at the next scan.
+func ensureUploadDir(root, user string) (string, error) {
+	dir := root
+	for _, part := range []string{UploadDir, user} {
+		dir = filepath.Join(dir, part)
+		fi, err := os.Lstat(dir)
+		if errors.Is(err, fs.ErrNotExist) {
+			// dir's parent is root or a real directory checked just above.
+			if err := os.Mkdir(dir, 0o755); err != nil && !errors.Is(err, fs.ErrExist) {
+				return "", fmt.Errorf("creating upload folder: %w", err)
+			}
+			fi, err = os.Lstat(dir)
+		}
+		if err != nil {
+			return "", fmt.Errorf("checking upload folder: %w", err)
+		}
+		if !fi.IsDir() { // Lstat: a symlink is not a directory here
+			return "", fmt.Errorf("%w: %s is not a plain folder (a symlink?)", ErrNotIndexable, part)
+		}
+	}
+	return dir, nil
 }
 
 // reserve creates an empty file for name in dir, or for the first free

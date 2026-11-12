@@ -41,38 +41,22 @@ func (b *Bot) Library(q web.LibraryQuery) (web.LibraryPage, error) {
 	page := web.LibraryPage{Tags: tags}
 
 	filtering := q.Search != "" || len(q.Tags) > 0
-	var tracks []library.Track
-	switch {
-	case q.Search != "" && len(q.Tags) > 0:
-		bySearch, err := b.SearchLibrary(strings.Fields(q.Search))
-		if err != nil {
-			return page, err
-		}
-		byTag, err := b.FindTagged(q.Tags)
-		if err != nil {
-			return page, err
-		}
-		inTag := make(map[string]bool, len(byTag))
-		for _, t := range byTag {
-			inTag[t.Path] = true
-		}
-		for _, t := range bySearch {
-			if inTag[t.Path] {
-				tracks = append(tracks, t)
+	// One pass over every track, in Go. The database's keyword column only holds
+	// title and artist (path words are added just for untitled files), so asking it
+	// would miss a query that only matches the path, such as a folder name.
+	tracks, err := b.ListLibrary(nil)
+	if err != nil {
+		return page, err
+	}
+	if filtering {
+		words := strings.Fields(strings.ToLower(q.Search))
+		kept := tracks[:0:0]
+		for _, t := range tracks {
+			if matchesAll(strings.ToLower(t.Path+" "+t.Title+" "+t.Artist), words) && hasAllTags(t.Tags, q.Tags) {
+				kept = append(kept, t)
 			}
 		}
-	case q.Search != "":
-		if tracks, err = b.SearchLibrary(strings.Fields(q.Search)); err != nil {
-			return page, err
-		}
-	case len(q.Tags) > 0:
-		if tracks, err = b.FindTagged(q.Tags); err != nil {
-			return page, err
-		}
-	default:
-		if tracks, err = b.ListLibrary(nil); err != nil {
-			return page, err
-		}
+		tracks = kept
 	}
 	sort.SliceStable(tracks, func(i, j int) bool { return tracks[i].Path < tracks[j].Path })
 
@@ -116,4 +100,32 @@ func (b *Bot) Library(q web.LibraryQuery) (web.LibraryPage, error) {
 	}
 	page.Tracks = here[lo:hi]
 	return page, nil
+}
+
+// matchesAll reports whether every word occurs in text (both already lower-case).
+func matchesAll(text string, words []string) bool {
+	for _, w := range words {
+		if !strings.Contains(text, w) {
+			return false
+		}
+	}
+	return true
+}
+
+// hasAllTags reports whether have contains every wanted tag as a whole tag, ignoring
+// case ("rock" does not match "hardrock").
+func hasAllTags(have, want []string) bool {
+	for _, w := range want {
+		found := false
+		for _, h := range have {
+			if strings.EqualFold(h, w) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
 }
