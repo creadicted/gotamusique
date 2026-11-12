@@ -25,17 +25,17 @@ func libFileBot(t *testing.T, names ...string) *mockBot {
 	return bot
 }
 
-func tr(paths ...string) []LibraryTrack {
-	var out []LibraryTrack
+func tr(paths ...string) []library.Track {
+	var out []library.Track
 	for _, p := range paths {
-		out = append(out, LibraryTrack{Path: p, Title: p})
+		out = append(out, library.Track{Path: p, Title: p})
 	}
 	return out
 }
 
 func TestFile_Exact_QueuesOneFromLibrary(t *testing.T) {
 	bot := libFileBot(t, "a/x.mp3")
-	bot.lookup = FileLookup{Kind: LookupExact, Tracks: tr("a/x.mp3")}
+	bot.lookup = library.FileLookup{Kind: library.LookupExact, Tracks: tr("a/x.mp3")}
 	callHandler(makeFileHandler(newShortlist()), bot, "a/x.mp3")
 	if enqueuedPaths(bot) != "a/x.mp3" || bot.lookupArg != "a/x.mp3" {
 		t.Errorf("queued %q for lookup %q", enqueuedPaths(bot), bot.lookupArg)
@@ -44,7 +44,7 @@ func TestFile_Exact_QueuesOneFromLibrary(t *testing.T) {
 
 func TestFile_Folder_QueuesAllBelow(t *testing.T) {
 	bot := libFileBot(t, "a/x.mp3", "a/y.mp3")
-	bot.lookup = FileLookup{Kind: LookupFolder, Tracks: tr("a/x.mp3", "a/y.mp3")}
+	bot.lookup = library.FileLookup{Kind: library.LookupFolder, Tracks: tr("a/x.mp3", "a/y.mp3")}
 	callHandler(makeFileHandler(newShortlist()), bot, "a")
 	if enqueuedPaths(bot) != "a/x.mp3,a/y.mp3" {
 		t.Errorf("queued %q", enqueuedPaths(bot))
@@ -53,7 +53,7 @@ func TestFile_Folder_QueuesAllBelow(t *testing.T) {
 
 func TestFile_PartialUnique_QueuesIt(t *testing.T) {
 	bot := libFileBot(t, "a/x.mp3")
-	bot.lookup = FileLookup{Kind: LookupPartial, Tracks: tr("a/x.mp3")}
+	bot.lookup = library.FileLookup{Kind: library.LookupPartial, Tracks: tr("a/x.mp3")}
 	callHandler(makeFileHandler(newShortlist()), bot, "x.m")
 	if enqueuedPaths(bot) != "a/x.mp3" {
 		t.Errorf("queued %q", enqueuedPaths(bot))
@@ -62,7 +62,7 @@ func TestFile_PartialUnique_QueuesIt(t *testing.T) {
 
 func TestFile_PartialMany_FillsShortlistInsteadOfQueueing(t *testing.T) {
 	bot := libFileBot(t, "a/x.mp3", "b/x.mp3")
-	bot.lookup = FileLookup{Kind: LookupPartial, Tracks: tr("a/x.mp3", "b/x.mp3")}
+	bot.lookup = library.FileLookup{Kind: library.LookupPartial, Tracks: tr("a/x.mp3", "b/x.mp3")}
 	sl := newShortlist()
 	callHandler(makeFileHandler(sl), bot, "x")
 	if len(bot.enqueueCalls) != 0 {
@@ -76,7 +76,7 @@ func TestFile_PartialMany_FillsShortlistInsteadOfQueueing(t *testing.T) {
 
 func TestFile_NoLibraryMatch_FallsBackToDisk(t *testing.T) {
 	bot := libFileBot(t) // file not in the library and not on disk
-	bot.lookup = FileLookup{Kind: LookupPartial}
+	bot.lookup = library.FileLookup{Kind: library.LookupPartial}
 	callHandler(makeFileHandler(newShortlist()), bot, "nothing.mp3")
 	if len(bot.enqueueCalls) != 0 {
 		t.Error("a missing file must not be queued")
@@ -185,7 +185,7 @@ func TestShortlistPaging_ShowsOtherPagesWithoutQueueing(t *testing.T) {
 		names[i] = fmt.Sprintf("dir/a-very-long-track-name-to-fill-the-pages-%04d.mp3", i)
 	}
 	bot := libFileBot(t, names...)
-	bot.lookup = FileLookup{Kind: LookupPartial, Tracks: tr(names...)}
+	bot.lookup = library.FileLookup{Kind: library.LookupPartial, Tracks: tr(names...)}
 	sl := newShortlist()
 	callHandler(makeFileHandler(sl), bot, "track")
 	if len(sl.get(0)) != 300 {
@@ -206,7 +206,7 @@ func TestShortlistPaging_ShowsOtherPagesWithoutQueueing(t *testing.T) {
 
 func TestFile_PathContainingPFlagStaysLiteral(t *testing.T) {
 	bot := libFileBot(t, "a/x -p 2.mp3")
-	bot.lookup = FileLookup{Kind: LookupExact, Tracks: tr("a/x -p 2.mp3")}
+	bot.lookup = library.FileLookup{Kind: library.LookupExact, Tracks: tr("a/x -p 2.mp3")}
 	callHandler(makeFileHandler(newShortlist()), bot, "a/x -p 2.mp3")
 	if bot.lookupArg != "a/x -p 2.mp3" || enqueuedPaths(bot) != "a/x -p 2.mp3" {
 		t.Errorf("lookup %q queued %q; !file must not treat -p as a flag", bot.lookupArg, enqueuedPaths(bot))
