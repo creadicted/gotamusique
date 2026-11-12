@@ -10,6 +10,7 @@ import (
 	"github.com/konradk/gotamusique/internal/audio"
 	"github.com/konradk/gotamusique/internal/config"
 	"github.com/konradk/gotamusique/internal/library"
+	"github.com/konradk/gotamusique/internal/web"
 	"layeh.com/gumble/gumble"
 )
 
@@ -55,6 +56,15 @@ type mockBot struct {
 	rescanResult   string
 	rescanErr      error
 	rescanBlock    chan struct{}
+	webLink        string
+	webTTL         time.Duration
+	webErr         error
+	webIDs         []web.Identity
+}
+
+func (m *mockBot) WebLogin(id web.Identity) (string, time.Duration, error) {
+	m.webIDs = append(m.webIDs, id)
+	return m.webLink, m.webTTL, m.webErr
 }
 
 func (m *mockBot) Config() *config.Config       { return m.cfg }

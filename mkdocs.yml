@@ -41,5 +41,6 @@ nav:
   - Configuration:
       - configuration/index.md
       - Music library: configuration/library.md
+      - Web interface: configuration/web.md
   - Commands: commands/index.md
   - Migrating from botamusique: migrating.md

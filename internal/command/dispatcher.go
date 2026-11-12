@@ -11,6 +11,7 @@ import (
 	"github.com/konradk/gotamusique/internal/audio"
 	"github.com/konradk/gotamusique/internal/config"
 	"github.com/konradk/gotamusique/internal/library"
+	"github.com/konradk/gotamusique/internal/web"
 	"layeh.com/gumble/gumble"
 )
 
@@ -62,6 +63,10 @@ type BotAPI interface {
 	// UpdateTags rewrites the tags of the library row id with fn. Returns
 	// library.ErrNotInLibrary when there is no such row.
 	UpdateTags(id string, fn func(tags []string) []string) error
+	// WebLogin returns the address to open the web UI for id: a one-time login link
+	// valid for ttl, or (ttl 0) the plain address when no login is required. It
+	// returns web.ErrDisabled when the web interface is off.
+	WebLogin(id web.Identity) (link string, ttl time.Duration, err error)
 }
 
 // HandlerFunc is the signature every command handler must implement.

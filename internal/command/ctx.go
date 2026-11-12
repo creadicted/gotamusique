@@ -13,6 +13,10 @@ type Ctx struct {
 	ChannelID uint32
 	// Out receives the command's output. Nil discards it.
 	Out func(text string)
+	// Private delivers text to the caller alone (a Mumble private message). Nil
+	// when there is no such channel; commands that hand out secrets must refuse
+	// to run without it rather than fall back to Out.
+	Private func(text string)
 	// Sender is the Mumble user who sent the message, when there is one. Only
 	// JoinTarget uses it.
 	Sender *gumble.User
@@ -40,6 +44,13 @@ func chatCtx(msg *gumble.TextMessage) *Ctx {
 	c := &Ctx{Sender: msg.Sender}
 	if msg.Sender != nil {
 		c.User = msg.Sender.Name
+	}
+	if msg.Sender != nil {
+		sender := msg.Sender
+		c.Private = func(text string) {
+			defer func() { recover() }() //nolint:errcheck
+			sender.Send(text)
+		}
 	}
 	if len(msg.Channels) > 0 && msg.Channels[0] != nil {
 		ch := msg.Channels[0]

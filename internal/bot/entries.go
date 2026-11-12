@@ -115,6 +115,10 @@ type snapSig struct {
 	volume  float64
 	playing bool
 	scan    status.Scan
+	// launch counts play, seek, pause and skip controls. A seek during playback
+	// can leave every other field as it was, yet the playhead jumped; clients that
+	// interpolate the position need to see that as a change.
+	launch int64
 }
 
 // Snapshot reads the bot's state for a front end. The queue part is one
@@ -180,7 +184,7 @@ func (b *Bot) Snapshot() status.Snapshot {
 
 	s.Version = b.versionFor(snapSig{
 		queue: q.Version, pause: pauseNow, muted: muted,
-		volume: volume, playing: s.Playing, scan: s.Scan,
+		volume: volume, playing: s.Playing, scan: s.Scan, launch: b.launchVersion.Load(),
 	})
 	return s
 }

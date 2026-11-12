@@ -5,6 +5,8 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
+	"net/url"
+	"strings"
 	"sync"
 	"time"
 )
@@ -51,6 +53,16 @@ const (
 	maxTokens   = 1024 // outstanding login tokens
 	maxSessions = 4096
 )
+
+// ErrDisabled is returned by the bot's login-link request when the web interface
+// is not enabled.
+var ErrDisabled = errors.New("the web interface is disabled")
+
+// LoginURL builds the link that logs a user in with token, under the public
+// access address.
+func LoginURL(accessAddress, token string) string {
+	return strings.TrimRight(accessAddress, "/") + "/login?token=" + url.QueryEscape(token)
+}
 
 // ErrBadToken is returned by Redeem for an unknown, expired or already used token.
 var ErrBadToken = errors.New("invalid or expired token")

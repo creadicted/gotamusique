@@ -12,6 +12,7 @@ import (
 	"github.com/konradk/gotamusique/internal/command"
 	"github.com/konradk/gotamusique/internal/config"
 	"github.com/konradk/gotamusique/internal/queue"
+	"github.com/konradk/gotamusique/internal/web"
 	"layeh.com/gumble/gumble"
 )
 
@@ -37,6 +38,8 @@ type Bot struct {
 	resume        resumePoint     // where a paused local file stopped, for Resume
 	nowPlaying    audio.MediaItem // item handed to the pipeline last (guarded by mu)
 	last          *lastPlayed     // item remembered from the previous run; consumed by RestoreLast (guarded by mu)
+
+	webAuth *web.Auth // login tokens and sessions; nil unless the web interface uses token auth
 
 	snapMu  sync.Mutex // guards snapSig and snapRev (see Snapshot)
 	snapSig snapSig
@@ -81,6 +84,9 @@ func New(cfg *config.Config) (*Bot, error) {
 		log:        log,
 		queue:      queue.NewQueue(),
 		wakeCh:     make(chan struct{}, 1),
+	}
+	if cfg.Web.Enabled && cfg.Web.AuthMethod == config.AuthToken {
+		b.webAuth = web.NewAuth(web.AuthOptions{})
 	}
 	b.last = loadLastPlayed(cfg.Bot.LastPlayedPath, log)
 	b.lib = openLibrary(b)

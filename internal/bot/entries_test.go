@@ -254,3 +254,17 @@ func TestSnapshot_VersionChangesOnlyWithState(t *testing.T) {
 		v = nv
 	}
 }
+
+// A seek while playing leaves the queue, pause state, volume and playing flag
+// alone, but the playhead jumped: the version must still change.
+func TestSnapshot_VersionChangesOnSeek(t *testing.T) {
+	b := pauseBot(t, false)
+	b.Enqueue(&seekItem{mockItem{"song"}})
+	v := b.Snapshot().Version
+	if err := b.Seek(30 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if b.Snapshot().Version == v {
+		t.Error("a seek did not change the snapshot version")
+	}
+}
