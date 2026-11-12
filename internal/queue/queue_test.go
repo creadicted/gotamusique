@@ -1,6 +1,7 @@
 package queue
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -431,6 +432,12 @@ func TestVersion_EveryMutatorBumps(t *testing.T) {
 			q.FinishIfUnchanged(q.Version())
 		},
 		"NextIfUnchanged": func(q *Queue) { q.NextIfUnchanged(q.Version()) },
+		"RemoveByID":      func(q *Queue) { _ = q.RemoveByID(q.Snapshot().IDs[0]) },
+		"JumpToID":        func(q *Queue) { _, _ = q.JumpToID(q.Snapshot().IDs[1]) },
+		"MoveAfter": func(q *Queue) {
+			ids := q.Snapshot().IDs
+			_ = q.MoveAfter(ids[0], ids[1])
+		},
 	}
 	for name, mutate := range mutators {
 		q := NewQueue()
@@ -669,4 +676,177 @@ func TestJumpToLast_ConcurrentAppend(t *testing.T) {
 	}
 	close(stop)
 	<-done
+}
+
+// --- Entry IDs ---
+
+func titles(q *Queue) []string {
+	var out []string
+	for _, it := range q.Items() {
+		out = append(out, it.(*testItem).id)
+	}
+	return out
+}
+
+func TestIDs_UniqueAndNeverReused(t *testing.T) {
+	q := NewQueue()
+	a := item("a")
+	q.Append(a)
+	q.Append(a) // same item twice -> distinct entries
+	if _, ok := q.RepeatCurrent(2); !ok {
+		t.Fatal("RepeatCurrent failed")
+	}
+	ids := q.Snapshot().IDs
+	seen := map[uint64]bool{}
+	for _, id := range ids {
+		if id == 0 || seen[id] {
+			t.Fatalf("bad or duplicate id in %v", ids)
+		}
+		seen[id] = true
+	}
+	_ = q.RemoveByID(ids[0])
+	q.Append(item("z"))
+	for _, id := range q.Snapshot().IDs {
+		if id == ids[0] {
+			t.Fatal("removed ID was reused")
+		}
+	}
+}
+
+func TestIDs_SurviveShuffleAndInsert(t *testing.T) {
+	q := NewQueue()
+	for _, n := range []string{"a", "b", "c", "d", "e"} {
+		q.Append(item(n))
+	}
+	before := map[uint64]string{}
+	snap := q.Snapshot()
+	for i, id := range snap.IDs {
+		before[id] = snap.Items[i].(*testItem).id
+	}
+	q.Randomize()
+	_ = q.Insert(0, item("x"))
+	after := q.Snapshot()
+	for i, id := range after.IDs {
+		if want, ok := before[id]; ok && after.Items[i].(*testItem).id != want {
+			t.Errorf("id %d now points at %v, was %s", id, after.Items[i], want)
+		}
+	}
+}
+
+func TestRemoveByID(t *testing.T) {
+	q := NewQueue()
+	for _, n := range []string{"a", "b", "c"} {
+		q.Append(item(n))
+	}
+	_ = q.JumpTo(2)
+	ids := q.Snapshot().IDs
+	if err := q.RemoveByID(ids[0]); err != nil {
+		t.Fatal(err)
+	}
+	if q.Index() != 1 || q.Current().(*testItem).id != "c" {
+		t.Errorf("current should still be c, got index %d", q.Index())
+	}
+	v := q.Version()
+	if err := q.RemoveByID(ids[0]); !errors.Is(err, ErrNotFound) {
+		t.Errorf("second remove = %v, want ErrNotFound", err)
+	}
+	if q.Version() != v || q.Len() != 2 {
+		t.Error("a missing ID must not touch the queue or bump the version")
+	}
+}
+
+func TestJumpToID(t *testing.T) {
+	q := NewQueue()
+	for _, n := range []string{"a", "b", "c"} {
+		q.Append(item(n))
+	}
+	ids := q.Snapshot().IDs
+	// Another client removes "a" first; the ID still finds "c".
+	_ = q.RemoveByID(ids[0])
+	i, err := q.JumpToID(ids[2])
+	if err != nil || i != 1 || q.Current().(*testItem).id != "c" {
+		t.Errorf("JumpToID = %d, %v, current %v", i, err, q.Current())
+	}
+	if _, err := q.JumpToID(ids[0]); !errors.Is(err, ErrNotFound) {
+		t.Errorf("gone ID = %v, want ErrNotFound", err)
+	}
+}
+
+func TestMoveAfter(t *testing.T) {
+	setup := func() (*Queue, []uint64) {
+		q := NewQueue()
+		for _, n := range []string{"a", "b", "c", "d"} {
+			q.Append(item(n))
+		}
+		return q, q.Snapshot().IDs
+	}
+	cases := []struct {
+		name     string
+		cur      int // JumpTo before moving
+		from, to int // positions; to == -1 means front
+		want     string
+		wantCur  string
+	}{
+		{"forward", 0, 0, 2, "bcad", "a"},
+		{"backward", 0, 3, 0, "adbc", "a"},
+		{"to front", 2, 2, -1, "cabd", "c"},
+		{"move current", 1, 1, 3, "acdb", "b"},
+		{"after current keeps current", 1, 3, 1, "abdc", "b"},
+	}
+	for _, c := range cases {
+		q, ids := setup()
+		_ = q.JumpTo(c.cur)
+		after := uint64(0)
+		if c.to >= 0 {
+			after = ids[c.to]
+		}
+		if err := q.MoveAfter(ids[c.from], after); err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		got := ""
+		for _, s := range titles(q) {
+			got += s
+		}
+		if got != c.want || q.Current().(*testItem).id != c.wantCur {
+			t.Errorf("%s: order %s current %v, want %s / %s", c.name, got, q.Current(), c.want, c.wantCur)
+		}
+	}
+}
+
+func TestMoveAfter_MissingAndSelfAndPastEnd(t *testing.T) {
+	q := NewQueue()
+	q.Append(item("a"))
+	q.Append(item("b"))
+	ids := q.Snapshot().IDs
+	v := q.Version()
+	if err := q.MoveAfter(999, ids[0]); !errors.Is(err, ErrNotFound) {
+		t.Errorf("missing id = %v", err)
+	}
+	if err := q.MoveAfter(ids[0], 999); !errors.Is(err, ErrNotFound) {
+		t.Errorf("missing after = %v", err)
+	}
+	if err := q.MoveAfter(ids[0], ids[0]); err != nil {
+		t.Errorf("self move = %v", err)
+	}
+	if q.Version() != v {
+		t.Error("rejected or no-op moves must not bump the version")
+	}
+	q.Next()
+	q.Next() // past end
+	if err := q.MoveAfter(ids[0], ids[1]); err != nil {
+		t.Fatal(err)
+	}
+	if q.Current() != nil || q.Index() != 2 {
+		t.Errorf("past-end queue must stay past end, index %d", q.Index())
+	}
+}
+
+func TestSnapshot_IndexOf(t *testing.T) {
+	q := NewQueue()
+	q.Append(item("a"))
+	q.Append(item("b"))
+	s := q.Snapshot()
+	if s.IndexOf(s.IDs[1]) != 1 || s.IndexOf(12345) != -1 {
+		t.Error("IndexOf wrong")
+	}
 }
