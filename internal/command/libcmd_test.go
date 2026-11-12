@@ -101,7 +101,7 @@ func TestListFile_NoArgListsEverything(t *testing.T) {
 func TestListFile_InvalidRegexDoesNotQuery(t *testing.T) {
 	bot := defaultBot()
 	bot.hasLibrary = true
-	bot.libTracks = []LibraryTrack{{Path: "a.mp3"}}
+	bot.libTracks = []library.Track{{Path: "a.mp3"}}
 	callHandler(makeListFileHandler(newShortlist()), bot, "([")
 	if bot.listRE != nil {
 		t.Error("invalid regex must not reach the library")
@@ -148,9 +148,9 @@ func TestTruncateRunes_KeepsMultibyteIntact(t *testing.T) {
 
 func TestPaging_PageCount(t *testing.T) {
 	// Out-of-range and malformed pages must not panic.
-	tracks := make([]LibraryTrack, 120)
+	tracks := make([]library.Track, 120)
 	for i := range tracks {
-		tracks[i] = LibraryTrack{Path: fmt.Sprintf("t%03d.mp3", i)}
+		tracks[i] = library.Track{Path: fmt.Sprintf("t%03d.mp3", i)}
 	}
 	bot := defaultBot()
 	bot.hasLibrary = true
@@ -162,8 +162,8 @@ func TestPaging_PageCount(t *testing.T) {
 
 // ---- shortlist and tags ----
 
-func tracks3() []LibraryTrack {
-	return []LibraryTrack{{Path: "a.mp3", Title: "A"}, {Path: "b.mp3", Title: "B"}, {Path: "c.mp3", Title: "C"}}
+func tracks3() []library.Track {
+	return []library.Track{{Path: "a.mp3", Title: "A"}, {Path: "b.mp3", Title: "B"}, {Path: "c.mp3", Title: "C"}}
 }
 
 func shortlistBot(t *testing.T) (*mockBot, *shortlist) {
@@ -227,7 +227,7 @@ func TestShortlist_BadNumberQueuesNothing(t *testing.T) {
 
 func TestShortlist_MissingFileIsSkipped(t *testing.T) {
 	bot, sl := shortlistBot(t)
-	bot.libTracks = append(tracks3(), LibraryTrack{Path: "gone.mp3"})
+	bot.libTracks = append(tracks3(), library.Track{Path: "gone.mp3"})
 	callHandler(makeListFileHandler(sl), bot, "")
 	callHandler(makeShortlistHandler(sl), bot, "*")
 	if got := enqueuedPaths(bot); got != "a.mp3,b.mp3,c.mp3" {

@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/konradk/gotamusique/internal/audio"
-	"github.com/konradk/gotamusique/internal/command"
 	"github.com/konradk/gotamusique/internal/database"
 	"github.com/konradk/gotamusique/internal/library"
 	"github.com/konradk/gotamusique/internal/media/file"
@@ -124,7 +123,7 @@ func (b *Bot) Rescan(ctx context.Context, force bool) (string, error) {
 
 // ListLibrary returns the scanned tracks ordered by path. A non-nil re keeps only
 // tracks whose path or title match.
-func (b *Bot) ListLibrary(re *regexp.Regexp) ([]command.LibraryTrack, error) {
+func (b *Bot) ListLibrary(re *regexp.Regexp) ([]library.Track, error) {
 	lib := b.libraryRef()
 	if lib == nil {
 		return nil, library.ErrUnavailable
@@ -134,7 +133,7 @@ func (b *Bot) ListLibrary(re *regexp.Regexp) ([]command.LibraryTrack, error) {
 	if err != nil {
 		return nil, fmt.Errorf("reading library: %w", err)
 	}
-	var out []command.LibraryTrack
+	var out []library.Track
 	for _, r := range recs {
 		if re == nil || re.MatchString(r.Path) || re.MatchString(r.Title) {
 			out = append(out, toLibraryTrack(r))
@@ -145,7 +144,7 @@ func (b *Bot) ListLibrary(re *regexp.Regexp) ([]command.LibraryTrack, error) {
 
 // SearchLibrary returns the tracks whose keywords contain every given keyword
 // (case-insensitive), ordered by path.
-func (b *Bot) SearchLibrary(keywords []string) ([]command.LibraryTrack, error) {
+func (b *Bot) SearchLibrary(keywords []string) ([]library.Track, error) {
 	lib := b.libraryRef()
 	if lib == nil {
 		return nil, library.ErrUnavailable
@@ -158,7 +157,7 @@ func (b *Bot) SearchLibrary(keywords []string) ([]command.LibraryTrack, error) {
 	if err != nil {
 		return nil, fmt.Errorf("reading library: %w", err)
 	}
-	out := make([]command.LibraryTrack, 0, len(recs))
+	out := make([]library.Track, 0, len(recs))
 	for _, r := range recs {
 		out = append(out, toLibraryTrack(r))
 	}
@@ -166,7 +165,7 @@ func (b *Bot) SearchLibrary(keywords []string) ([]command.LibraryTrack, error) {
 }
 
 // FindTagged returns the library files carrying every given tag, ordered by path.
-func (b *Bot) FindTagged(tags []string) ([]command.LibraryTrack, error) {
+func (b *Bot) FindTagged(tags []string) ([]library.Track, error) {
 	lib := b.libraryRef()
 	if lib == nil {
 		return nil, library.ErrUnavailable
@@ -175,7 +174,7 @@ func (b *Bot) FindTagged(tags []string) ([]command.LibraryTrack, error) {
 	if err != nil {
 		return nil, fmt.Errorf("reading library: %w", err)
 	}
-	out := make([]command.LibraryTrack, 0, len(recs))
+	out := make([]library.Track, 0, len(recs))
 	for _, r := range recs {
 		if r.Type == library.RecordType {
 			out = append(out, toLibraryTrack(r))
@@ -187,26 +186,26 @@ func (b *Bot) FindTagged(tags []string) ([]command.LibraryTrack, error) {
 
 // LookupFile resolves a !file argument against the library: an exact path, else
 // a folder (every track below it), else a case-insensitive partial path match.
-func (b *Bot) LookupFile(arg string) (command.FileLookup, error) {
+func (b *Bot) LookupFile(arg string) (library.FileLookup, error) {
 	lib := b.libraryRef()
 	if lib == nil {
-		return command.FileLookup{}, library.ErrUnavailable
+		return library.FileLookup{}, library.ErrUnavailable
 	}
 	arg = strings.TrimSpace(arg)
 	// An exact path is one primary-key lookup; only a miss loads the library.
 	if r, err := lib.db.QueryByID(file.IDFromPath(arg)); err != nil {
-		return command.FileLookup{}, fmt.Errorf("reading library: %w", err)
+		return library.FileLookup{}, fmt.Errorf("reading library: %w", err)
 	} else if r != nil && r.Type == library.RecordType && r.Path == arg {
-		return command.FileLookup{Kind: command.LookupExact, Tracks: []command.LibraryTrack{toLibraryTrack(*r)}}, nil
+		return library.FileLookup{Kind: library.LookupExact, Tracks: []library.Track{toLibraryTrack(*r)}}, nil
 	}
 	recs, err := lib.db.Query((&database.Condition{}).
 		AndEqual("type", library.RecordType, true).OrderBy("path", false))
 	if err != nil {
-		return command.FileLookup{}, fmt.Errorf("reading library: %w", err)
+		return library.FileLookup{}, fmt.Errorf("reading library: %w", err)
 	}
 	dir := strings.TrimSuffix(arg, "/") + "/"
 	lower := strings.ToLower(arg)
-	var folder, partial []command.LibraryTrack
+	var folder, partial []library.Track
 	for _, r := range recs {
 		switch {
 		case strings.HasPrefix(r.Path, dir):
@@ -216,9 +215,9 @@ func (b *Bot) LookupFile(arg string) (command.FileLookup, error) {
 		}
 	}
 	if len(folder) > 0 {
-		return command.FileLookup{Kind: command.LookupFolder, Tracks: folder}, nil
+		return library.FileLookup{Kind: library.LookupFolder, Tracks: folder}, nil
 	}
-	return command.FileLookup{Kind: command.LookupPartial, Tracks: partial}, nil
+	return library.FileLookup{Kind: library.LookupPartial, Tracks: partial}, nil
 }
 
 // UpdateTags rewrites the tags of the library file row id.
@@ -236,8 +235,8 @@ func (b *Bot) UpdateTags(id string, fn func(tags []string) []string) error {
 	return nil
 }
 
-func toLibraryTrack(r database.MusicRecord) command.LibraryTrack {
-	t := command.LibraryTrack{Path: r.Path, Title: r.Title, Tags: r.Tags}
+func toLibraryTrack(r database.MusicRecord) library.Track {
+	t := library.Track{Path: r.Path, Title: r.Title, Tags: r.Tags}
 	if a, ok := r.Metadata["artist"].(string); ok {
 		t.Artist = a
 	}

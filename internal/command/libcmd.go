@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/konradk/gotamusique/internal/config"
+	"github.com/konradk/gotamusique/internal/library"
 	fileitem "github.com/konradk/gotamusique/internal/media/file"
 )
 
@@ -25,13 +26,13 @@ const maxLineLen = 90
 // per channel, so !shortlist can queue entries from it. Channels are evicted FIFO.
 type shortlist struct {
 	mu     sync.Mutex
-	tracks map[uint32][]LibraryTrack
+	tracks map[uint32][]library.Track
 	order  []uint32
 }
 
-func newShortlist() *shortlist { return &shortlist{tracks: map[uint32][]LibraryTrack{}} }
+func newShortlist() *shortlist { return &shortlist{tracks: map[uint32][]library.Track{}} }
 
-func (s *shortlist) set(ch uint32, tracks []LibraryTrack) {
+func (s *shortlist) set(ch uint32, tracks []library.Track) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, ok := s.tracks[ch]; !ok {
@@ -44,7 +45,7 @@ func (s *shortlist) set(ch uint32, tracks []LibraryTrack) {
 	s.tracks[ch] = tracks
 }
 
-func (s *shortlist) get(ch uint32) []LibraryTrack {
+func (s *shortlist) get(ch uint32) []library.Track {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.tracks[ch]
@@ -172,7 +173,7 @@ func makeFindTaggedHandler(sl *shortlist) HandlerFunc {
 }
 
 // trackLine renders one track as "path - artist title (tag, tag)".
-func trackLine(t LibraryTrack) string {
+func trackLine(t library.Track) string {
 	line := t.Path
 	if t.Title != "" || t.Artist != "" {
 		line += " - " + strings.TrimSpace(t.Artist+" "+t.Title)
@@ -205,7 +206,7 @@ func paginate(lines []string) [][]string {
 
 // sendTrackPage numbers the tracks, remembers them as the channel's shortlist and
 // sends one page. Numbers run across pages, so "!shortlist 70" works from page 2.
-func sendTrackPage(cfg *config.Config, c *Ctx, sl *shortlist, tracks []LibraryTrack, page int, empty, cmd string) {
+func sendTrackPage(cfg *config.Config, c *Ctx, sl *shortlist, tracks []library.Track, page int, empty, cmd string) {
 	if len(tracks) == 0 {
 		reply(cfg, c, esc(empty), empty)
 		return
@@ -243,7 +244,7 @@ func truncateRunes(s string, n int) string {
 
 // trackItem builds a playable file item from a library track without running
 // ffprobe: the scan already stored title, artist and duration.
-func trackItem(t LibraryTrack, musicFolder string) (*fileitem.FileItem, error) {
+func trackItem(t library.Track, musicFolder string) (*fileitem.FileItem, error) {
 	it := fileitem.New(t.Path, musicFolder)
 	if err := it.Validate(); err != nil {
 		return nil, err
@@ -259,7 +260,7 @@ const maxBulkAdd = 200
 
 // enqueueTracks queues the tracks that still exist on disk and replies with a summary.
 // At most maxBulkAdd tracks are queued; the reply says when the rest was left out.
-func enqueueTracks(bot BotAPI, cfg *config.Config, c *Ctx, tracks []LibraryTrack, what string) {
+func enqueueTracks(bot BotAPI, cfg *config.Config, c *Ctx, tracks []library.Track, what string) {
 	if cfg.Files.MusicFolder == "" {
 		noLibrary(cfg, c)
 		return
@@ -322,7 +323,7 @@ func makeShortlistHandler(sl *shortlist) HandlerFunc {
 			sendTrackPage(cfg, c, sl, list, page, "", cmd)
 			return
 		}
-		var picked []LibraryTrack
+		var picked []library.Track
 		if len(fields) == 1 && fields[0] == "*" {
 			picked = list
 		} else {

@@ -135,6 +135,13 @@ func (u *URLItem) Resolve(ctx context.Context) error {
 	return nil
 }
 
+// Length returns the track length, or 0 until it is known. Resolve may fill it in.
+func (u *URLItem) Length() time.Duration {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	return u.Duration
+}
+
 // StreamURL returns the resolved direct URL ("" before Resolve).
 func (u *URLItem) StreamURL() string {
 	u.mu.Lock()

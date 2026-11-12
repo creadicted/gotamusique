@@ -1,6 +1,7 @@
 package queue
 
 import (
+	"errors"
 	"fmt"
 	"math/rand/v2"
 	"slices"
@@ -9,7 +10,20 @@ import (
 	"github.com/konradk/gotamusique/internal/audio"
 )
 
-// Queue is a thread-safe, index-based media queue.
+// ErrNotFound is returned by the by-ID operations when no entry has that ID,
+// typically because another client already removed it.
+var ErrNotFound = errors.New("queue entry not found")
+
+// entry is one queue slot. The ID is unique for the lifetime of the Queue and
+// never reused, so it stays valid across inserts, removals, moves and shuffles
+// (the same MediaItem can sit in several slots, e.g. after RepeatCurrent).
+type entry struct {
+	id   uint64
+	item audio.MediaItem
+}
+
+// Queue is a thread-safe, index-based media queue whose entries also carry
+// stable IDs for clients that must not act on a shifted index.
 // currentIndex == len(items) is the "past-end / idle" sentinel.
 //
 // The playback mode decides what Next does at the end of the queue. Random mode
@@ -18,13 +32,20 @@ import (
 // ModeOneShot.
 type Queue struct {
 	mu           sync.RWMutex
-	items        []audio.MediaItem
+	items        []entry
 	currentIndex int
 	mode         Mode
 	version      uint64 // bumped by every mutator; see Version
+	lastID       uint64 // last entry ID handed out; IDs start at 1
 }
 
 func NewQueue() *Queue { return &Queue{mode: ModeOneShot} }
+
+// newEntryLocked wraps item in an entry with a fresh ID.
+func (q *Queue) newEntryLocked(item audio.MediaItem) entry {
+	q.lastID++
+	return entry{id: q.lastID, item: item}
+}
 
 // Mode returns the current playback mode.
 func (q *Queue) Mode() Mode {
@@ -79,7 +100,7 @@ func (q *Queue) reshuffleLocked(last int) {
 		j := 1 + rand.IntN(n-1)
 		perm[0], perm[j] = perm[j], perm[0]
 	}
-	out := make([]audio.MediaItem, n)
+	out := make([]entry, n)
 	for i, p := range perm {
 		out[i] = q.items[p]
 	}
@@ -95,10 +116,10 @@ func (q *Queue) Append(item audio.MediaItem) {
 	q.version++
 	if q.mode == ModeRandom && q.currentIndex < len(q.items) {
 		pos := q.currentIndex + 1 + rand.IntN(len(q.items)-q.currentIndex)
-		q.items = slices.Insert(q.items, pos, item)
+		q.items = slices.Insert(q.items, pos, q.newEntryLocked(item))
 		return
 	}
-	q.items = append(q.items, item)
+	q.items = append(q.items, q.newEntryLocked(item))
 }
 
 // Insert adds item at index, shifting later items right.
@@ -111,9 +132,9 @@ func (q *Queue) Insert(index int, item audio.MediaItem) error {
 	if index < 0 || index > len(q.items) {
 		return fmt.Errorf("insert index %d out of range [0, %d]", index, len(q.items))
 	}
-	q.items = append(q.items, nil)
+	q.items = append(q.items, entry{})
 	copy(q.items[index+1:], q.items[index:])
-	q.items[index] = item
+	q.items[index] = q.newEntryLocked(item)
 	// Adjust only when not already in past-end state; past-end stays past-end.
 	if index <= q.currentIndex && q.currentIndex < len(q.items)-1 {
 		q.currentIndex++
@@ -130,10 +151,10 @@ func (q *Queue) RepeatCurrent(n int) (audio.MediaItem, bool) {
 		return nil, false
 	}
 	q.version++
-	item := q.items[q.currentIndex]
-	copies := make([]audio.MediaItem, n)
+	item := q.items[q.currentIndex].item
+	copies := make([]entry, n)
 	for i := range copies {
-		copies[i] = item
+		copies[i] = q.newEntryLocked(item)
 	}
 	q.items = slices.Insert(q.items, q.currentIndex+1, copies...)
 	return item, true
@@ -164,7 +185,7 @@ func (q *Queue) Current() audio.MediaItem {
 	if q.currentIndex >= len(q.items) {
 		return nil
 	}
-	return q.items[q.currentIndex]
+	return q.items[q.currentIndex].item
 }
 
 // Next advances to the following item and returns true. At the end of the
@@ -223,7 +244,8 @@ func (q *Queue) nextLocked() bool {
 }
 
 // Version returns a counter that every mutator (Append, Insert, Remove, Next,
-// JumpTo, Reset, Clear, SetMode, Randomize, FinishIfUnchanged) increments. Two
+// JumpTo, Reset, Clear, SetMode, Randomize, FinishIfUnchanged, RemoveByID,
+// JumpToID, MoveAfter) increments. Two
 // reads returning the same value mean nothing changed in between. A mutator may
 // also bump it on a rejected call (e.g. an out-of-range Insert); callers must
 // treat a changed value as "re-evaluate", never as proof something moved.
@@ -233,12 +255,17 @@ func (q *Queue) Version() uint64 {
 	return q.version
 }
 
-// Snapshot is a consistent copy of the queue taken under one lock.
+// Snapshot is a consistent copy of the queue taken under one lock. IDs is
+// parallel to Items.
 type Snapshot struct {
 	Items   []audio.MediaItem
+	IDs     []uint64
 	Index   int
 	Version uint64
 }
+
+// IndexOf returns the position of the entry with the given ID, or -1.
+func (s Snapshot) IndexOf(id uint64) int { return slices.Index(s.IDs, id) }
 
 // Current returns the snapshot's current item, or nil when idle or empty.
 func (s Snapshot) Current() audio.MediaItem {
@@ -253,8 +280,11 @@ func (q *Queue) Snapshot() Snapshot {
 	q.mu.RLock()
 	defer q.mu.RUnlock()
 	items := make([]audio.MediaItem, len(q.items))
-	copy(items, q.items)
-	return Snapshot{Items: items, Index: q.currentIndex, Version: q.version}
+	ids := make([]uint64, len(q.items))
+	for i, e := range q.items {
+		items[i], ids[i] = e.item, e.id
+	}
+	return Snapshot{Items: items, IDs: ids, Index: q.currentIndex, Version: q.version}
 }
 
 // FinishIfUnchanged moves the queue to the past-end (idle) position, but only if
@@ -287,7 +317,10 @@ func (q *Queue) ReplaceIfUnchanged(version uint64, items []audio.MediaItem) bool
 	if q.version != version || len(items) == 0 {
 		return false
 	}
-	q.items = slices.Clone(items)
+	q.items = make([]entry, len(items))
+	for i, it := range items {
+		q.items[i] = q.newEntryLocked(it)
+	}
 	q.currentIndex = 0
 	q.version++
 	return true
@@ -355,6 +388,88 @@ func (q *Queue) Items() []audio.MediaItem {
 	q.mu.RLock()
 	defer q.mu.RUnlock()
 	cp := make([]audio.MediaItem, len(q.items))
-	copy(cp, q.items)
+	for i, e := range q.items {
+		cp[i] = e.item
+	}
 	return cp
+}
+
+func (q *Queue) indexOfLocked(id uint64) int {
+	return slices.IndexFunc(q.items, func(e entry) bool { return e.id == id })
+}
+
+// RemoveByID deletes the entry with the given ID and keeps the current item
+// pointing at the same entry (as Remove does); removing the current entry leaves
+// the next one current. wasCurrent says whether the removed entry was the current
+// one, decided under the same lock so the caller knows whether the playing track
+// is gone. It returns ErrNotFound, without touching the queue or its version,
+// when the entry is already gone.
+func (q *Queue) RemoveByID(id uint64) (wasCurrent bool, err error) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	i := q.indexOfLocked(id)
+	if i < 0 {
+		return false, ErrNotFound
+	}
+	wasCurrent = i == q.currentIndex
+	q.version++
+	q.items = slices.Delete(q.items, i, i+1)
+	if i < q.currentIndex {
+		q.currentIndex--
+	}
+	return wasCurrent, nil
+}
+
+// JumpToID makes the entry with the given ID current. It returns its index, or
+// ErrNotFound (queue and version untouched) when it is gone.
+func (q *Queue) JumpToID(id uint64) (int, error) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	i := q.indexOfLocked(id)
+	if i < 0 {
+		return 0, ErrNotFound
+	}
+	q.version++
+	q.currentIndex = i
+	return i, nil
+}
+
+// MoveAfter moves the entry id to sit directly after the entry afterID; an
+// afterID of 0 moves it to the front. The current entry stays current, whichever
+// slot it ends up in, and a queue that is past its end stays past its end. Moving
+// an entry after itself is a no-op that succeeds. It returns ErrNotFound (nothing
+// changed) when either entry is missing, so a stale request never reorders the
+// wrong items.
+func (q *Queue) MoveAfter(id, afterID uint64) error {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	from := q.indexOfLocked(id)
+	if from < 0 {
+		return ErrNotFound
+	}
+	if afterID != 0 && q.indexOfLocked(afterID) < 0 {
+		return ErrNotFound
+	}
+	if id == afterID {
+		return nil
+	}
+	var curID uint64
+	pastEnd := q.currentIndex >= len(q.items)
+	if !pastEnd {
+		curID = q.items[q.currentIndex].id
+	}
+	moved := q.items[from]
+	q.items = slices.Delete(q.items, from, from+1)
+	to := 0
+	if afterID != 0 {
+		to = q.indexOfLocked(afterID) + 1
+	}
+	q.items = slices.Insert(q.items, to, moved)
+	if pastEnd {
+		q.currentIndex = len(q.items)
+	} else {
+		q.currentIndex = q.indexOfLocked(curID)
+	}
+	q.version++
+	return nil
 }
