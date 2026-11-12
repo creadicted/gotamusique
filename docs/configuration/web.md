@@ -27,7 +27,7 @@ auth_method = token
 | `access_address` | `http://127.0.0.1:8181` | The public URL people open, an absolute `http://` or `https://` URL with a host (a path is fine, credentials and a query are not). The link from `!web` is built from it. An `https://` URL marks the session cookie *Secure*. The bot refuses to start with `enabled = True` and a missing or malformed value |
 | `auth_method`    | `token`                 | `token` or `none` (see below) |
 | `upload_enabled` | `True`                  | Let logged-in users upload audio (see [Uploads](#uploads)) |
-| `max_upload_file_size` | `30M`             | Size limit of one uploaded file: a number with an optional `K`, `M` or `G` |
+| `max_upload_file_size` | `30M`             | Size limit of one uploaded file: a number with an optional `K`, `M` or `G`, at most `1024G` |
 | `allow_upload_without_auth` | `False`      | Also allow uploads when `auth_method = none`. Off by default: an open instance would let anyone who can reach it fill the disk |
 
 The section name and these keys are the same as in botamusique, so an existing file loads. Its
@@ -179,16 +179,17 @@ and the lookup just before a queued URL plays all share that limit. The checks t
 The file is stored as `<music_folder>/uploads/<your name>/<file name>` and added to the library at
 once, no rescan needed. What the server does with it:
 
-* The name is cleaned up: only the last path component is used, control and reserved characters
-  become `_`, hidden names lose their dot, and the name must end in a known audio extension
+* The name is cleaned up: only the last path component is used, control characters are removed,
+  reserved characters (`/ \ : * ? " < > |`) become `_`, hidden names lose their dot, and the name
+  must end in a known audio extension
   (`.mp3`, `.flac`, `.ogg`, `.oga`, `.opus`, `.m4a`, `.aac`, `.wav`, `.wma`, `.ape`, `.aiff`).
 * An existing file is **never overwritten**: the new one becomes `name (1).mp3`, `name (2).mp3`...
 * The file must be readable by `ffprobe` and contain an audio stream; otherwise it is deleted again
   (`422 invalid_file`). A file over `max_upload_file_size` is `413 too_large`. Nothing is left behind
   on any failure.
 * At most four uploads run at once; more get `503 busy`.
-* The `uploads` folder must really lie inside the music folder: a symlink pointing elsewhere is
-  refused. Do not list `uploads` in `[files] ignored_folders`, or uploads are refused.
+* `uploads` and `uploads/<your name>` must be plain folders inside the music folder. A symlink there
+  is refused, and nothing is created behind it (the scan does not follow folder symlinks either). Do not list `uploads` in `[files] ignored_folders`, or uploads are refused.
 
 !!! warning "Uploads parse untrusted files"
     `ffprobe` reads every uploaded file, and media parsers are a classic source of vulnerabilities.

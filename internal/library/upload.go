@@ -7,6 +7,7 @@ import (
 	"io"
 	"io/fs"
 	"log/slog"
+	"math"
 	"os"
 	"path"
 	"path/filepath"
@@ -135,7 +136,14 @@ func (s *Scanner) Store(ctx context.Context, owner, filename string, r io.Reader
 	}
 	defer os.Remove(tmp.Name()) //nolint:errcheck // gone after a successful rename
 
-	n, err := io.Copy(tmp, io.LimitReader(ctxReader{ctx, r}, maxBytes+1))
+	// Read one byte more than allowed to tell "exactly at the limit" from "over it".
+	// At the top of the int64 range there is no room for that byte, and no file can
+	// be bigger, so the limit is used as it is instead of wrapping around.
+	readMax := maxBytes
+	if readMax < math.MaxInt64 {
+		readMax++
+	}
+	n, err := io.Copy(tmp, io.LimitReader(ctxReader{ctx, r}, readMax))
 	if cerr := tmp.Close(); err == nil {
 		err = cerr
 	}

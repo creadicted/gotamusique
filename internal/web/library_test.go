@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"mime/multipart"
 	"net/http"
 	"strings"
@@ -328,5 +329,25 @@ func TestUpload_ConcurrentUploadsAreCapped(t *testing.T) {
 	}
 	if got := len(e.srv.uploadSlots); got != maxConcurrentUploads-1 {
 		t.Errorf("a finished upload must give its slot back; %d held", got)
+	}
+}
+
+// The limit plus the multipart headroom must not wrap around: with the largest
+// possible setting an ordinary upload still works, and the arithmetic saturates.
+func TestUpload_AHugeLimitDoesNotOverflow(t *testing.T) {
+	if got := bodyLimit(math.MaxInt64); got != math.MaxInt64 {
+		t.Errorf("bodyLimit(MaxInt64) = %d, want it to saturate", got)
+	}
+	if got := bodyLimit(math.MaxInt64 - multipartOverhead + 1); got != math.MaxInt64 {
+		t.Errorf("just past the edge = %d, want saturation", got)
+	}
+	if got := bodyLimit(1000); got != 1000+multipartOverhead {
+		t.Errorf("bodyLimit(1000) = %d", got)
+	}
+
+	e := uploadEnv(t, Options{AuthMethod: config.AuthToken, MaxUploadBytes: math.MaxInt64})
+	body, ct := multipartBody(t, [3]string{"file", "a.mp3", "audio"})
+	if resp := e.upload(t, body, ct); resp.StatusCode != http.StatusCreated {
+		t.Errorf("an ordinary upload with the largest limit = %d, want 201 (the limit wrapped negative?)", resp.StatusCode)
 	}
 }

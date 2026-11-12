@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -432,4 +433,17 @@ func TestIndexFile_RejectsNoAudio(t *testing.T) {
 		t.Errorf("err = %v, want ErrNotIndexable", err)
 	}
 	eq(t, f.paths(t), nil)
+}
+
+// maxBytes+1 would wrap to a negative number at the top of the range and reject
+// everything; an ordinary file must still be stored.
+func TestStore_AHugeLimitDoesNotOverflow(t *testing.T) {
+	f := newFixture(t)
+	rec, err := f.scanner(Config{}).Store(context.Background(), "bob", "a.mp3", strings.NewReader("audio"), math.MaxInt64)
+	if err != nil || rec.Path != "uploads/bob/a.mp3" {
+		t.Errorf("= %+v, %v", rec, err)
+	}
+	if _, err := f.scanner(Config{}).Store(context.Background(), "bob", "b.mp3", strings.NewReader("audio"), math.MaxInt64-1); err != nil {
+		t.Errorf("one below the top: %v", err)
+	}
 }

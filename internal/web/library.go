@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -152,6 +153,16 @@ const (
 	maxConcurrentUploads = 4
 )
 
+// bodyLimit is the most a whole upload request may carry: the file limit plus room
+// for the multipart framing. It saturates instead of wrapping around, so a huge
+// limit cannot turn negative and make every request look oversize.
+func bodyLimit(fileLimit int64) int64 {
+	if fileLimit > math.MaxInt64-multipartOverhead {
+		return math.MaxInt64
+	}
+	return fileLimit + multipartOverhead
+}
+
 // handleUpload takes one audio file as multipart/form-data in the field "file"
 // and adds it to the library. The body is streamed to disk, never held in memory.
 // It answers 201 with the new library entry; queue it with a follow-up add.
@@ -178,7 +189,8 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request, id Identit
 	if limit <= 0 {
 		limit = defaultMaxUpload
 	}
-	if r.ContentLength > limit+multipartOverhead {
+	bodyMax := bodyLimit(limit)
+	if r.ContentLength > bodyMax {
 		writeError(w, http.StatusRequestEntityTooLarge, "too_large", "the file is too large")
 		return
 	}
@@ -189,7 +201,7 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request, id Identit
 	_ = rc.SetReadDeadline(time.Now().Add(uploadTimeout))
 	_ = rc.SetWriteDeadline(time.Now().Add(uploadTimeout + 30*time.Second))
 
-	r.Body = http.MaxBytesReader(w, r.Body, limit+multipartOverhead)
+	r.Body = http.MaxBytesReader(w, r.Body, bodyMax)
 	mr, err := r.MultipartReader()
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "bad_request", "send the file as multipart/form-data in the field \"file\"")

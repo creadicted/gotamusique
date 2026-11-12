@@ -389,3 +389,18 @@ func TestLoad_WebRejectsABadUploadSize(t *testing.T) {
 		t.Errorf("err = %v, want one that names max_upload_file_size", err)
 	}
 }
+
+// Close to the int64 limit the upload code's own additions would wrap around, so
+// absurd settings are refused up front.
+func TestLoad_WebUploadSizeIsCapped(t *testing.T) {
+	for _, v := range []string{"9223372036854775807", "9223372036854775807B", "1025G", "9000000000G"} {
+		_, err := loadString(t, "[webinterface]\nmax_upload_file_size = "+v+"\n")
+		if err == nil || !strings.Contains(err.Error(), "max_upload_file_size") {
+			t.Errorf("%s: err = %v, want a refusal naming max_upload_file_size", v, err)
+		}
+	}
+	cfg, err := loadString(t, "[webinterface]\nmax_upload_file_size = 1024G\n")
+	if err != nil || cfg.Web.MaxUploadBytes != 1<<40 {
+		t.Errorf("1024G = %v, %v, want accepted", cfg, err)
+	}
+}

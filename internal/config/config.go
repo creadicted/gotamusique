@@ -293,6 +293,9 @@ func build(f *ini.File) (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("[webinterface] max_upload_file_size %q: %w", w.Key("max_upload_file_size").String(), err)
 	}
+	if maxUpload > maxUploadSetting {
+		return nil, fmt.Errorf("[webinterface] max_upload_file_size %q: at most 1024G", w.Key("max_upload_file_size").String())
+	}
 	cfg.Web.MaxUploadBytes = maxUpload
 	if cfg.Web.Enabled {
 		// Everything user-facing is built from this: the !web link, the cookie's
@@ -354,6 +357,11 @@ func parseAccessAddress(raw string) (string, error) {
 	}
 	return strings.TrimRight(raw, "/"), nil
 }
+
+// maxUploadSetting is the largest accepted max_upload_file_size (1 TiB). It is far
+// beyond any sensible limit; the point is to stay well clear of int64 overflow when
+// the upload code adds its own headroom to the setting.
+const maxUploadSetting = 1 << 40
 
 // parseSize reads a size such as "30M", "512K", "2G" or a plain byte count. The
 // units are powers of 1024 and may be followed by "B" or "iB"; case does not matter.
