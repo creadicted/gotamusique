@@ -50,6 +50,21 @@ type Seekable interface {
 	CanSeek() bool
 }
 
+// Lengther is implemented by items that know how long they are. Length is 0
+// while unknown (an unresolved URL, a live stream), and may change once, when
+// the item resolves.
+type Lengther interface {
+	Length() time.Duration
+}
+
+// LengthOf returns item's length, or 0 when it has none or does not know it.
+func LengthOf(item MediaItem) time.Duration {
+	if l, ok := item.(Lengther); ok {
+		return l.Length()
+	}
+	return 0
+}
+
 // StreamConfigurer is optionally implemented by items that need non-default
 // ffmpeg input options. It is called after Resolve, just before playback.
 type StreamConfigurer interface {

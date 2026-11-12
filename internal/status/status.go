@@ -4,7 +4,12 @@
 // bot itself.
 package status
 
-import "time"
+import (
+	"encoding/binary"
+	"hash/fnv"
+	"math"
+	"time"
+)
 
 // Entry is one queue slot.
 type Entry struct {
@@ -41,4 +46,50 @@ type Snapshot struct {
 	Mode   string // one-shot, repeat, random or autoplay
 
 	Scan Scan
+}
+
+// Fingerprint hashes everything a client renders from the snapshot, so it changes
+// exactly when the rendered state changes and never otherwise. Version and, while
+// audio is playing, Position are left out: the position advances every moment and
+// clients interpolate it. When nothing plays the position is static, so then a
+// change (a seek while paused) counts.
+func (s Snapshot) Fingerprint() uint64 {
+	h := fnv.New64a()
+	var buf [8]byte
+	u64 := func(v uint64) {
+		binary.LittleEndian.PutUint64(buf[:], v)
+		h.Write(buf[:]) //nolint:errcheck // hash.Hash never fails
+	}
+	str := func(v string) {
+		u64(uint64(len(v))) // length prefix keeps "ab","c" apart from "a","bc"
+		h.Write([]byte(v))  //nolint:errcheck
+	}
+	flag := func(v bool) {
+		if v {
+			u64(1)
+		} else {
+			u64(0)
+		}
+	}
+
+	u64(uint64(len(s.Queue)))
+	for _, e := range s.Queue {
+		u64(e.ID)
+		str(e.Title)
+		u64(uint64(e.Duration))
+		flag(e.Seekable)
+	}
+	u64(uint64(s.Index))
+	flag(s.Playing)
+	str(s.Pause)
+	if !s.Playing {
+		flag(s.PositionKnown)
+		u64(uint64(s.Position))
+	}
+	u64(math.Float64bits(s.Volume))
+	flag(s.Muted)
+	str(s.Mode)
+	flag(s.Scan.Available)
+	flag(s.Scan.Running)
+	return h.Sum64()
 }

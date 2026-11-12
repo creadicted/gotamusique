@@ -6,6 +6,7 @@ import (
 	"time"
 
 	fileitem "github.com/konradk/gotamusique/internal/media/file"
+	urlitem "github.com/konradk/gotamusique/internal/media/url"
 	"github.com/konradk/gotamusique/internal/queue"
 )
 
@@ -252,5 +253,82 @@ func TestSnapshot_VersionChangesOnlyWithState(t *testing.T) {
 			t.Errorf("%s did not change the version", name)
 		}
 		v = nv
+	}
+}
+
+// A queued URL item knows its length once validated; the entry must carry it, not
+// only local files.
+func TestSnapshot_URLItemDuration(t *testing.T) {
+	b := pauseBot(t, false)
+	u := urlitem.New("https://example.com/watch?v=1", b.cfg)
+	u.Title, u.Duration = "Song", 3*time.Minute+25*time.Second
+	b.Enqueue(u)
+	b.Enqueue(urlitem.New("https://example.com/watch?v=2", b.cfg)) // not resolved yet
+
+	q := b.Snapshot().Queue
+	if q[0].Duration != 3*time.Minute+25*time.Second {
+		t.Errorf("URL item duration = %v, want 3m25s", q[0].Duration)
+	}
+	if q[1].Duration != 0 || q[0].Seekable {
+		t.Errorf("unresolved/unseekable URL entries = %+v", q)
+	}
+}
+
+// Next() at the end of a one-shot queue bumps the queue's mutation counter but
+// changes nothing a client sees; the snapshot version must not move.
+func TestSnapshot_VersionIgnoresNoOpQueueMutations(t *testing.T) {
+	b := pauseBot(t, false)
+	b.Enqueue(&mockItem{"a"})
+	b.queue.Next() // runs off the end: idle
+	v := b.Snapshot().Version
+	for i := 0; i < 3; i++ {
+		b.queue.Next() // past the end already: a no-op that still bumps queue.Version
+	}
+	if got := b.Snapshot().Version; got != v {
+		t.Errorf("version moved from %d to %d without any visible change", v, got)
+	}
+}
+
+// URLItem.Resolve fills in title and duration in place, with no queue mutation.
+// Clients must still see the change.
+func TestSnapshot_VersionChangesWhenAnItemUpdatesInPlace(t *testing.T) {
+	b := pauseBot(t, false)
+	u := urlitem.New("https://example.com/watch?v=1", b.cfg)
+	b.Enqueue(u)
+	v := b.Snapshot().Version
+
+	u.Title, u.Duration = "Resolved title", 90*time.Second // what Resolve does
+	if b.Snapshot().Version == v {
+		t.Error("an in-place metadata update did not change the version")
+	}
+}
+
+func TestSnapshot_VersionChangesWhenPausedSeekMovesTheResumePoint(t *testing.T) {
+	b := pauseBot(t, false)
+	b.Enqueue(&seekItem{mockItem{"song"}})
+	b.Pause()
+	if err := b.Seek(10 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	v := b.Snapshot().Version
+	if err := b.Seek(20 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if b.Snapshot().Version == v {
+		t.Error("seeking while paused changed the position but not the version")
+	}
+}
+
+// A seek during playback leaves the fingerprint alone (the position is excluded
+// while playing), yet the playhead jumped.
+func TestSnapshot_VersionChangesOnSeek(t *testing.T) {
+	b := pauseBot(t, false)
+	b.Enqueue(&seekItem{mockItem{"song"}})
+	v := b.Snapshot().Version
+	if err := b.Seek(30 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if b.Snapshot().Version == v {
+		t.Error("a seek did not change the snapshot version")
 	}
 }
