@@ -201,3 +201,86 @@ func TestLoad_AnnounceRadioTracksDefaultAndOverride(t *testing.T) {
 		t.Error("override not applied: announce_radio_tracks still true")
 	}
 }
+
+func loadString(t *testing.T, ini string) (*Config, error) {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "c.ini")
+	if err := os.WriteFile(p, []byte(ini), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return Load(p)
+}
+
+func TestLoad_WebDefaultsAreSafe(t *testing.T) {
+	cfg, err := Load("testdata/valid.ini")
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := cfg.Web
+	if w.Enabled {
+		t.Error("the web UI must be off by default")
+	}
+	if w.Addr != "127.0.0.1" || w.Port != 8181 {
+		t.Errorf("listen = %s:%d, want loopback 8181", w.Addr, w.Port)
+	}
+	if w.AuthMethod != AuthToken {
+		t.Errorf("auth_method = %q, want token", w.AuthMethod)
+	}
+	if w.AccessAddress != "http://127.0.0.1:8181" {
+		t.Errorf("access_address = %q", w.AccessAddress)
+	}
+	if got := cfg.Commands.Aliases["web"]; len(got) == 0 || got[0] != "web" {
+		t.Errorf("web alias = %v", got)
+	}
+}
+
+func TestLoad_WebOverrides(t *testing.T) {
+	cfg, err := loadString(t, "[webinterface]\nenabled = True\nlistening_addr = 0.0.0.0\nlistening_port = 9000\n"+
+		"access_address = https://music.example.com/\nauth_method = NONE\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := cfg.Web
+	if !w.Enabled || w.Addr != "0.0.0.0" || w.Port != 9000 || w.AuthMethod != AuthNone {
+		t.Errorf("web = %+v", w)
+	}
+	if w.AccessAddress != "https://music.example.com" {
+		t.Errorf("trailing slash not trimmed: %q", w.AccessAddress)
+	}
+}
+
+// A botamusique file with the full [webinterface] section must still load.
+func TestLoad_WebAcceptsOriginalKeys(t *testing.T) {
+	_, err := loadString(t, `[webinterface]
+access_address = http://127.0.0.1:8181
+auth_method = none
+enabled = False
+flask_secret = ChangeThisPassword
+is_web_proxified = True
+listening_addr = 127.0.0.1
+listening_port = 8181
+max_attempts = 10
+max_upload_file_size = 30M
+password =
+upload_enabled = True
+user =
+web_logfile =
+`)
+	if err != nil {
+		t.Fatalf("original keys rejected: %v", err)
+	}
+}
+
+func TestLoad_WebRejectsUnsupportedAuthAndBadPort(t *testing.T) {
+	for _, ini := range []string{
+		"[webinterface]\nauth_method = password\n",
+		"[webinterface]\nauth_method = oidc\n",
+		"[webinterface]\nlistening_port = 0\n",
+		"[webinterface]\nlistening_port = 70000\n",
+		"[webinterface]\nbogus = 1\n",
+	} {
+		if _, err := loadString(t, ini); err == nil {
+			t.Errorf("%q: expected an error", ini)
+		}
+	}
+}
