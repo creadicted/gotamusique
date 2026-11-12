@@ -96,10 +96,14 @@ type Scanner struct {
 
 	mu      sync.Mutex
 	running bool
-	// indexed holds the IDs IndexFile wrote while a scan was running (nil
-	// otherwise). The scan's walk may predate such a file, so reconcile must not
-	// remove those rows as "gone".
-	indexed map[string]bool
+	// indexed holds the IDs IndexFile successfully wrote while a scan was running,
+	// and inflight counts the IndexFile calls still working on an ID (both nil
+	// when no scan runs). The scan's walk may predate such a file, so reconcile
+	// must not remove those rows as "gone". A call that fails gives its
+	// protection back, so a stale row is not kept alive by a failed index.
+	indexed  map[string]bool
+	inflight map[string]int
+	scanGen  uint64 // counts scans, so a late IndexFile never touches a newer scan's sets
 
 	afterWalk func() // test hook: runs between the walk and the database read
 }
@@ -164,12 +168,14 @@ func (s *Scanner) scan(ctx context.Context, force bool) (Result, error) {
 		return Result{}, ErrScanRunning
 	}
 	s.running = true
+	s.scanGen++
 	s.indexed = map[string]bool{}
+	s.inflight = map[string]int{}
 	s.mu.Unlock()
 	defer func() {
 		s.mu.Lock()
 		s.running = false
-		s.indexed = nil
+		s.indexed, s.inflight = nil, nil
 		s.mu.Unlock()
 	}()
 
@@ -369,7 +375,7 @@ func (s *Scanner) reconcile(ctx context.Context, files []found, existing []datab
 	}
 
 	for _, r := range existing {
-		if seen[r.ID] || s.wasIndexed(r.ID) {
+		if seen[r.ID] || s.protected(r.ID) {
 			continue
 		}
 		// Keep rows for files that were found but failed probing (they are in
@@ -457,10 +463,39 @@ func pathWords(rel string) []string {
 	return out
 }
 
-func (s *Scanner) wasIndexed(id string) bool {
+// protected reports whether reconcile must keep the row for id: IndexFile wrote
+// it, or is writing it right now, during this scan.
+func (s *Scanner) protected(id string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.indexed[id]
+	return s.indexed[id] || s.inflight[id] > 0
+}
+
+// beginIndex protects id from the running scan's removal pass until the returned
+// function is called; it reports whether the write succeeded, and only a
+// successful write keeps the protection.
+func (s *Scanner) beginIndex(id string) (done func(ok bool)) {
+	s.mu.Lock()
+	if !s.running {
+		s.mu.Unlock()
+		return func(bool) {}
+	}
+	gen := s.scanGen
+	s.inflight[id]++
+	s.mu.Unlock()
+	return func(ok bool) {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if !s.running || s.scanGen != gen {
+			return // that scan is over
+		}
+		if s.inflight[id]--; s.inflight[id] <= 0 {
+			delete(s.inflight, id)
+		}
+		if ok {
+			s.indexed[id] = true
+		}
+	}
 }
 
 // IndexFile adds or refreshes the single file at rel (a path relative to the
@@ -502,12 +537,11 @@ func (s *Scanner) IndexFile(ctx context.Context, rel string) (*database.MusicRec
 	f := found{rel: clean, abs: target, size: info.Size(), mtime: info.ModTime().UnixMilli()}
 	id := file.IDFromPath(clean)
 
-	// Mark before writing so a running scan never deletes the row (see indexed).
-	s.mu.Lock()
-	if s.running {
-		s.indexed[id] = true
-	}
-	s.mu.Unlock()
+	// Protect the row from a running scan while it is being written (see inflight),
+	// and keep that only if the write succeeds.
+	written := false
+	done := s.beginIndex(id)
+	defer func() { done(written) }()
 
 	meta, err := s.probe(target)
 	if err != nil {
@@ -516,6 +550,7 @@ func (s *Scanner) IndexFile(ctx context.Context, rel string) (*database.MusicRec
 	if err := s.db.UpsertProbed(buildRecord(id, f, meta)); err != nil {
 		return nil, fmt.Errorf("writing %s: %w", clean, err)
 	}
+	written = true
 	rec, err := s.db.QueryByID(id)
 	if err != nil {
 		return nil, fmt.Errorf("reading %s: %w", clean, err)
