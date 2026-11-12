@@ -32,6 +32,14 @@ func (b *Bot) WebLogin(id web.Identity) (link string, ttl time.Duration, err err
 	return web.LoginURL(w.AccessAddress, token), b.webAuth.TokenTTL(), nil
 }
 
+// WebRevoke cancels the unused login link of id (its sessions stay). !web calls it
+// when the link could not be delivered, so a link nobody received cannot be used.
+func (b *Bot) WebRevoke(id web.Identity) {
+	if b.webAuth != nil {
+		b.webAuth.RevokePending(id.Subject)
+	}
+}
+
 // StartWeb starts the web interface when it is enabled. It listens before
 // returning, so a bad address or a port already in use is reported to the caller
 // instead of failing later in the background. The server stops when ctx is

@@ -3,6 +3,7 @@ package config
 import (
 	_ "embed"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -274,6 +275,17 @@ func build(f *ini.File) (*Config, error) {
 		AccessAddress: strings.TrimRight(w.Key("access_address").String(), "/"),
 		AuthMethod:    strings.ToLower(w.Key("auth_method").MustString(AuthToken)),
 	}
+	if cfg.Web.Enabled {
+		// Everything user-facing is built from this: the !web link, the cookie's
+		// Secure flag and the Host allowlist. A bad value would start fine and
+		// then hand out links that cannot work, so refuse it here. A disabled
+		// section is left alone: it must not stop a bot that does not use it.
+		addr, err := parseAccessAddress(cfg.Web.AccessAddress)
+		if err != nil {
+			return nil, fmt.Errorf("[webinterface] access_address %q: %w", cfg.Web.AccessAddress, err)
+		}
+		cfg.Web.AccessAddress = addr
+	}
 	if cfg.Web.Port < 1 || cfg.Web.Port > 65535 {
 		return nil, fmt.Errorf("[webinterface] listening_port %d is not a valid port", cfg.Web.Port)
 	}
@@ -294,6 +306,35 @@ func build(f *ini.File) (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// parseAccessAddress checks that raw is an absolute http(s) URL with a host, such
+// as https://music.example.com or http://192.168.1.5:8181/bot, and returns it
+// without a trailing slash. A path is allowed (a proxy may serve the bot under
+// one); credentials, a query and a fragment are not, since links are built by
+// appending to it.
+func parseAccessAddress(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", fmt.Errorf("it is empty; set the public URL, for example http://127.0.0.1:8181")
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "", fmt.Errorf("not a valid URL: %w", err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return "", fmt.Errorf("it must start with http:// or https://")
+	}
+	if u.Hostname() == "" {
+		return "", fmt.Errorf("it has no host")
+	}
+	if u.User != nil {
+		return "", fmt.Errorf("it must not contain a username or password")
+	}
+	if u.RawQuery != "" || u.ForceQuery || u.Fragment != "" {
+		return "", fmt.Errorf("it must not contain a query or a fragment")
+	}
+	return strings.TrimRight(raw, "/"), nil
 }
 
 func parseCommands(section *ini.Section) CommandsConfig {

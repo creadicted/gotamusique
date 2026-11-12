@@ -10,6 +10,9 @@ import (
 	"layeh.com/gumble/gumble"
 )
 
+// errPrivate, when set, makes the private reply of the next webSetup context fail.
+var errPrivate error
+
 func webSetup(sender *gumble.User) (*mockBot, *Dispatcher, *Ctx, *replies, *replies) {
 	bot := defaultBot()
 	bot.webLink = "https://music.example.com/login?token=SECRET"
@@ -17,7 +20,14 @@ func webSetup(sender *gumble.User) (*mockBot, *Dispatcher, *Ctx, *replies, *repl
 	d := NewDispatcher([]string{"!"})
 	RegisterAll(bot, d)
 	var channel, private replies
-	c := &Ctx{User: sender.Name, Sender: sender, Out: channel.add, Private: private.add}
+	fail := errPrivate
+	c := &Ctx{User: sender.Name, Sender: sender, Out: channel.add, Private: func(text string) error {
+		if fail != nil {
+			return fail
+		}
+		private.add(text)
+		return nil
+	}}
 	return bot, d, c, &channel, &private
 }
 
@@ -119,5 +129,41 @@ func TestChatCtx_PrivateIsSetForAnySender(t *testing.T) {
 	msg := makeMsgFrom("alice", "!web")
 	if c := chatCtx(msg); c.Private == nil {
 		t.Error("chatCtx must provide a private reply path")
+	}
+}
+
+// If the private message cannot be sent the user never sees the link, so it must
+// not stay redeemable, and the channel must not claim it was sent.
+func TestWeb_UndeliveredLinkIsRevoked(t *testing.T) {
+	errPrivate = errors.New("user disconnected")
+	defer func() { errPrivate = nil }()
+	bot, d, c, channel, private := webSetup(&gumble.User{Name: "alice", Hash: "cert-hash"})
+	d.Run(bot, c, "!web")
+
+	if len(bot.webIDs) != 1 || len(bot.webRevoked) != 1 || bot.webRevoked[0].Subject != "cert-hash" {
+		t.Errorf("issued %v, revoked %v: the undelivered link must be revoked", bot.webIDs, bot.webRevoked)
+	}
+	if len(private.list) != 0 {
+		t.Errorf("private = %v", private.list)
+	}
+	if len(channel.list) != 1 || strings.Contains(channel.list[0], "Sent you") || strings.Contains(channel.list[0], "SECRET") {
+		t.Errorf("channel = %v, want a failure notice and no claim of success", channel.list)
+	}
+}
+
+func TestWeb_DeliveredLinkIsNotRevoked(t *testing.T) {
+	bot, d, c, _, _ := webSetup(&gumble.User{Name: "alice"})
+	d.Run(bot, c, "!web")
+	if len(bot.webRevoked) != 0 {
+		t.Errorf("a delivered link was revoked: %v", bot.webRevoked)
+	}
+}
+
+// gumble panics when a user's client is gone (here: no client at all); Private
+// must turn that into an error instead of swallowing it.
+func TestChatCtx_PrivateReportsAFailedSend(t *testing.T) {
+	c := chatCtx(makeMsgFrom("alice", "!web"))
+	if err := c.Private("hello"); err == nil {
+		t.Error("a send that panicked must come back as an error")
 	}
 }

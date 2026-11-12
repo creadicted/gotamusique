@@ -47,6 +47,11 @@ func handleWeb(bot BotAPI, c *Ctx, cmd, arg string) {
 		htmlText += note
 		plain += note
 	}
-	c.Private(format(cfg.Bot.FormattedReplies, htmlText, plain))
+	if err := c.Private(format(cfg.Bot.FormattedReplies, htmlText, plain)); err != nil {
+		// Nobody got the link, so it must not stay usable.
+		bot.WebRevoke(id)
+		c.Send("Could not send you the web link in a private message, try again.")
+		return
+	}
 	c.Send("Sent you the web link in a private message.")
 }

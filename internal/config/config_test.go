@@ -284,3 +284,65 @@ func TestLoad_WebRejectsUnsupportedAuthAndBadPort(t *testing.T) {
 		}
 	}
 }
+
+func TestLoad_WebAccessAddressMustBeAnAbsoluteURLWhenEnabled(t *testing.T) {
+	for _, addr := range []string{
+		"",                            // blanked out: !web would produce a relative link
+		"music.example.com",           // no scheme
+		"//music.example.com",         // scheme-relative
+		"/login",                      // relative
+		"ftp://music.example.com",     // wrong scheme
+		"javascript:alert(1)",         // not http(s)
+		"http://",                     // no host
+		"http://:8181",                // port only
+		"https://user:pw@example.com", // credentials
+		"https://example.com/?x=1",    // query
+		"https://exa mple.com",        // invalid
+	} {
+		ini := "[webinterface]\nenabled = True\naccess_address = " + addr + "\n"
+		if _, err := loadString(t, ini); err == nil {
+			t.Errorf("access_address %q was accepted", addr)
+		} else if !strings.Contains(err.Error(), "access_address") {
+			t.Errorf("access_address %q: the error does not name the key: %v", addr, err)
+		}
+	}
+}
+
+func TestLoad_WebAccessAddressAcceptsValidForms(t *testing.T) {
+	for addr, want := range map[string]string{
+		"https://music.example.com":     "https://music.example.com",
+		"https://music.example.com/":    "https://music.example.com",
+		"http://192.168.1.5:8181":       "http://192.168.1.5:8181",
+		"http://[::1]:8181":             "http://[::1]:8181",
+		"HTTPS://Music.Example.com":     "HTTPS://Music.Example.com", // case is the user's business
+		"https://example.com/bot/":      "https://example.com/bot",   // served under a path by a proxy
+		"  https://music.example.com  ": "https://music.example.com",
+	} {
+		cfg, err := loadString(t, "[webinterface]\nenabled = True\naccess_address = "+addr+"\n")
+		if err != nil {
+			t.Errorf("%q rejected: %v", addr, err)
+			continue
+		}
+		if cfg.Web.AccessAddress != want {
+			t.Errorf("%q -> %q, want %q", addr, cfg.Web.AccessAddress, want)
+		}
+	}
+}
+
+// A disabled web interface must not stop the bot over a value it never uses.
+func TestLoad_WebAccessAddressIsNotCheckedWhileDisabled(t *testing.T) {
+	if _, err := loadString(t, "[webinterface]\nenabled = False\naccess_address = nonsense\n"); err != nil {
+		t.Errorf("disabled section rejected: %v", err)
+	}
+	if _, err := loadString(t, "[webinterface]\naccess_address =\n"); err != nil {
+		t.Errorf("default (disabled) with an empty address rejected: %v", err)
+	}
+}
+
+// The INI parser cuts a value at "#", so a fragment cannot reach the check through
+// a file; the rule still holds for the parser itself.
+func TestParseAccessAddress_RejectsAFragment(t *testing.T) {
+	if _, err := parseAccessAddress("https://example.com/#frag"); err == nil {
+		t.Error("a fragment was accepted")
+	}
+}

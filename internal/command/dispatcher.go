@@ -67,6 +67,8 @@ type BotAPI interface {
 	// valid for ttl, or (ttl 0) the plain address when no login is required. It
 	// returns web.ErrDisabled when the web interface is off.
 	WebLogin(id web.Identity) (link string, ttl time.Duration, err error)
+	// WebRevoke cancels the unused login link of id, for when it could not be delivered.
+	WebRevoke(id web.Identity)
 }
 
 // HandlerFunc is the signature every command handler must implement.

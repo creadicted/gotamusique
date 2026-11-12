@@ -24,7 +24,7 @@ auth_method = token
 | `enabled`        | `False`                 | Start the web interface |
 | `listening_addr` | `127.0.0.1`             | Address to listen on. Loopback only by default; use `0.0.0.0` in Docker and publish the port |
 | `listening_port` | `8181`                  | Port to listen on. The bot exits at startup if it is already taken |
-| `access_address` | `http://127.0.0.1:8181` | The public URL people open. The link from `!web` is built from it. An `https://` URL marks the session cookie *Secure* |
+| `access_address` | `http://127.0.0.1:8181` | The public URL people open, an absolute `http://` or `https://` URL with a host (a path is fine, credentials and a query are not). The link from `!web` is built from it. An `https://` URL marks the session cookie *Secure*. The bot refuses to start with `enabled = True` and a missing or malformed value |
 | `auth_method`    | `token`                 | `token` or `none` (see below) |
 
 The section name and these keys are the same as in botamusique, so an existing file loads. Its
@@ -37,7 +37,8 @@ serving without the login you asked for.
 
 1. Type `!web` in the Mumble channel.
 2. The bot sends you a **private message** with a login link. The link works once and expires after
-   5 minutes. Asking again invalidates the previous link.
+   5 minutes. Asking again invalidates the previous link, and a link that could not be sent to you
+   is cancelled at once.
 3. Open it. You get a session cookie (HttpOnly, SameSite=Lax) that stays valid while you use it, up
    to 12 hours idle and 7 days in total. Restarting the bot logs everyone out.
 

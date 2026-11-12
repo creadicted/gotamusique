@@ -60,7 +60,10 @@ type mockBot struct {
 	webTTL         time.Duration
 	webErr         error
 	webIDs         []web.Identity
+	webRevoked     []web.Identity
 }
+
+func (m *mockBot) WebRevoke(id web.Identity) { m.webRevoked = append(m.webRevoked, id) }
 
 func (m *mockBot) WebLogin(id web.Identity) (string, time.Duration, error) {
 	m.webIDs = append(m.webIDs, id)
