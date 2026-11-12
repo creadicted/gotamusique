@@ -76,7 +76,12 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request, id Identity
 	v := version(snap)
 	etag := `"` + v + `"`
 	w.Header().Set("ETag", etag)
-	w.Header().Set("Cache-Control", "no-cache")
+	// The body names the caller (me), while the ETag is only the bot's state
+	// version, so a shared cache must never store or revalidate it for someone
+	// else: private keeps it to the user's own browser, no-cache keeps polling
+	// conditional.
+	w.Header().Set("Cache-Control", "private, no-cache")
+	w.Header().Set("Vary", "Cookie")
 	if since := r.URL.Query().Get("since"); since == v || etagMatches(r.Header.Get("If-None-Match"), etag) {
 		w.WriteHeader(http.StatusNotModified)
 		return

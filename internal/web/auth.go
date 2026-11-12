@@ -215,6 +215,17 @@ func (a *Auth) Logout(sessionID string) {
 	delete(a.sessions, hashOf(sessionID))
 }
 
+// RevokePending cancels the unused login token of subject, if any, and leaves its
+// sessions alone. Use it when a token was issued but could not be delivered.
+func (a *Auth) RevokePending(subject string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if h, ok := a.bySubj[subject]; ok {
+		delete(a.tokens, h)
+		delete(a.bySubj, subject)
+	}
+}
+
 // RevokeSubject ends every session and pending token of subject, for example
 // when a user is banned.
 func (a *Auth) RevokeSubject(subject string) {

@@ -159,3 +159,19 @@ func TestIdentity_Has(t *testing.T) {
 		t.Error("Has wrong")
 	}
 }
+
+func TestRevokePending_CancelsTheTokenButKeepsSessions(t *testing.T) {
+	a, _ := newTestAuth()
+	tok, _ := a.IssueToken(alice)
+	sid, _, _ := a.Redeem(tok)
+	pending, _ := a.IssueToken(alice) // a second link, e.g. one that was never delivered
+
+	a.RevokePending("hash-alice")
+	if _, _, err := a.Redeem(pending); !errors.Is(err, ErrBadToken) {
+		t.Error("the revoked token is still redeemable")
+	}
+	if _, ok := a.Lookup(sid); !ok {
+		t.Error("revoking an undelivered link must not log the user out")
+	}
+	a.RevokePending("nobody") // unknown subject: harmless
+}

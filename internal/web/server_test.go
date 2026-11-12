@@ -170,8 +170,17 @@ func TestState_Content(t *testing.T) {
 	if ct := resp.Header.Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
 		t.Errorf("Content-Type = %q", ct)
 	}
-	if resp.Header.Get("ETag") != `"7"` || resp.Header.Get("Cache-Control") != "no-cache" {
-		t.Errorf("ETag %q, Cache-Control %q", resp.Header.Get("ETag"), resp.Header.Get("Cache-Control"))
+	if resp.Header.Get("ETag") != `"7"` {
+		t.Errorf("ETag = %q", resp.Header.Get("ETag"))
+	}
+	// The body names the caller; a shared cache must not store it or reuse it for
+	// someone else, yet the browser may revalidate it.
+	cc := resp.Header.Get("Cache-Control")
+	if !strings.Contains(cc, "private") || !strings.Contains(cc, "no-cache") || strings.Contains(cc, "public") {
+		t.Errorf("Cache-Control = %q, want private, no-cache", cc)
+	}
+	if !strings.Contains(resp.Header.Get("Vary"), "Cookie") {
+		t.Errorf("Vary = %q, want Cookie", resp.Header.Get("Vary"))
 	}
 	s := decodeState(t, resp)
 	if s.Version != "7" || s.Me.Name != "alice" || len(s.Me.Roles) != 2 || s.Me.Roles[1] != "admin" {
@@ -213,6 +222,9 @@ func TestState_ConditionalRequests(t *testing.T) {
 		if resp.StatusCode != http.StatusNotModified {
 			t.Errorf("%s: status = %d, want 304", name, resp.StatusCode)
 		}
+	}
+	if resp := e.get(t, "/api/v1/state", "If-None-Match", `"7"`); resp.Header.Get("Cache-Control") != "private, no-cache" {
+		t.Errorf("a 304 must carry the same cache policy, got %q", resp.Header.Get("Cache-Control"))
 	}
 	if resp := e.get(t, "/api/v1/state?since=7"); resp.StatusCode != http.StatusNotModified {
 		t.Errorf("since=current = %d, want 304", resp.StatusCode)
