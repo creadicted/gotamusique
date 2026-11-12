@@ -17,8 +17,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   adding library files, radio stations (preset, URL or radio-browser search) and URLs to the queue
   (at the end, next, or play now), removing, moving and playing queue entries by their stable ID,
   clearing and shuffling, and a background library rescan whose outcome shows up in the state.
-  State-changing requests from another site are refused. Library browsing, uploads and the browser
-  UI follow. See [Web interface](docs/configuration/web.md).
+  State-changing requests from another site are refused.
+  **Library browsing and uploads** complete the API: `GET /api/v1/library` browses a folder or searches
+  by words and tags, and `POST /api/v1/library/upload` stores an audio file under
+  `<music_folder>/uploads/<name>/` (cleaned-up name, never overwrites, checked with ffprobe, size
+  limit, login required unless `allow_upload_without_auth`). New keys `upload_enabled`,
+  `max_upload_file_size`, `allow_upload_without_auth`. The browser UI follows. See
+  [Web interface](docs/configuration/web.md).
+- ffprobe now runs with a 60 second timeout, so a corrupt file cannot hang a library scan.
 
 ### Changed
 

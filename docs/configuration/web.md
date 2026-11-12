@@ -5,9 +5,8 @@ channel can follow and control playback from a browser. It is **off by default**
 listens until you enable it.
 
 !!! note "Work in progress"
-    This release ships the login, the state and the control API (playback, volume, mode, queue,
-    adding radio and URLs, library rescan). Library browsing and uploads follow in the next
-    release, and the browser UI after that.
+    This release ships the login, the state, the control API (playback, volume, mode, queue, adding
+    radio and URLs, library rescan), library browsing and uploads. The browser UI follows.
 
 ## Enable it
 
@@ -27,6 +26,9 @@ auth_method = token
 | `listening_port` | `8181`                  | Port to listen on. The bot exits at startup if it is already taken |
 | `access_address` | `http://127.0.0.1:8181` | The public URL people open, an absolute `http://` or `https://` URL with a host (a path is fine, credentials and a query are not). The link from `!web` is built from it. An `https://` URL marks the session cookie *Secure*. The bot refuses to start with `enabled = True` and a missing or malformed value |
 | `auth_method`    | `token`                 | `token` or `none` (see below) |
+| `upload_enabled` | `True`                  | Let logged-in users upload audio (see [Uploads](#uploads)) |
+| `max_upload_file_size` | `30M`             | Size limit of one uploaded file: a number with an optional `K`, `M` or `G` |
+| `allow_upload_without_auth` | `False`      | Also allow uploads when `auth_method = none`. Off by default: an open instance would let anyone who can reach it fill the disk |
 
 The section name and these keys are the same as in botamusique, so an existing file loads. Its
 other keys (`user`, `password`, `max_attempts`, `flask_secret`, `is_web_proxified`,
@@ -70,7 +72,9 @@ server {
 }
 ```
 
-Forward the original `Host` header (as above). The bot refuses state-changing requests whose
+Forward the original `Host` header (as above). To allow uploads, also raise the proxy's body limit
+to at least `max_upload_file_size` (nginx: `client_max_body_size 31m;`, its default is only 1 MB)
+and its timeouts for slow uploads (`proxy_request_buffering off;` streams the file through). The bot refuses state-changing requests whose
 `Origin` is a different site than the `Host` it was sent to, or than `access_address`.
 
 ## Docker
@@ -149,4 +153,44 @@ answers `503 busy`. The checks take up to 25 seconds.
 | Request | Effect |
 |---------|--------|
 | `GET /radio/search?q=jazz&limit=10` | Search radio-browser.info (limit 1 to 50); add a result with its `uuid` |
+| `GET /library` | Browse or search the library, see below |
+| `POST /library/upload` | Upload one audio file, see [Uploads](#uploads) |
 | `POST /library/rescan` | Start an incremental scan. Answers `202` at once, or `409 scan_running`. The state's `scan` field shows `running`, then `last_result` or `last_error`. There is no `force` option here |
+
+### Browsing the library
+
+`GET /library` takes `dir`, `q`, `tag` (repeat it or separate with commas), `limit` (1 to 500, default
+100) and `offset`, and answers `{"dir", "dirs", "tracks", "total", "offset", "limit", "tags"}`.
+
+* Without `q` and `tag` it **browses** `dir` (the root by default): `dirs` are its sub-folders with the
+  number of tracks below each, `tracks` are the files directly in it, and `total` counts those files.
+* With `q` and/or `tag` it **searches** every track below `dir`: all words of `q` must match the
+  title, artist or path, and a track must carry every tag. `dirs` is empty.
+
+`tags` lists every tag in use. Queue a track with `{"type": "library", "path": "<path>"}`.
+
+## Uploads
+
+`POST /library/upload` takes one audio file as `multipart/form-data` in the field `file` and answers
+`201` with `{"track": {...}}`; queue it afterwards with a normal add. Uploads need a login unless
+`allow_upload_without_auth` is set.
+
+The file is stored as `<music_folder>/uploads/<your name>/<file name>` and added to the library at
+once, no rescan needed. What the server does with it:
+
+* The name is cleaned up: only the last path component is used, control and reserved characters
+  become `_`, hidden names lose their dot, and the name must end in a known audio extension
+  (`.mp3`, `.flac`, `.ogg`, `.oga`, `.opus`, `.m4a`, `.aac`, `.wav`, `.wma`, `.ape`, `.aiff`).
+* An existing file is **never overwritten**: the new one becomes `name (1).mp3`, `name (2).mp3`...
+* The file must be readable by `ffprobe` and contain an audio stream; otherwise it is deleted again
+  (`422 invalid_file`). A file over `max_upload_file_size` is `413 too_large`. Nothing is left behind
+  on any failure.
+* At most four uploads run at once; more get `503 busy`.
+* The `uploads` folder must really lie inside the music folder: a symlink pointing elsewhere is
+  refused. Do not list `uploads` in `[files] ignored_folders`, or uploads are refused.
+
+!!! warning "Uploads parse untrusted files"
+    `ffprobe` reads every uploaded file, and media parsers are a classic source of vulnerabilities.
+    Keep ffmpeg up to date, and run the bot as an unprivileged user or in a container (the supplied
+    Docker image does). Only the size of a single file is limited; there is no quota per user, so
+    watch the disk if you let people you do not trust upload.
