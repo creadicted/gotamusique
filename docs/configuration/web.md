@@ -5,8 +5,9 @@ channel can follow and control playback from a browser. It is **off by default**
 listens until you enable it.
 
 !!! note "Work in progress"
-    This release ships the login and a read-only `GET /api/v1/state`. Playback control, the
-    library and uploads follow in the next releases, and the browser UI after that.
+    This release ships the login, the state and the control API (playback, volume, mode, queue,
+    adding radio and URLs, library rescan). Library browsing and uploads follow in the next
+    release, and the browser UI after that.
 
 ## Enable it
 
@@ -68,6 +69,9 @@ server {
 }
 ```
 
+Forward the original `Host` header (as above). The bot refuses state-changing requests whose
+`Origin` is a different site than the `Host` it was sent to, or than `access_address`.
+
 ## Docker
 
 Bind to all interfaces inside the container and publish the port:
@@ -88,8 +92,60 @@ services:
 
 ## API
 
+All endpoints are under `/api/v1`, speak JSON and need a session (except in `none` mode). Errors
+look like `{"error": "...", "code": "not_found"}`; the `code` is stable, the text is for humans.
+Every call that changes something answers with the new state, so a client can apply the answer
+instead of polling again. Some controls act asynchronously (a skip interrupts audio first); the
+next poll shows the final state.
+
+### State
+
 `GET /api/v1/state` returns the whole state in one response: queue (each entry has a stable `id`),
 position, volume, mode and scan status. Its `version` changes whenever the state changes (the
 playhead position excluded), and it is also sent as an `ETag`, so polling with
 `If-None-Match: "<version>"` (or `?since=<version>`) costs a `304` while nothing happened.
-Errors are JSON: `{"error": "...", "code": "unauthenticated"}`.
+
+### Playback
+
+| Request | Body | Effect |
+|---------|------|--------|
+| `POST /playback/pause`, `/resume`, `/stop`, `/next` | | Same as `!pause`, `!resume`, `!stop`, `!skip` |
+| `POST /playback/seek` | `{"position_ms": 90000}` | Restart the current track at that position. Only local files seek (`409 not_seekable` otherwise) |
+| `PUT /volume` | `{"volume": 0.4}` and/or `{"muted": true}` | Volume is 0 to 1 and ends a mute |
+| `PUT /mode` | `{"mode": "repeat"}` | `one-shot`, `repeat`, `random` or `autoplay` |
+
+### Queue
+
+Entries are addressed by the `id` from the state, never by position, so two people editing at
+once cannot hit the wrong track. An entry that is already gone answers `404 not_found`; treat that
+as "already done" and refresh.
+
+| Request | Body | Effect |
+|---------|------|--------|
+| `POST /queue` | see below | Add something; answers `201` with the state and `"added": {"id", "title"}` |
+| `DELETE /queue` | | Clear the queue and stop |
+| `POST /queue/shuffle` | | Shuffle the upcoming entries |
+| `DELETE /queue/{id}` | | Remove an entry. Removing the playing one starts the next |
+| `POST /queue/{id}/play` | | Jump to an entry and play it |
+| `POST /queue/{id}/move` | `{"after": 7}` | Put the entry directly after entry 7 (`0` = the front) |
+
+`POST /queue` takes a `type` plus its field, and an optional `position` (`end` by default, `next`
+to play it after the current track, `now` to play it at once):
+
+| `type` | Field | Meaning |
+|--------|-------|---------|
+| `library` | `path` | A file from the library, by its path |
+| `radio` | `preset` | A name from `[radio]` |
+| `radio` | `url` | A direct stream URL (checked to be reachable first) |
+| `radio` | `uuid` | A radio-browser.info station, from the search below |
+| `url` | `url` | One track resolved through yt-dlp. Playlists are refused |
+
+A source that cannot be queued answers `422 invalid_source` with the reason; all yt-dlp slots busy
+answers `503 busy`. The checks take up to 25 seconds.
+
+### Radio search and library
+
+| Request | Effect |
+|---------|--------|
+| `GET /radio/search?q=jazz&limit=10` | Search radio-browser.info (limit 1 to 50); add a result with its `uuid` |
+| `POST /library/rescan` | Start an incremental scan. Answers `202` at once, or `409 scan_running`. The state's `scan` field shows `running`, then `last_result` or `last_error`. There is no `force` option here |

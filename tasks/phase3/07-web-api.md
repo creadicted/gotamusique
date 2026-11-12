@@ -1,6 +1,6 @@
 # 3-07 — Web REST API
 
-**Status:** in progress — PR 1 (#41) and PR 2 done  
+**Status:** in progress — PRs 1 (#41), 2 (#42) and 3 done  
 **Depends on:** 3-04, 3-05  
 **Unlocks:** 3-08
 
@@ -62,28 +62,34 @@ TLS is not terminated by the bot; the admin puts a reverse proxy in front.
 Sessions live in memory with a sliding 12 h TTL and are not tied to Mumble presence. 3-11 can
 revoke a user's sessions on ban. A restart logs everyone out.
 
-## API (draft, finalise in PR 2/3/4)
+## API (PRs 2 and 3 final; library browse and upload are PR 4)
 
 | Method | Path | Description |
 |---|---|---|
 | GET | `/api/v1/state` | Full snapshot: queue (with IDs), current item, playhead, paused, volume, mode, autoplay, library scan status, `version`. Supports `If-None-Match` / `?since=` → `304`. |
 | POST | `/api/v1/playback/{pause,resume,stop,next}` | Playback control. |
 | POST | `/api/v1/playback/seek` | Seek the current item (only if `Seekable`; otherwise `409`). |
-| PUT | `/api/v1/volume` | Set volume. |
+| PUT | `/api/v1/volume` | `{"volume": 0..1}` and/or `{"muted": bool}`. |
 | PUT | `/api/v1/mode` | `one-shot`, `repeat`, `random`, autoplay. |
-| POST | `/api/v1/queue` | Add an item (library file, radio, URL), at end / next / play now. |
+| POST | `/api/v1/queue` | Add an item (`type`: `library` path, `radio` preset/url/uuid, `url` via yt-dlp), `position`: `end` / `next` / `now`. Answers `201` with the state and the new entry. |
 | DELETE | `/api/v1/queue` | Clear. |
+| POST | `/api/v1/queue/shuffle` | Shuffle the upcoming entries. |
 | DELETE | `/api/v1/queue/{id}` | Remove an entry. |
 | POST | `/api/v1/queue/{id}/play` | Jump to an entry. |
 | POST | `/api/v1/queue/{id}/move` | Move after another entry ID. |
-| GET | `/api/v1/radio/search` | radio-browser.info query (synchronous, timeout). |
+| GET | `/api/v1/radio/search` | radio-browser.info query (synchronous, 10 s timeout); add a hit by `uuid`. |
 | GET | `/api/v1/library` | Browse/search files, tags, dirs. |
-| POST | `/api/v1/library/rescan` | `202` / `409`. |
+| POST | `/api/v1/library/rescan` | `202` / `409`; no `force`. The state's `scan` shows `running`, then `last_result` / `last_error`. |
 | POST | `/api/v1/library/upload` | Upload an audio file. |
 | POST | `/api/v1/auth/logout` | End the session. |
 | GET | `/login` | Consume a token, set the cookie, redirect to `/`. |
 
 Every mutating call returns the new state snapshot. Errors are JSON `{error, code}`.
+
+State-changing requests (anything but GET/HEAD/OPTIONS) are refused with `403 cross_origin` when the
+browser marks them cross-site (`Sec-Fetch-Site`) or their `Origin` host differs from the `Host`
+and from `access_address`. Without a login there is no cookie to rely on, so this is what stops
+another website from driving a bot on the user's own network.
 
 ## Upload
 
