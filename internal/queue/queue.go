@@ -399,21 +399,25 @@ func (q *Queue) indexOfLocked(id uint64) int {
 }
 
 // RemoveByID deletes the entry with the given ID and keeps the current item
-// pointing at the same entry (as Remove does). It returns ErrNotFound, without
-// touching the queue or its version, when the entry is already gone.
-func (q *Queue) RemoveByID(id uint64) error {
+// pointing at the same entry (as Remove does); removing the current entry leaves
+// the next one current. wasCurrent says whether the removed entry was the current
+// one, decided under the same lock so the caller knows whether the playing track
+// is gone. It returns ErrNotFound, without touching the queue or its version,
+// when the entry is already gone.
+func (q *Queue) RemoveByID(id uint64) (wasCurrent bool, err error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	i := q.indexOfLocked(id)
 	if i < 0 {
-		return ErrNotFound
+		return false, ErrNotFound
 	}
+	wasCurrent = i == q.currentIndex
 	q.version++
 	q.items = slices.Delete(q.items, i, i+1)
 	if i < q.currentIndex {
 		q.currentIndex--
 	}
-	return nil
+	return wasCurrent, nil
 }
 
 // JumpToID makes the entry with the given ID current. It returns its index, or

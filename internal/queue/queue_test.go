@@ -432,7 +432,7 @@ func TestVersion_EveryMutatorBumps(t *testing.T) {
 			q.FinishIfUnchanged(q.Version())
 		},
 		"NextIfUnchanged": func(q *Queue) { q.NextIfUnchanged(q.Version()) },
-		"RemoveByID":      func(q *Queue) { _ = q.RemoveByID(q.Snapshot().IDs[0]) },
+		"RemoveByID":      func(q *Queue) { _, _ = q.RemoveByID(q.Snapshot().IDs[0]) },
 		"JumpToID":        func(q *Queue) { _, _ = q.JumpToID(q.Snapshot().IDs[1]) },
 		"MoveAfter": func(q *Queue) {
 			ids := q.Snapshot().IDs
@@ -704,7 +704,7 @@ func TestIDs_UniqueAndNeverReused(t *testing.T) {
 		}
 		seen[id] = true
 	}
-	_ = q.RemoveByID(ids[0])
+	_, _ = q.RemoveByID(ids[0])
 	q.Append(item("z"))
 	for _, id := range q.Snapshot().IDs {
 		if id == ids[0] {
@@ -740,18 +740,30 @@ func TestRemoveByID(t *testing.T) {
 	}
 	_ = q.JumpTo(2)
 	ids := q.Snapshot().IDs
-	if err := q.RemoveByID(ids[0]); err != nil {
-		t.Fatal(err)
+
+	// A non-current entry before the current one: current keeps pointing at "c".
+	if was, err := q.RemoveByID(ids[0]); err != nil || was {
+		t.Fatalf("remove non-current = %v, %v", was, err)
 	}
 	if q.Index() != 1 || q.Current().(*testItem).id != "c" {
 		t.Errorf("current should still be c, got index %d", q.Index())
 	}
-	v := q.Version()
-	if err := q.RemoveByID(ids[0]); !errors.Is(err, ErrNotFound) {
+
+	// The same ID again: not found, queue and version untouched.
+	v, n := q.Version(), q.Len()
+	if _, err := q.RemoveByID(ids[0]); !errors.Is(err, ErrNotFound) {
 		t.Errorf("second remove = %v, want ErrNotFound", err)
 	}
-	if q.Version() != v || q.Len() != 2 {
+	if q.Version() != v || q.Len() != n {
 		t.Error("a missing ID must not touch the queue or bump the version")
+	}
+
+	// Removing the current (last) entry reports it and leaves the queue past its end.
+	if was, err := q.RemoveByID(ids[2]); err != nil || !was {
+		t.Errorf("removing the current entry = %v, %v, want was=true", was, err)
+	}
+	if q.Index() != 1 || q.Current() != nil {
+		t.Errorf("index %d current %v, want past-end 1 / nil", q.Index(), q.Current())
 	}
 }
 
@@ -762,7 +774,7 @@ func TestJumpToID(t *testing.T) {
 	}
 	ids := q.Snapshot().IDs
 	// Another client removes "a" first; the ID still finds "c".
-	_ = q.RemoveByID(ids[0])
+	_, _ = q.RemoveByID(ids[0])
 	i, err := q.JumpToID(ids[2])
 	if err != nil || i != 1 || q.Current().(*testItem).id != "c" {
 		t.Errorf("JumpToID = %d, %v, current %v", i, err, q.Current())

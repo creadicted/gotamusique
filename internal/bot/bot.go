@@ -38,6 +38,10 @@ type Bot struct {
 	nowPlaying    audio.MediaItem // item handed to the pipeline last (guarded by mu)
 	last          *lastPlayed     // item remembered from the previous run; consumed by RestoreLast (guarded by mu)
 
+	snapMu  sync.Mutex // guards snapSig and snapRev (see Snapshot)
+	snapSig snapSig
+	snapRev uint64
+
 	// Music library (nil when music_folder is unset or the database failed to open).
 	libMu          sync.Mutex
 	lib            *musicLibrary
