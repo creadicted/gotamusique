@@ -72,6 +72,30 @@ func (i YTInfo) entryURL() string {
 	return i.URL
 }
 
+// MaxConcurrent caps simultaneous yt-dlp processes across the whole bot. Every
+// invocation takes a slot in run, whoever asks: a chat or web add, a playlist
+// expansion or the resolution of a queued item just before it plays. Capping at
+// the one place yt-dlp is launched is what makes the bound hold; a cap in the
+// callers would miss whatever calls in from elsewhere.
+const MaxConcurrent = 3
+
+var slots = make(chan struct{}, MaxConcurrent)
+
+// ErrBusy is returned when no yt-dlp slot freed up before the context ended.
+var ErrBusy = errors.New("too many requests in progress, try again in a moment")
+
+// acquire waits for a free slot and returns the function that gives it back, or
+// ErrBusy if ctx ends first, so a burst of requests cannot pile up behind the cap
+// for longer than its own deadline.
+func acquire(ctx context.Context) (release func(), err error) {
+	select {
+	case slots <- struct{}{}:
+		return func() { <-slots }, nil
+	case <-ctx.Done():
+		return nil, ErrBusy
+	}
+}
+
 // CheckURL accepts only absolute http(s) URLs.
 func CheckURL(raw string) error {
 	u, err := neturl.Parse(raw)
@@ -115,6 +139,13 @@ func run(ctx context.Context, cfg *config.Config, rawURL string, extra ...string
 	}
 	args := append(baseArgs(cfg), extra...)
 	args = append(args, "--", rawURL)
+
+	// After CheckURL, so a bad URL never takes a slot; held until the process ends.
+	release, err := acquire(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 
 	cmd := exec.CommandContext(ctx, binary(cfg), args...)
 	var stdout, stderr bytes.Buffer

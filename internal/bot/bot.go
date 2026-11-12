@@ -12,6 +12,7 @@ import (
 	"github.com/konradk/gotamusique/internal/command"
 	"github.com/konradk/gotamusique/internal/config"
 	"github.com/konradk/gotamusique/internal/queue"
+	"github.com/konradk/gotamusique/internal/radio"
 	"github.com/konradk/gotamusique/internal/web"
 	"layeh.com/gumble/gumble"
 )
@@ -38,6 +39,9 @@ type Bot struct {
 	resume        resumePoint     // where a paused local file stopped, for Resume
 	nowPlaying    audio.MediaItem // item handed to the pipeline last (guarded by mu)
 	last          *lastPlayed     // item remembered from the previous run; consumed by RestoreLast (guarded by mu)
+
+	rbOnce sync.Once
+	rb     *radio.RadioBrowser // lazily created by radioBrowser
 
 	webAuth *web.Auth // login tokens and sessions; nil unless the web interface uses token auth
 

@@ -13,8 +13,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   the bot serves `GET /api/v1/state` (queue with stable entry IDs, position, volume, mode, scan
   status; `ETag` / `?since=` for cheap polling). `!web` sends you a private, one-use login link
   (5 minutes) that starts a cookie session; `auth_method = none` is available for trusted networks.
-  Playback control, the library, uploads and the browser UI follow. See
-  [Web interface](docs/configuration/web.md).
+  The control API follows in the same release: pause, resume, stop, next, seek, volume, mute, mode,
+  adding library files, radio stations (preset, URL or radio-browser search) and URLs to the queue
+  (at the end, next, or play now), removing, moving and playing queue entries by their stable ID,
+  clearing and shuffling, and a background library rescan whose outcome shows up in the state.
+  State-changing requests from another site are refused. Library browsing, uploads and the browser
+  UI follow. See [Web interface](docs/configuration/web.md).
 
 ### Changed
 

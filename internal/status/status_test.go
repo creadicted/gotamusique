@@ -33,6 +33,8 @@ func TestFingerprint_ChangesWithEveryRenderedField(t *testing.T) {
 		"mode":           func(s *Snapshot) { s.Mode = "repeat" },
 		"scan available": func(s *Snapshot) { s.Scan.Available = false },
 		"scan running":   func(s *Snapshot) { s.Scan.Running = true },
+		"scan result":    func(s *Snapshot) { s.Scan.LastResult = "1 added" },
+		"scan error":     func(s *Snapshot) { s.Scan.LastError = "boom" },
 	}
 	for name, edit := range edits {
 		s := base()
