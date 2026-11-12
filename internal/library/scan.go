@@ -547,6 +547,9 @@ func (s *Scanner) IndexFile(ctx context.Context, rel string) (*database.MusicRec
 	if err != nil {
 		return nil, fmt.Errorf("%w: %q: %v", ErrNotIndexable, rel, err)
 	}
+	if meta.NoAudio {
+		return nil, fmt.Errorf("%w: %q has no audio stream", ErrNotIndexable, rel)
+	}
 	if err := s.db.UpsertProbed(buildRecord(id, f, meta)); err != nil {
 		return nil, fmt.Errorf("writing %s: %w", clean, err)
 	}
