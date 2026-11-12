@@ -4,6 +4,8 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -117,51 +119,80 @@ func TestHandlePlaylist_BadURL_NoEnqueue(t *testing.T) {
 	}
 }
 
-func TestRunYT_SemaphoreWaitCountsTowardTimeout(t *testing.T) {
-	old := ytTimeout
-	ytTimeout = 150 * time.Millisecond
-	defer func() { ytTimeout = old }()
-
-	// Occupy every slot.
-	var releases []func()
-	for i := 0; i < urlitem.MaxConcurrent; i++ {
-		release, err := urlitem.Acquire(context.Background())
-		if err != nil {
-			t.Fatal(err)
-		}
-		releases = append(releases, release)
-	}
-	defer func() {
-		for _, release := range releases {
-			release()
-		}
-	}()
-
-	ran, busy := make(chan struct{}, 1), make(chan struct{}, 1)
-	start := time.Now()
-	runYT(func(ctx context.Context) { ran <- struct{}{} }, func() { busy <- struct{}{} })
-
-	select {
-	case <-busy:
-	case <-ran:
-		t.Fatal("fn must not run when no slot frees up before the deadline")
-	case <-time.After(3 * time.Second):
-		t.Fatal("busy callback not invoked: semaphore wait ignores the timeout")
-	}
-	if d := time.Since(start); d > time.Second {
-		t.Errorf("gave up after %v, want ~150ms", d)
-	}
-	ytWG.Wait()
+// blockingBody is a fake yt-dlp that signals it started (a file per process) and
+// then waits until the test creates "release", so a test can hold yt-dlp slots.
+func blockingBody(dir string) string {
+	return "touch \"" + dir + "/started.$$\"\n" +
+		"while [ ! -f \"" + dir + "/release\" ]; do sleep 0.02; done\n" +
+		`echo '{"id":"a","title":"Song","duration":100}'` + "\n"
 }
 
-func TestRunYT_RunsWhenSlotFree(t *testing.T) {
+func waitStarted(t *testing.T, dir string, n int) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		if m, _ := filepath.Glob(filepath.Join(dir, "started.*")); len(m) >= n {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("fewer than %d yt-dlp processes started", n)
+}
+
+// The slots are shared with everything else that runs yt-dlp. With all of them
+// taken, a chat request waits only as long as its own timeout and then says so,
+// instead of running on top of the others or hanging.
+func TestHandleURL_RepliesBusyWhenEverySlotIsTaken(t *testing.T) {
+	old := ytTimeout
+	ytTimeout = 250 * time.Millisecond
+	defer func() { ytTimeout = old }()
+
+	dir := t.TempDir()
+	bot := defaultBot()
+	fakeYT(t, bot, blockingBody(dir))
+
+	// Hold every slot, the way a playback-time resolution or a web add would.
+	hold, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	var wg sync.WaitGroup
+	for i := 0; i < urlitem.MaxConcurrent; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			urlitem.GetInfo(hold, "https://example.com/hold", bot.cfg) //nolint:errcheck
+		}()
+	}
+	waitStarted(t, dir, urlitem.MaxConcurrent)
+
+	var r replies
+	handleURL(bot, testCtx(&r), "url", "https://example.com/late")
+	ytWG.Wait()
+
+	got := strings.Join(r.all(), "\n")
+	if !strings.Contains(strings.ToLower(got), "too many requests") {
+		t.Errorf("replies = %q, want a busy message", got)
+	}
+	if len(bot.enqueueCalls) != 0 {
+		t.Errorf("enqueued %d, want 0", len(bot.enqueueCalls))
+	}
+	if m, _ := filepath.Glob(filepath.Join(dir, "started.*")); len(m) != urlitem.MaxConcurrent {
+		t.Errorf("%d yt-dlp processes ran, want %d: a refused request must not start one", len(m), urlitem.MaxConcurrent)
+	}
+
+	if err := os.WriteFile(filepath.Join(dir, "release"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	wg.Wait()
+}
+
+func TestRunYT_RunsWithADeadline(t *testing.T) {
 	ran := make(chan struct{}, 1)
 	runYT(func(ctx context.Context) {
 		if _, ok := ctx.Deadline(); !ok {
 			t.Error("ctx must carry a deadline")
 		}
 		ran <- struct{}{}
-	}, func() { t.Error("busy must not be called") })
+	})
 	ytWG.Wait()
 	select {
 	case <-ran:

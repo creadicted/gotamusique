@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -341,27 +342,143 @@ func TestSplitCookies(t *testing.T) {
 	}
 }
 
-func TestAcquire_LimitsConcurrencyAndHonoursTheContext(t *testing.T) {
-	var releases []func()
-	for i := 0; i < MaxConcurrent; i++ {
-		release, err := Acquire(context.Background())
-		if err != nil {
-			t.Fatal(err)
+// ---- the shared yt-dlp bound ----
+
+// blockingBody is a fake yt-dlp that signals it started (a file per process) and
+// then waits until the test creates "release", so a test can hold its slots.
+func blockingBody(dir string) string {
+	return "touch \"" + dir + "/started.$$\"\n" +
+		"while [ ! -f \"" + dir + "/release\" ]; do sleep 0.02; done\n" +
+		`echo '{"id":"a","title":"Song","duration":100,"url":"http://cdn.example/a.m4a"}'` + "\n"
+}
+
+// waitStarted waits until n fake yt-dlp processes are running.
+func waitStarted(t *testing.T, dir string, n int) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		if m, _ := filepath.Glob(filepath.Join(dir, "started.*")); len(m) >= n {
+			return
 		}
-		releases = append(releases, release)
+		time.Sleep(10 * time.Millisecond)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	t.Fatalf("fewer than %d yt-dlp processes started", n)
+}
+
+func startedCount(dir string) int {
+	m, _ := filepath.Glob(filepath.Join(dir, "started.*"))
+	return len(m)
+}
+
+// Every way of launching yt-dlp shares one bound, the playback-time resolution of a
+// queued item included: it runs next to whatever else is running, never on top.
+func TestRun_OneSharedBoundForEveryEntryPoint(t *testing.T) {
+	dir := t.TempDir()
+	cfg, _ := fakeYTDLP(t, blockingBody(dir))
+	const u = "https://example.com/watch?v=a"
+
+	// Fill every slot through three different entry points.
+	bg, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	if _, err := Acquire(ctx); !errors.Is(err, ErrBusy) {
-		t.Errorf("with every slot taken, Acquire = %v, want ErrBusy", err)
+	var wg sync.WaitGroup
+	holders := []func() error{
+		func() error { _, err := GetInfo(bg, u, cfg); return err },
+		func() error { _, err := ResolveStream(bg, u, cfg); return err },
+		func() error { _, err := IsPlaylist(bg, u, cfg); return err },
 	}
-	releases[0]()
-	release, err := Acquire(context.Background())
-	if err != nil {
-		t.Fatalf("a released slot must be reusable: %v", err)
+	if len(holders) != MaxConcurrent {
+		t.Fatalf("the test fills %d slots, MaxConcurrent is %d", len(holders), MaxConcurrent)
 	}
-	release()
-	for _, r := range releases[1:] {
-		r()
+	errs := make(chan error, len(holders))
+	for _, h := range holders {
+		wg.Add(1)
+		go func() { defer wg.Done(); errs <- h() }()
+	}
+	waitStarted(t, dir, MaxConcurrent)
+
+	// A fourth call of any kind gives up when its own deadline ends, without ever
+	// launching a process.
+	late := func() (context.Context, context.CancelFunc) {
+		return context.WithTimeout(context.Background(), 80*time.Millisecond)
+	}
+	item := New(u, cfg)
+	for name, call := range map[string]func(context.Context) error{
+		"GetInfo":       func(c context.Context) error { _, err := GetInfo(c, u, cfg); return err },
+		"ResolveStream": func(c context.Context) error { _, err := ResolveStream(c, u, cfg); return err },
+		"IsPlaylist":    func(c context.Context) error { _, err := IsPlaylist(c, u, cfg); return err },
+		"FlatPlaylist":  func(c context.Context) error { _, err := FlatPlaylist(c, u, cfg, 5); return err },
+		"Playlist":      func(c context.Context) error { _, err := Playlist(c, u, cfg); return err },
+		"Validate":      func(c context.Context) error { return New(u, cfg).ValidateCtx(c) },
+		"Resolve":       func(c context.Context) error { return item.Resolve(c) }, // what the play loop calls
+	} {
+		c, cancel := late()
+		if err := call(c); !errors.Is(err, ErrBusy) {
+			t.Errorf("%s with every slot taken: err = %v, want ErrBusy", name, err)
+		}
+		cancel()
+	}
+	if n := startedCount(dir); n != MaxConcurrent {
+		t.Errorf("%d yt-dlp processes ran, want %d: a refused call must not start one", n, MaxConcurrent)
+	}
+
+	// Releasing lets the holders finish and frees every slot again.
+	if err := os.WriteFile(filepath.Join(dir, "release"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Errorf("a holder failed: %v", err)
+		}
+	}
+	if n := len(slots); n != 0 {
+		t.Errorf("%d slots still held after every call finished", n)
+	}
+	if _, err := GetInfo(context.Background(), u, cfg); err != nil {
+		t.Errorf("a call after the slots freed up: %v", err)
+	}
+}
+
+func TestRun_AnInvalidURLTakesNoSlot(t *testing.T) {
+	cfg, _ := fakeYTDLP(t, standardBody)
+	for i := 0; i < MaxConcurrent; i++ {
+		slots <- struct{}{} // every slot taken
+	}
+	defer func() {
+		for len(slots) > 0 {
+			<-slots
+		}
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	start := time.Now()
+	if _, err := GetInfo(ctx, "ftp://example.com/x", cfg); err == nil || errors.Is(err, ErrBusy) {
+		t.Errorf("err = %v, want the URL error, not ErrBusy", err)
+	}
+	if time.Since(start) > time.Second {
+		t.Error("an invalid URL waited for a slot")
+	}
+}
+
+func TestRun_AFailedRunGivesItsSlotBack(t *testing.T) {
+	cfg, _ := fakeYTDLP(t, "echo 'ERROR: Video unavailable' >&2\nexit 1\n")
+	for i := 0; i < MaxConcurrent*3; i++ { // far more than there are slots
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		_, err := GetInfo(ctx, "https://example.com/x", cfg)
+		cancel()
+		if err == nil || errors.Is(err, ErrBusy) {
+			t.Fatalf("run %d: err = %v, want a plain yt-dlp failure", i, err)
+		}
+	}
+	missing := &config.Config{}
+	missing.YoutubeDL.Binary = filepath.Join(t.TempDir(), "nope")
+	for i := 0; i < MaxConcurrent*2; i++ { // a binary that does not exist
+		if _, err := GetInfo(context.Background(), "https://example.com/x", missing); !errors.Is(err, ErrBinaryMissing) {
+			t.Fatalf("missing binary run %d: err = %v", i, err)
+		}
+	}
+	if n := len(slots); n != 0 {
+		t.Errorf("%d slots leaked", n)
 	}
 }

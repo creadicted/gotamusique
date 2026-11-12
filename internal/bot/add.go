@@ -123,15 +123,13 @@ func (b *Bot) urlItem(ctx context.Context, raw string) (audio.MediaItem, error) 
 	if err := urlitem.CheckURL(raw); err != nil {
 		return nil, badSource("%v", err)
 	}
-	release, err := urlitem.Acquire(ctx)
-	if err != nil {
-		return nil, web.ErrBusy
-	}
-	defer release()
-
 	item := urlitem.New(raw, b.cfg)
 	if err := item.ValidateCtx(ctx); err != nil {
 		switch {
+		case errors.Is(err, urlitem.ErrBusy):
+			// Checked before the context: running out of time while waiting for a
+			// yt-dlp slot is "busy", not a slow site.
+			return nil, web.ErrBusy
 		case ctx.Err() != nil:
 			return nil, ctx.Err()
 		case errors.Is(err, urlitem.ErrIsPlaylist):
