@@ -1,24 +1,21 @@
 package bot
 
 import (
-	"errors"
 	"fmt"
 	"time"
 
 	"github.com/konradk/gotamusique/internal/audio"
 	"github.com/konradk/gotamusique/internal/queue"
 	"github.com/konradk/gotamusique/internal/status"
+	"github.com/konradk/gotamusique/internal/web"
 )
 
+// The seek errors are defined by the web package, which maps them to HTTP
+// statuses; these names keep them reachable from here.
 var (
-	// ErrNothingPlaying is returned by Seek when no item is current.
-	ErrNothingPlaying = errors.New("nothing is playing")
-	// ErrNotSeekable is returned by Seek for items that cannot be restarted
-	// part-way in (live streams).
-	ErrNotSeekable = errors.New("the current item cannot be seeked")
-	// ErrSeekRange is returned by Seek for a negative position or one at or past
-	// the end of an item whose length is known.
-	ErrSeekRange = errors.New("seek position out of range")
+	ErrNothingPlaying = web.ErrNothingPlaying
+	ErrNotSeekable    = web.ErrNotSeekable
+	ErrSeekRange      = web.ErrSeekRange
 )
 
 // restartCurrent interrupts whatever is running and wakes the loop so it launches
@@ -169,9 +166,7 @@ func (b *Bot) Snapshot() status.Snapshot {
 		}
 	}
 
-	if lib := b.libraryRef(); lib != nil {
-		s.Scan = status.Scan{Available: true, Running: lib.scanner.Running()}
-	}
+	s.Scan = b.scanStatus()
 
 	s.Version = b.versionFor(snapSig{fingerprint: s.Fingerprint(), launch: launch})
 	return s

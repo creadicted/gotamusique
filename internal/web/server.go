@@ -17,13 +17,7 @@ import (
 	"time"
 
 	"github.com/konradk/gotamusique/internal/config"
-	"github.com/konradk/gotamusique/internal/status"
 )
-
-// Bot is what the web layer needs from the bot.
-type Bot interface {
-	Snapshot() status.Snapshot
-}
 
 // Options configure a Server.
 type Options struct {
