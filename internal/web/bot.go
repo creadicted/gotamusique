@@ -3,8 +3,10 @@ package web
 import (
 	"context"
 	"errors"
+	"io"
 	"time"
 
+	"github.com/konradk/gotamusique/internal/library"
 	"github.com/konradk/gotamusique/internal/queue"
 	"github.com/konradk/gotamusique/internal/radio"
 	"github.com/konradk/gotamusique/internal/status"
@@ -40,6 +42,11 @@ type Bot interface {
 	Add(ctx context.Context, src Source, pos queue.Position) (Added, error)
 
 	SearchRadio(ctx context.Context, query string, limit int) ([]radio.Station, error)
+	// Library lists what the scan found: a folder's contents, or search results.
+	Library(q LibraryQuery) (LibraryPage, error)
+	// Upload saves r as a new audio file for id, adds it to the library and returns
+	// its entry. The bot enforces its own size limit and validates the file.
+	Upload(ctx context.Context, id Identity, filename string, r io.Reader) (library.Track, error)
 	// StartRescan starts an incremental library scan in the background. It
 	// returns library.ErrScanRunning or library.ErrUnavailable without starting.
 	StartRescan() error
@@ -65,6 +72,33 @@ const (
 	SourceRadio   = "radio"
 	SourceURL     = "url"
 )
+
+// LibraryQuery selects what Library returns. With neither Search nor Tags it
+// browses Dir: the folders and the tracks directly in it. With either, it returns
+// matching tracks anywhere below Dir (all of the library when Dir is empty).
+type LibraryQuery struct {
+	Dir    string
+	Search string   // every word must match the title, artist or path
+	Tags   []string // the track must carry every tag
+	Offset int
+	Limit  int
+}
+
+// LibraryDir is a folder in a browse result.
+type LibraryDir struct {
+	Name   string
+	Path   string
+	Tracks int // tracks below it, at any depth
+}
+
+// LibraryPage is one page of a Library result. Total counts the tracks the query
+// matched (browse: the tracks directly in the folder), before paging.
+type LibraryPage struct {
+	Dirs   []LibraryDir
+	Tracks []library.Track
+	Total  int
+	Tags   []string // every tag in use, for a filter menu
+}
 
 // Added is the queue entry a successful Add created.
 type Added struct {
