@@ -72,6 +72,27 @@ func (i YTInfo) entryURL() string {
 	return i.URL
 }
 
+// MaxConcurrent caps simultaneous yt-dlp processes, shared by every front end
+// (chat and web), so spam from either cannot fork-bomb the host.
+const MaxConcurrent = 3
+
+var slots = make(chan struct{}, MaxConcurrent)
+
+// ErrBusy is returned by Acquire when no yt-dlp slot freed up before ctx ended.
+var ErrBusy = errors.New("too many requests in progress, try again in a moment")
+
+// Acquire waits for a free yt-dlp slot and returns the function that gives it
+// back. It returns ErrBusy if ctx ends first, so a burst of requests cannot pile
+// up goroutines.
+func Acquire(ctx context.Context) (release func(), err error) {
+	select {
+	case slots <- struct{}{}:
+		return func() { <-slots }, nil
+	case <-ctx.Done():
+		return nil, ErrBusy
+	}
+}
+
 // CheckURL accepts only absolute http(s) URLs.
 func CheckURL(raw string) error {
 	u, err := neturl.Parse(raw)

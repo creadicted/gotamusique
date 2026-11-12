@@ -1,6 +1,10 @@
 package library
 
-import "time"
+import (
+	"time"
+
+	"github.com/konradk/gotamusique/internal/media/file"
+)
 
 // Track is one scanned library entry as exposed to the chat commands and the web
 // API. It lives here, not in the command package, so every front end shares it.
@@ -25,4 +29,16 @@ const (
 type FileLookup struct {
 	Kind   LookupKind
 	Tracks []Track
+}
+
+// NewItem builds a playable file item from a library track without running
+// ffprobe: the scan already stored title, artist and duration. It fails when the
+// file is gone or lies outside musicFolder.
+func NewItem(t Track, musicFolder string) (*file.FileItem, error) {
+	it := file.New(t.Path, musicFolder)
+	if err := it.Validate(); err != nil {
+		return nil, err
+	}
+	it.Title, it.Artist, it.Duration, it.Tags = t.Title, t.Artist, t.Duration, t.Tags
+	return it, nil
 }

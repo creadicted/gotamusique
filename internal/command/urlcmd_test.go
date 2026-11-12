@@ -123,12 +123,17 @@ func TestRunYT_SemaphoreWaitCountsTowardTimeout(t *testing.T) {
 	defer func() { ytTimeout = old }()
 
 	// Occupy every slot.
-	for i := 0; i < maxConcurrentYT; i++ {
-		ytSem <- struct{}{}
+	var releases []func()
+	for i := 0; i < urlitem.MaxConcurrent; i++ {
+		release, err := urlitem.Acquire(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		releases = append(releases, release)
 	}
 	defer func() {
-		for i := 0; i < maxConcurrentYT; i++ {
-			<-ytSem
+		for _, release := range releases {
+			release()
 		}
 	}()
 

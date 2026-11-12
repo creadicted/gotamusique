@@ -340,3 +340,28 @@ func TestSplitCookies(t *testing.T) {
 		t.Error("empty input must yield no cookies")
 	}
 }
+
+func TestAcquire_LimitsConcurrencyAndHonoursTheContext(t *testing.T) {
+	var releases []func()
+	for i := 0; i < MaxConcurrent; i++ {
+		release, err := Acquire(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		releases = append(releases, release)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	if _, err := Acquire(ctx); !errors.Is(err, ErrBusy) {
+		t.Errorf("with every slot taken, Acquire = %v, want ErrBusy", err)
+	}
+	releases[0]()
+	release, err := Acquire(context.Background())
+	if err != nil {
+		t.Fatalf("a released slot must be reusable: %v", err)
+	}
+	release()
+	for _, r := range releases[1:] {
+		r()
+	}
+}

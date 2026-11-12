@@ -12,14 +12,9 @@ import (
 	urlitem "github.com/konradk/gotamusique/internal/media/url"
 )
 
-const maxConcurrentYT = 3
-
 // ytTimeout bounds one request, including time spent waiting for a free slot.
 // A var so tests can shorten it.
 var ytTimeout = 30 * time.Second
-
-// ytSem limits concurrent yt-dlp processes so chat spam cannot fork-bomb the host.
-var ytSem = make(chan struct{}, maxConcurrentYT)
 
 // ytWG tracks in-flight yt-dlp jobs; tests wait on it.
 var ytWG sync.WaitGroup
@@ -34,13 +29,12 @@ func runYT(fn func(ctx context.Context), busy func()) {
 		defer ytWG.Done()
 		ctx, cancel := context.WithTimeout(context.Background(), ytTimeout)
 		defer cancel()
-		select {
-		case ytSem <- struct{}{}:
-			defer func() { <-ytSem }()
-		case <-ctx.Done():
+		release, err := urlitem.Acquire(ctx)
+		if err != nil {
 			busy()
 			return
 		}
+		defer release()
 		fn(ctx)
 	}()
 }
