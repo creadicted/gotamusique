@@ -3,6 +3,7 @@ package config
 import (
 	_ "embed"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,6 +20,7 @@ type Config struct {
 	Files     FilesConfig
 	YoutubeDL YoutubeDLConfig
 	Commands  CommandsConfig
+	Web       WebConfig
 	Radio     map[string]RadioPreset
 	Debug     DebugConfig
 }
@@ -64,6 +66,26 @@ type YoutubeDLConfig struct {
 	SourceAddress string
 	UserAgent     string
 }
+
+// WebConfig holds the [webinterface] section. The section name and the keys
+// listening_addr, listening_port, access_address and auth_method match the
+// original botamusique so existing files keep working.
+type WebConfig struct {
+	Enabled bool
+	// Addr and Port are where the HTTP server listens. The default is loopback only.
+	Addr string
+	Port int
+	// AccessAddress is the public URL users open (the base of the !web link).
+	AccessAddress string
+	// AuthMethod is "token" (log in with a link from !web) or "none".
+	AuthMethod string
+}
+
+// Web auth methods.
+const (
+	AuthToken = "token"
+	AuthNone  = "none"
+)
 
 type CommandsConfig struct {
 	Symbol  []string            // colon-split, e.g. ["!", "！"]
@@ -118,6 +140,15 @@ var sectionAllowlists = map[string]map[string]bool{
 	},
 	"debug": {
 		"ffmpeg": true, "mumble_connection": true,
+	},
+	// The keys after listening_port exist in the original botamusique. They are
+	// accepted so an existing file loads, but are not used (yet).
+	"webinterface": {
+		"enabled": true, "listening_addr": true, "listening_port": true,
+		"access_address": true, "auth_method": true,
+		"flask_secret": true, "is_web_proxified": true, "max_attempts": true,
+		"max_upload_file_size": true, "password": true, "upload_enabled": true,
+		"user": true, "web_logfile": true,
 	},
 }
 
@@ -185,6 +216,7 @@ func build(f *ini.File) (*Config, error) {
 	fi := f.Section("files")
 	yt := f.Section("youtube_dl")
 	d := f.Section("debug")
+	w := f.Section("webinterface")
 
 	cfg := &Config{
 		Server: ServerConfig{
@@ -236,6 +268,35 @@ func build(f *ini.File) (*Config, error) {
 		},
 	}
 
+	cfg.Web = WebConfig{
+		Enabled:       w.Key("enabled").MustBool(false),
+		Addr:          w.Key("listening_addr").MustString("127.0.0.1"),
+		Port:          w.Key("listening_port").MustInt(8181),
+		AccessAddress: strings.TrimRight(w.Key("access_address").String(), "/"),
+		AuthMethod:    strings.ToLower(w.Key("auth_method").MustString(AuthToken)),
+	}
+	if cfg.Web.Enabled {
+		// Everything user-facing is built from this: the !web link, the cookie's
+		// Secure flag and the Host allowlist. A bad value would start fine and
+		// then hand out links that cannot work, so refuse it here. A disabled
+		// section is left alone: it must not stop a bot that does not use it.
+		addr, err := parseAccessAddress(cfg.Web.AccessAddress)
+		if err != nil {
+			return nil, fmt.Errorf("[webinterface] access_address %q: %w", cfg.Web.AccessAddress, err)
+		}
+		cfg.Web.AccessAddress = addr
+	}
+	if cfg.Web.Port < 1 || cfg.Web.Port > 65535 {
+		return nil, fmt.Errorf("[webinterface] listening_port %d is not a valid port", cfg.Web.Port)
+	}
+	switch cfg.Web.AuthMethod {
+	case AuthToken, AuthNone:
+	default:
+		// Fail loudly: silently serving without the auth the file asked for would be worse.
+		return nil, fmt.Errorf("[webinterface] auth_method %q is not supported (use %q or %q)",
+			cfg.Web.AuthMethod, AuthToken, AuthNone)
+	}
+
 	cfg.Commands = parseCommands(f.Section("commands"))
 
 	var err error
@@ -245,6 +306,35 @@ func build(f *ini.File) (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// parseAccessAddress checks that raw is an absolute http(s) URL with a host, such
+// as https://music.example.com or http://192.168.1.5:8181/bot, and returns it
+// without a trailing slash. A path is allowed (a proxy may serve the bot under
+// one); credentials, a query and a fragment are not, since links are built by
+// appending to it.
+func parseAccessAddress(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", fmt.Errorf("it is empty; set the public URL, for example http://127.0.0.1:8181")
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "", fmt.Errorf("not a valid URL: %w", err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return "", fmt.Errorf("it must start with http:// or https://")
+	}
+	if u.Hostname() == "" {
+		return "", fmt.Errorf("it has no host")
+	}
+	if u.User != nil {
+		return "", fmt.Errorf("it must not contain a username or password")
+	}
+	if u.RawQuery != "" || u.ForceQuery || u.Fragment != "" {
+		return "", fmt.Errorf("it must not contain a query or a fragment")
+	}
+	return strings.TrimRight(raw, "/"), nil
 }
 
 func parseCommands(section *ini.Section) CommandsConfig {

@@ -1,6 +1,10 @@
 package command
 
-import "layeh.com/gumble/gumble"
+import (
+	"fmt"
+
+	"layeh.com/gumble/gumble"
+)
 
 // Ctx is everything a command handler needs to know about who called it and where
 // its output goes. Chat builds one from a Mumble text message; other front ends (the
@@ -13,6 +17,12 @@ type Ctx struct {
 	ChannelID uint32
 	// Out receives the command's output. Nil discards it.
 	Out func(text string)
+	// Private delivers text to the caller alone (a Mumble private message). Nil
+	// when there is no such channel; commands that hand out secrets must refuse
+	// to run without it rather than fall back to Out. It returns an error when the
+	// send itself failed (the user disconnected). gumble reports nothing about a
+	// message the server drops afterwards, so a nil error is not a receipt.
+	Private func(text string) error
 	// Sender is the Mumble user who sent the message, when there is one. Only
 	// JoinTarget uses it.
 	Sender *gumble.User
@@ -40,6 +50,18 @@ func chatCtx(msg *gumble.TextMessage) *Ctx {
 	c := &Ctx{Sender: msg.Sender}
 	if msg.Sender != nil {
 		c.User = msg.Sender.Name
+	}
+	if msg.Sender != nil {
+		sender := msg.Sender
+		c.Private = func(text string) (err error) {
+			defer func() {
+				if r := recover(); r != nil {
+					err = fmt.Errorf("private message not sent: %v", r)
+				}
+			}()
+			sender.Send(text)
+			return nil
+		}
 	}
 	if len(msg.Channels) > 0 && msg.Channels[0] != nil {
 		ch := msg.Channels[0]

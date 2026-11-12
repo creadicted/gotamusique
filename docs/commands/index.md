@@ -192,6 +192,7 @@ command and say so when more matched; narrow the selection to get the rest.
 | Command | Description |
 |---------|-------------|
 | `!version` | Show the bot version |
+| `!web` | Send you a private, one-use login link for the [web interface](../configuration/web.md) |
 | `!joinme` | Move the bot to your channel |
 | `!help` | List commands |
 | `!kill` | **Admin only.** Disconnect and exit |

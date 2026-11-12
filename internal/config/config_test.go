@@ -201,3 +201,148 @@ func TestLoad_AnnounceRadioTracksDefaultAndOverride(t *testing.T) {
 		t.Error("override not applied: announce_radio_tracks still true")
 	}
 }
+
+func loadString(t *testing.T, ini string) (*Config, error) {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "c.ini")
+	if err := os.WriteFile(p, []byte(ini), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return Load(p)
+}
+
+func TestLoad_WebDefaultsAreSafe(t *testing.T) {
+	cfg, err := Load("testdata/valid.ini")
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := cfg.Web
+	if w.Enabled {
+		t.Error("the web UI must be off by default")
+	}
+	if w.Addr != "127.0.0.1" || w.Port != 8181 {
+		t.Errorf("listen = %s:%d, want loopback 8181", w.Addr, w.Port)
+	}
+	if w.AuthMethod != AuthToken {
+		t.Errorf("auth_method = %q, want token", w.AuthMethod)
+	}
+	if w.AccessAddress != "http://127.0.0.1:8181" {
+		t.Errorf("access_address = %q", w.AccessAddress)
+	}
+	if got := cfg.Commands.Aliases["web"]; len(got) == 0 || got[0] != "web" {
+		t.Errorf("web alias = %v", got)
+	}
+}
+
+func TestLoad_WebOverrides(t *testing.T) {
+	cfg, err := loadString(t, "[webinterface]\nenabled = True\nlistening_addr = 0.0.0.0\nlistening_port = 9000\n"+
+		"access_address = https://music.example.com/\nauth_method = NONE\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := cfg.Web
+	if !w.Enabled || w.Addr != "0.0.0.0" || w.Port != 9000 || w.AuthMethod != AuthNone {
+		t.Errorf("web = %+v", w)
+	}
+	if w.AccessAddress != "https://music.example.com" {
+		t.Errorf("trailing slash not trimmed: %q", w.AccessAddress)
+	}
+}
+
+// A botamusique file with the full [webinterface] section must still load.
+func TestLoad_WebAcceptsOriginalKeys(t *testing.T) {
+	_, err := loadString(t, `[webinterface]
+access_address = http://127.0.0.1:8181
+auth_method = none
+enabled = False
+flask_secret = ChangeThisPassword
+is_web_proxified = True
+listening_addr = 127.0.0.1
+listening_port = 8181
+max_attempts = 10
+max_upload_file_size = 30M
+password =
+upload_enabled = True
+user =
+web_logfile =
+`)
+	if err != nil {
+		t.Fatalf("original keys rejected: %v", err)
+	}
+}
+
+func TestLoad_WebRejectsUnsupportedAuthAndBadPort(t *testing.T) {
+	for _, ini := range []string{
+		"[webinterface]\nauth_method = password\n",
+		"[webinterface]\nauth_method = oidc\n",
+		"[webinterface]\nlistening_port = 0\n",
+		"[webinterface]\nlistening_port = 70000\n",
+		"[webinterface]\nbogus = 1\n",
+	} {
+		if _, err := loadString(t, ini); err == nil {
+			t.Errorf("%q: expected an error", ini)
+		}
+	}
+}
+
+func TestLoad_WebAccessAddressMustBeAnAbsoluteURLWhenEnabled(t *testing.T) {
+	for _, addr := range []string{
+		"",                            // blanked out: !web would produce a relative link
+		"music.example.com",           // no scheme
+		"//music.example.com",         // scheme-relative
+		"/login",                      // relative
+		"ftp://music.example.com",     // wrong scheme
+		"javascript:alert(1)",         // not http(s)
+		"http://",                     // no host
+		"http://:8181",                // port only
+		"https://user:pw@example.com", // credentials
+		"https://example.com/?x=1",    // query
+		"https://exa mple.com",        // invalid
+	} {
+		ini := "[webinterface]\nenabled = True\naccess_address = " + addr + "\n"
+		if _, err := loadString(t, ini); err == nil {
+			t.Errorf("access_address %q was accepted", addr)
+		} else if !strings.Contains(err.Error(), "access_address") {
+			t.Errorf("access_address %q: the error does not name the key: %v", addr, err)
+		}
+	}
+}
+
+func TestLoad_WebAccessAddressAcceptsValidForms(t *testing.T) {
+	for addr, want := range map[string]string{
+		"https://music.example.com":     "https://music.example.com",
+		"https://music.example.com/":    "https://music.example.com",
+		"http://192.168.1.5:8181":       "http://192.168.1.5:8181",
+		"http://[::1]:8181":             "http://[::1]:8181",
+		"HTTPS://Music.Example.com":     "HTTPS://Music.Example.com", // case is the user's business
+		"https://example.com/bot/":      "https://example.com/bot",   // served under a path by a proxy
+		"  https://music.example.com  ": "https://music.example.com",
+	} {
+		cfg, err := loadString(t, "[webinterface]\nenabled = True\naccess_address = "+addr+"\n")
+		if err != nil {
+			t.Errorf("%q rejected: %v", addr, err)
+			continue
+		}
+		if cfg.Web.AccessAddress != want {
+			t.Errorf("%q -> %q, want %q", addr, cfg.Web.AccessAddress, want)
+		}
+	}
+}
+
+// A disabled web interface must not stop the bot over a value it never uses.
+func TestLoad_WebAccessAddressIsNotCheckedWhileDisabled(t *testing.T) {
+	if _, err := loadString(t, "[webinterface]\nenabled = False\naccess_address = nonsense\n"); err != nil {
+		t.Errorf("disabled section rejected: %v", err)
+	}
+	if _, err := loadString(t, "[webinterface]\naccess_address =\n"); err != nil {
+		t.Errorf("default (disabled) with an empty address rejected: %v", err)
+	}
+}
+
+// The INI parser cuts a value at "#", so a fragment cannot reach the check through
+// a file; the rule still holds for the parser itself.
+func TestParseAccessAddress_RejectsAFragment(t *testing.T) {
+	if _, err := parseAccessAddress("https://example.com/#frag"); err == nil {
+		t.Error("a fragment was accepted")
+	}
+}

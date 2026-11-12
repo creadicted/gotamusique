@@ -60,6 +60,18 @@ Missing keys fall back to the embedded defaults.
 
 See [Music library](library.md) for how scanning works.
 
+## `[webinterface]`
+
+| Key              | Default                 | Description |
+|------------------|-------------------------|-------------|
+| `enabled`        | `False`                 | Start the web interface (off by default) |
+| `listening_addr` | `127.0.0.1`             | Address to listen on |
+| `listening_port` | `8181`                  | Port to listen on |
+| `access_address` | `http://127.0.0.1:8181` | Public URL; the `!web` link is built from it |
+| `auth_method`    | `token`                 | `token` (login link from `!web`) or `none` |
+
+See [Web interface](web.md) for logging in, reverse proxies and Docker.
+
 ## `[radio]` presets
 
 Each key is an alias; the value is a URL, optionally followed by a quoted display name.
