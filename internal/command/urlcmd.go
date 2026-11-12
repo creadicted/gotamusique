@@ -20,30 +20,19 @@ var ytTimeout = 30 * time.Second
 var ytWG sync.WaitGroup
 
 // runYT runs fn in a goroutine so slow yt-dlp calls never block gumble's event
-// goroutine. The ytTimeout deadline starts before waiting for a semaphore slot,
-// so a burst of requests can't pile up goroutines or run long after the
-// advertised timeout. If no slot frees up in time, busy is called instead of fn.
-func runYT(fn func(ctx context.Context), busy func()) {
+// goroutine. The ytTimeout deadline covers everything fn does, including time
+// spent waiting for one of the shared yt-dlp slots (urlitem takes them where it
+// launches the process), so a burst of requests can't pile up goroutines or run
+// long after the advertised timeout. When no slot frees up in time the call fails
+// with urlitem.ErrBusy, which the handlers report like any other error.
+func runYT(fn func(ctx context.Context)) {
 	ytWG.Add(1)
 	go func() {
 		defer ytWG.Done()
 		ctx, cancel := context.WithTimeout(context.Background(), ytTimeout)
 		defer cancel()
-		release, err := urlitem.Acquire(ctx)
-		if err != nil {
-			busy()
-			return
-		}
-		defer release()
 		fn(ctx)
 	}()
-}
-
-// busyReply tells the user all yt-dlp slots were occupied for the whole timeout.
-func busyReply(cfg *config.Config, c *Ctx) func() {
-	return func() {
-		c.Send("Too many requests in progress, try again in a moment.")
-	}
 }
 
 func reply(cfg *config.Config, c *Ctx, htmlText, plain string) {
@@ -77,7 +66,7 @@ func handleURL(bot BotAPI, c *Ctx, cmd, arg string) {
 		}
 		bot.Enqueue(item)
 		reply(cfg, c, "Queued: <b>"+esc(item.FormatTitle())+"</b>", "Queued: "+item.FormatTitle())
-	}, busyReply(cfg, c))
+	})
 }
 
 // handlePlaylist: expand a playlist (capped at max_track_playlist). Entries are
@@ -104,5 +93,5 @@ func handlePlaylist(bot BotAPI, c *Ctx, cmd, arg string) {
 		}
 		text := fmt.Sprintf("Queued %d track(s)", len(items))
 		reply(cfg, c, text, text)
-	}, busyReply(cfg, c))
+	})
 }

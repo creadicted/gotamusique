@@ -142,7 +142,8 @@ to play it after the current track, `now` to play it at once):
 | `url` | `url` | One track resolved through yt-dlp. Playlists are refused |
 
 A source that cannot be queued answers `422 invalid_source` with the reason; all yt-dlp slots busy
-answers `503 busy`. The checks take up to 25 seconds.
+answers `503 busy`. At most three yt-dlp processes run at once in the whole bot: chat and web adds
+and the lookup just before a queued URL plays all share that limit. The checks take up to 25 seconds.
 
 ### Radio search and library
 

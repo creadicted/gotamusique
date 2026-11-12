@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -229,25 +230,61 @@ func TestAdd_URLMissingBinaryIsAServerProblem(t *testing.T) {
 	}
 }
 
+// blockingYT is a fake yt-dlp that signals it started (a file per process) and then
+// waits until the test creates "release", so a test can hold yt-dlp slots.
+func blockingYT(dir string) string {
+	return "touch \"" + dir + "/started.$$\"\n" +
+		"while [ ! -f \"" + dir + "/release\" ]; do sleep 0.02; done\n" +
+		`echo '{"id":"a","title":"Song","duration":100}'` + "\n"
+}
+
+func startedCount(dir string) int {
+	m, _ := filepath.Glob(filepath.Join(dir, "started.*"))
+	return len(m)
+}
+
+// Every yt-dlp call shares one bound (see urlitem.MaxConcurrent). With all slots
+// taken, a web add gives up at its own deadline as "busy", not as a slow site, and
+// never launches a fourth process.
 func TestAdd_URLBusyWhenEverySlotIsTaken(t *testing.T) {
-	b := ytBot(t, ytBody)
-	var releases []func()
+	dir := t.TempDir()
+	b := ytBot(t, blockingYT(dir))
+
+	var wg sync.WaitGroup
 	for i := 0; i < urlitem.MaxConcurrent; i++ {
-		r, err := urlitem.Acquire(bg)
-		if err != nil {
-			t.Fatal(err)
-		}
-		releases = append(releases, r)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			ctx, cancel := context.WithTimeout(bg, 20*time.Second)
+			defer cancel()
+			if _, err := b.Add(ctx, web.Source{Type: web.SourceURL, URL: "https://example.com/hold"}, queue.AtEnd); err != nil {
+				t.Errorf("a holder failed: %v", err)
+			}
+		}()
 	}
-	defer func() {
-		for _, r := range releases {
-			r()
-		}
-	}()
-	ctx, cancel := context.WithTimeout(bg, 80*time.Millisecond)
+	deadline := time.Now().Add(10 * time.Second)
+	for startedCount(dir) < urlitem.MaxConcurrent && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if startedCount(dir) < urlitem.MaxConcurrent {
+		t.Fatal("the holders did not start")
+	}
+
+	ctx, cancel := context.WithTimeout(bg, 100*time.Millisecond)
 	defer cancel()
-	if _, err := b.Add(ctx, web.Source{Type: web.SourceURL, URL: "https://example.com/x"}, queue.AtEnd); !errors.Is(err, web.ErrBusy) {
+	if _, err := b.Add(ctx, web.Source{Type: web.SourceURL, URL: "https://example.com/late"}, queue.AtEnd); !errors.Is(err, web.ErrBusy) {
 		t.Errorf("err = %v, want ErrBusy", err)
+	}
+	if n := startedCount(dir); n != urlitem.MaxConcurrent {
+		t.Errorf("%d yt-dlp processes ran, want %d", n, urlitem.MaxConcurrent)
+	}
+
+	if err := os.WriteFile(filepath.Join(dir, "release"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	wg.Wait()
+	if n := len(b.Snapshot().Queue); n != urlitem.MaxConcurrent {
+		t.Errorf("%d tracks queued, want the %d holders'", n, urlitem.MaxConcurrent)
 	}
 }
 
