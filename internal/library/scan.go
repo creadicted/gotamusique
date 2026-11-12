@@ -47,6 +47,9 @@ var (
 	ErrNotInLibrary = errors.New("file is not in the library, run !rescan")
 	// ErrScanRunning is returned when a scan is already in progress.
 	ErrScanRunning = errors.New("scan already running")
+	// ErrNotIndexable means IndexFile was given something that is not a regular
+	// audio file inside the music folder (or that ffprobe could not read).
+	ErrNotIndexable = errors.New("not an indexable audio file")
 	// ErrFolderUnavailable is returned when the music folder is not a readable directory.
 	ErrFolderUnavailable = errors.New("music folder is not a readable directory")
 	// ErrNoAudioFound is returned when the walk finds no audio files although the
@@ -93,6 +96,12 @@ type Scanner struct {
 
 	mu      sync.Mutex
 	running bool
+	// indexed holds the IDs IndexFile wrote while a scan was running (nil
+	// otherwise). The scan's walk may predate such a file, so reconcile must not
+	// remove those rows as "gone".
+	indexed map[string]bool
+
+	afterWalk func() // test hook: runs between the walk and the database read
 }
 
 // NewScanner returns a Scanner writing to db.
@@ -155,10 +164,12 @@ func (s *Scanner) scan(ctx context.Context, force bool) (Result, error) {
 		return Result{}, ErrScanRunning
 	}
 	s.running = true
+	s.indexed = map[string]bool{}
 	s.mu.Unlock()
 	defer func() {
 		s.mu.Lock()
 		s.running = false
+		s.indexed = nil
 		s.mu.Unlock()
 	}()
 
@@ -170,6 +181,10 @@ func (s *Scanner) scan(ctx context.Context, force bool) (Result, error) {
 	files, err := s.walk(ctx, root)
 	if err != nil {
 		return Result{}, err
+	}
+
+	if s.afterWalk != nil {
+		s.afterWalk()
 	}
 
 	existing, err := s.db.Query((&database.Condition{}).AndEqual("type", RecordType, true))
@@ -354,7 +369,7 @@ func (s *Scanner) reconcile(ctx context.Context, files []found, existing []datab
 	}
 
 	for _, r := range existing {
-		if seen[r.ID] {
+		if seen[r.ID] || s.wasIndexed(r.ID) {
 			continue
 		}
 		// Keep rows for files that were found but failed probing (they are in
@@ -440,4 +455,70 @@ func pathWords(rel string) []string {
 		}
 	}
 	return out
+}
+
+func (s *Scanner) wasIndexed(id string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.indexed[id]
+}
+
+// IndexFile adds or refreshes the single file at rel (a path relative to the
+// music folder) without scanning the tree, and returns its row. It applies the
+// same rules as the scan: audio extension, ignore lists, regular file, and a
+// symlink must resolve inside the music folder. Anything else, including a file
+// ffprobe cannot read, yields ErrNotIndexable and leaves the library untouched.
+// User tags on an existing row are kept. Safe to call while a scan runs.
+func (s *Scanner) IndexFile(ctx context.Context, rel string) (*database.MusicRecord, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	root, err := s.resolveRoot()
+	if err != nil {
+		return nil, err
+	}
+	clean := filepath.ToSlash(filepath.Clean(filepath.FromSlash(rel)))
+	if rel == "" || filepath.IsAbs(rel) || clean == "." || clean == ".." || strings.HasPrefix(clean, "../") {
+		return nil, fmt.Errorf("%w: %q", ErrNotIndexable, rel)
+	}
+	parts := strings.Split(clean, "/")
+	name := parts[len(parts)-1]
+	if s.ignFile[name] || !IsAudioFile(name) {
+		return nil, fmt.Errorf("%w: %q", ErrNotIndexable, rel)
+	}
+	for _, dir := range parts[:len(parts)-1] {
+		if s.ignDirs[dir] {
+			return nil, fmt.Errorf("%w: %q is in an ignored folder", ErrNotIndexable, rel)
+		}
+	}
+	target, err := filepath.EvalSymlinks(filepath.Join(root, filepath.FromSlash(clean)))
+	if err != nil || !within(root, target) {
+		return nil, fmt.Errorf("%w: %q", ErrNotIndexable, rel)
+	}
+	info, err := os.Stat(target)
+	if err != nil || !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("%w: %q", ErrNotIndexable, rel)
+	}
+	f := found{rel: clean, abs: target, size: info.Size(), mtime: info.ModTime().UnixMilli()}
+	id := file.IDFromPath(clean)
+
+	// Mark before writing so a running scan never deletes the row (see indexed).
+	s.mu.Lock()
+	if s.running {
+		s.indexed[id] = true
+	}
+	s.mu.Unlock()
+
+	meta, err := s.probe(target)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %q: %v", ErrNotIndexable, rel, err)
+	}
+	if err := s.db.UpsertProbed(buildRecord(id, f, meta)); err != nil {
+		return nil, fmt.Errorf("writing %s: %w", clean, err)
+	}
+	rec, err := s.db.QueryByID(id)
+	if err != nil {
+		return nil, fmt.Errorf("reading %s: %w", clean, err)
+	}
+	return rec, nil
 }
