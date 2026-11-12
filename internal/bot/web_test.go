@@ -175,3 +175,106 @@ func TestWeb_EndToEnd(t *testing.T) {
 		t.Errorf("poll after a change = %d, want 200", r3.StatusCode)
 	}
 }
+
+// A logged-in session driving the real bot over HTTP: queue edits by entry ID,
+// volume, mode and pause, each answered with the resulting state.
+func TestWeb_ControlEndToEnd(t *testing.T) {
+	b := webBot(t, nil)
+	b.cfg.Bot.MaxVolume = 1
+	b.cfg.Radio = map[string]config.RadioPreset{
+		"jazz": {URL: "http://radio.example/jazz", Comment: "Jazz"},
+		"rock": {URL: "http://radio.example/rock", Comment: "Rock"},
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := b.StartWeb(ctx); err != nil {
+		t.Fatal(err)
+	}
+	base := b.cfg.Web.AccessAddress
+	jar, _ := cookiejar.New(nil)
+	c := &http.Client{Jar: jar, Timeout: 10 * time.Second}
+
+	link, _, err := b.WebLogin(web.Identity{Subject: "h", Name: "alice", Roles: []web.Role{web.RoleUser}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp, err := c.Get(link); err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("login: %v %v", resp, err)
+	}
+
+	type entry struct {
+		ID    uint64 `json:"id"`
+		Title string `json:"title"`
+	}
+	type state struct {
+		Queue  []entry `json:"queue"`
+		Index  int     `json:"index"`
+		Volume float64 `json:"volume"`
+		Mode   string  `json:"mode"`
+		Pause  string  `json:"pause"`
+		Added  entry   `json:"added"`
+	}
+	send := func(method, path, body string) (int, state) {
+		t.Helper()
+		req, _ := http.NewRequest(method, base+path, strings.NewReader(body))
+		resp, err := c.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		var s state
+		json.NewDecoder(resp.Body).Decode(&s)
+		return resp.StatusCode, s
+	}
+
+	code, s := send("POST", "/api/v1/queue", `{"type":"radio","preset":"jazz"}`)
+	if code != http.StatusCreated || len(s.Queue) != 1 || s.Added.ID != s.Queue[0].ID || s.Queue[0].Title != "[Radio] Jazz" {
+		t.Fatalf("add jazz = %d %+v", code, s)
+	}
+	jazz := s.Added.ID
+	code, s = send("POST", "/api/v1/queue", `{"type":"radio","preset":"rock","position":"next"}`)
+	if code != http.StatusCreated || len(s.Queue) != 2 {
+		t.Fatalf("add rock = %d %+v", code, s)
+	}
+	rock := s.Added.ID
+
+	// Move jazz after rock, then play rock by its ID.
+	if code, s = send("POST", "/api/v1/queue/"+strconv.FormatUint(jazz, 10)+"/move", `{"after":`+strconv.FormatUint(rock, 10)+`}`); code != http.StatusOK ||
+		s.Queue[0].ID != rock || s.Queue[1].ID != jazz {
+		t.Errorf("move = %d %+v", code, s.Queue)
+	}
+	if code, s = send("POST", "/api/v1/queue/"+strconv.FormatUint(jazz, 10)+"/play", ""); code != http.StatusOK || s.Index != 1 {
+		t.Errorf("play = %d index %d, want 1", code, s.Index)
+	}
+
+	if code, s = send("PUT", "/api/v1/volume", `{"volume":0.3}`); code != http.StatusOK || s.Volume != 0.3 {
+		t.Errorf("volume = %d %v", code, s.Volume)
+	}
+	if code, s = send("PUT", "/api/v1/mode", `{"mode":"repeat"}`); code != http.StatusOK || s.Mode != "repeat" {
+		t.Errorf("mode = %d %q", code, s.Mode)
+	}
+	if code, s = send("POST", "/api/v1/playback/pause", ""); code != http.StatusOK || s.Pause != "manual" {
+		t.Errorf("pause = %d %q", code, s.Pause)
+	}
+	if code, s = send("POST", "/api/v1/playback/resume", ""); code != http.StatusOK || s.Pause != "" {
+		t.Errorf("resume = %d %q", code, s.Pause)
+	}
+
+	// Removing twice: the second one is the "already gone" 404, and nothing else moves.
+	if code, s = send("DELETE", "/api/v1/queue/"+strconv.FormatUint(rock, 10), ""); code != http.StatusOK || len(s.Queue) != 1 || s.Queue[0].ID != jazz {
+		t.Errorf("remove = %d %+v", code, s.Queue)
+	}
+	if code, _ = send("DELETE", "/api/v1/queue/"+strconv.FormatUint(rock, 10), ""); code != http.StatusNotFound {
+		t.Errorf("second remove = %d, want 404", code)
+	}
+
+	if code, _ = send("POST", "/api/v1/queue", `{"type":"radio","preset":"nope"}`); code != http.StatusUnprocessableEntity {
+		t.Errorf("unknown preset = %d, want 422", code)
+	}
+	if code, _ = send("POST", "/api/v1/library/rescan", ""); code != http.StatusConflict {
+		t.Errorf("rescan without a library = %d, want 409", code)
+	}
+	if code, s = send("DELETE", "/api/v1/queue", ""); code != http.StatusOK || len(s.Queue) != 0 {
+		t.Errorf("clear = %d %+v", code, s.Queue)
+	}
+}
