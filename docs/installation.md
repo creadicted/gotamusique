@@ -3,9 +3,14 @@
 ## Requirements
 
 - `ffmpeg` on PATH (`ffprobe` too, for `!file` metadata)
-- `yt-dlp` on PATH, only for `!url` / `!playlist`
+- `yt-dlp` on PATH, only for `!url` / `!playlist`. Optional, and best effort: see [URL playback](commands/index.md#url-playback)
 - A JavaScript runtime for yt-dlp's YouTube support: [`deno`](https://deno.com) >= 2.3.0 (enabled by default),
   or node/QuickJS/bun via yt-dlp's `--js-runtimes`. The Docker image bundles yt-dlp and deno.
+
+!!! warning "Keep yt-dlp up to date"
+    Sites, YouTube above all, change often and old yt-dlp versions stop working. With the binary run
+    `yt-dlp -U` now and then. The Docker image contains one fixed version (`YTDLP_VERSION` in the
+    `Dockerfile`): rebuild with a newer one when `!url` starts failing.
 
 No Go toolchain and no Python runtime are needed.
 

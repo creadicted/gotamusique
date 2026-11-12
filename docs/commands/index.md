@@ -11,8 +11,8 @@ when unambiguous: `!hel` runs `!help`. Aliases can be changed under `[commands]`
 | `!radio <alias\|url>` | Play a preset or any direct stream URL |
 | `!hls <url>` | Play an HLS/M3U8 stream |
 | `!file <path\|folder\|name part>` (`!f`) | Queue a library file or folder; see [Library](#library) |
-| `!url <url>` | Play one track via yt-dlp |
-| `!playlist <url>` | Queue a playlist (up to `max_track_playlist`) |
+| `!url <url>` | Play one track via yt-dlp. Best effort, see [URL playback](#url-playback) |
+| `!playlist <url>` | Queue a playlist (up to `max_track_playlist`). Best effort, see [URL playback](#url-playback) |
 | `!mode [mode]` | Show or set `one-shot`, `repeat`, `random`, `autoplay`. Not saved across restarts |
 | `!pause` | Halt playback and keep the queue position. See [Pause and resume](#pause-and-resume) |
 | `!resume` | Continue from the current item after a pause |
@@ -20,6 +20,33 @@ when unambiguous: `!hel` runs `!help`. Aliases can be changed under `[commands]`
 | `!mute` / `!unmute` | Set volume to 0 / restore it |
 | `!skip` | Skip to the next queued item |
 | `!clear` | Stop and empty the queue |
+
+## URL playback
+
+`!url` and `!playlist` hand the link to [yt-dlp](https://github.com/yt-dlp/yt-dlp), which supports
+hundreds of sites. Treat them as **best effort**: whether a link plays depends on the site and on
+your server, not on this bot.
+
+- **Many sites work reliably** (SoundCloud, Bandcamp, Mixcloud and others).
+- **YouTube often does not.** It checks for bots, asks for a sign-in and treats server and VPS
+  addresses much more strictly than a home connection, and it changes often enough that an old
+  yt-dlp stops working within weeks. A link can be accepted when you queue it and still fail when
+  its turn comes, because the stream is looked up just before it plays. The bot then says
+  `skipped` with yt-dlp's reason and moves on to the next item.
+- **Playlists** are resolved entry by entry as they play, so some entries can fail while others play.
+
+If a site does not work:
+
+1. **Update yt-dlp.** With the binary, run `yt-dlp -U`. The Docker image contains the version set
+   by `YTDLP_VERSION` in the `Dockerfile`, so bump it and rebuild.
+2. **Check the JavaScript runtime** that yt-dlp needs for YouTube ([Installation](../installation.md)).
+3. **Try cookies** from a logged-in browser session in `[youtube_dl] cookiefile`. Use an account
+   you can afford to lose: Google may restrict accounts that are used this way.
+4. **Run the bot from a home connection** if you can. `source_address` pins the outgoing address.
+
+For music you always want to work, prefer the other sources: [radio streams](../configuration/index.md#radio-presets)
+and the [music library](../configuration/library.md), which you can also fill by upload in the
+[web interface](../configuration/web.md#uploads). They do not depend on anyone's blocking policy.
 
 ## Pause and resume
 

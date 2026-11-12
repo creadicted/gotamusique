@@ -143,7 +143,7 @@ to play it after the current track, `now` to play it at once):
 | `radio` | `preset` | A name from `[radio]` |
 | `radio` | `url` | A direct stream URL (checked to be reachable first) |
 | `radio` | `uuid` | A radio-browser.info station, from the search below |
-| `url` | `url` | One track resolved through yt-dlp. Playlists are refused |
+| `url` | `url` | One track resolved through yt-dlp, best effort (see [URL playback](../commands/index.md#url-playback)). Playlists are refused |
 
 A source that cannot be queued answers `422 invalid_source` with the reason; all yt-dlp slots busy
 answers `503 busy`. At most three yt-dlp processes run at once in the whole bot: chat and web adds
