@@ -346,3 +346,46 @@ func TestParseAccessAddress_RejectsAFragment(t *testing.T) {
 		t.Error("a fragment was accepted")
 	}
 }
+
+func TestLoad_WebUploadDefaultsAndOverrides(t *testing.T) {
+	cfg, err := Load("testdata/valid.ini")
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := cfg.Web
+	if !w.UploadEnabled || w.MaxUploadBytes != 30<<20 || w.AllowUploadWithoutAuth {
+		t.Errorf("defaults = %+v, want uploads on, 30 MiB, login required", w)
+	}
+
+	cfg, err = loadString(t, "[webinterface]\nupload_enabled = False\nmax_upload_file_size = 2G\nallow_upload_without_auth = True\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w := cfg.Web; w.UploadEnabled || w.MaxUploadBytes != 2<<30 || !w.AllowUploadWithoutAuth {
+		t.Errorf("overrides = %+v", w)
+	}
+}
+
+func TestParseSize(t *testing.T) {
+	for in, want := range map[string]int64{
+		"30M": 30 << 20, "30m": 30 << 20, "30MB": 30 << 20, "30MiB": 30 << 20, " 30 M ": 30 << 20,
+		"512K": 512 << 10, "2G": 2 << 30, "1024": 1024, "1B": 1,
+	} {
+		got, err := parseSize(in)
+		if err != nil || got != want {
+			t.Errorf("parseSize(%q) = %d, %v, want %d", in, got, err, want)
+		}
+	}
+	for _, in := range []string{"", "0", "-5M", "M", "abc", "1.5M", "30X", "9999999999999G", "30 MB extra"} {
+		if _, err := parseSize(in); err == nil {
+			t.Errorf("parseSize(%q) was accepted", in)
+		}
+	}
+}
+
+func TestLoad_WebRejectsABadUploadSize(t *testing.T) {
+	_, err := loadString(t, "[webinterface]\nmax_upload_file_size = lots\n")
+	if err == nil || !strings.Contains(err.Error(), "max_upload_file_size") {
+		t.Errorf("err = %v, want one that names max_upload_file_size", err)
+	}
+}

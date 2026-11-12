@@ -3,9 +3,11 @@ package config
 import (
 	_ "embed"
 	"fmt"
+	"math"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"gopkg.in/ini.v1"
@@ -79,6 +81,14 @@ type WebConfig struct {
 	AccessAddress string
 	// AuthMethod is "token" (log in with a link from !web) or "none".
 	AuthMethod string
+	// UploadEnabled lets logged-in users upload audio into the library.
+	UploadEnabled bool
+	// MaxUploadBytes is the size limit of one uploaded file.
+	MaxUploadBytes int64
+	// AllowUploadWithoutAuth also allows uploads when auth_method is none.
+	// Without it, uploads need a login: an open instance would otherwise let
+	// anyone who can reach it fill the disk.
+	AllowUploadWithoutAuth bool
 }
 
 // Web auth methods.
@@ -149,6 +159,7 @@ var sectionAllowlists = map[string]map[string]bool{
 		"flask_secret": true, "is_web_proxified": true, "max_attempts": true,
 		"max_upload_file_size": true, "password": true, "upload_enabled": true,
 		"user": true, "web_logfile": true,
+		"allow_upload_without_auth": true,
 	},
 }
 
@@ -274,7 +285,15 @@ func build(f *ini.File) (*Config, error) {
 		Port:          w.Key("listening_port").MustInt(8181),
 		AccessAddress: strings.TrimRight(w.Key("access_address").String(), "/"),
 		AuthMethod:    strings.ToLower(w.Key("auth_method").MustString(AuthToken)),
+
+		UploadEnabled:          w.Key("upload_enabled").MustBool(true),
+		AllowUploadWithoutAuth: w.Key("allow_upload_without_auth").MustBool(false),
 	}
+	maxUpload, err := parseSize(w.Key("max_upload_file_size").MustString("30M"))
+	if err != nil {
+		return nil, fmt.Errorf("[webinterface] max_upload_file_size %q: %w", w.Key("max_upload_file_size").String(), err)
+	}
+	cfg.Web.MaxUploadBytes = maxUpload
 	if cfg.Web.Enabled {
 		// Everything user-facing is built from this: the !web link, the cookie's
 		// Secure flag and the Host allowlist. A bad value would start fine and
@@ -299,7 +318,6 @@ func build(f *ini.File) (*Config, error) {
 
 	cfg.Commands = parseCommands(f.Section("commands"))
 
-	var err error
 	cfg.Radio, err = parseRadio(f.Section("radio"))
 	if err != nil {
 		return nil, err
@@ -335,6 +353,32 @@ func parseAccessAddress(raw string) (string, error) {
 		return "", fmt.Errorf("it must not contain a query or a fragment")
 	}
 	return strings.TrimRight(raw, "/"), nil
+}
+
+// parseSize reads a size such as "30M", "512K", "2G" or a plain byte count. The
+// units are powers of 1024 and may be followed by "B" or "iB"; case does not matter.
+func parseSize(raw string) (int64, error) {
+	s := strings.ToUpper(strings.TrimSpace(raw))
+	s = strings.TrimSuffix(strings.TrimSuffix(s, "IB"), "B")
+	mult := int64(1)
+	if n := len(s); n > 0 {
+		switch s[n-1] {
+		case 'K':
+			mult, s = 1<<10, s[:n-1]
+		case 'M':
+			mult, s = 1<<20, s[:n-1]
+		case 'G':
+			mult, s = 1<<30, s[:n-1]
+		}
+	}
+	n, err := strconv.ParseInt(strings.TrimSpace(s), 10, 64)
+	if err != nil || n <= 0 {
+		return 0, fmt.Errorf("expected a positive size such as 30M, 512K or 2G")
+	}
+	if n > math.MaxInt64/mult {
+		return 0, fmt.Errorf("too large")
+	}
+	return n * mult, nil
 }
 
 func parseCommands(section *ini.Section) CommandsConfig {
