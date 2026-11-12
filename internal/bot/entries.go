@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/konradk/gotamusique/internal/audio"
-	fileitem "github.com/konradk/gotamusique/internal/media/file"
 	"github.com/konradk/gotamusique/internal/queue"
 	"github.com/konradk/gotamusique/internal/status"
 )
@@ -95,7 +94,7 @@ func (b *Bot) Seek(pos time.Duration) error {
 	if pos < 0 {
 		return ErrSeekRange
 	}
-	if fi, ok := item.(*fileitem.FileItem); ok && fi.Duration > 0 && pos >= fi.Duration {
+	if length := audio.LengthOf(item); length > 0 && pos >= length {
 		return ErrSeekRange
 	}
 	b.resume.set(item, pos)
@@ -106,19 +105,13 @@ func (b *Bot) Seek(pos time.Duration) error {
 	return nil
 }
 
-// snapSig is everything in a Snapshot that counts as "changed" for Version.
-// Position is left out on purpose: it moves every moment and clients interpolate.
+// snapSig is what Version is derived from: a fingerprint of the rendered state
+// plus the play-control counter. A seek during playback leaves the fingerprint
+// alone (position is excluded while playing) yet the playhead jumped; the counter,
+// bumped by every play, seek, pause and skip control, makes that visible.
 type snapSig struct {
-	queue   uint64
-	pause   int32
-	muted   bool
-	volume  float64
-	playing bool
-	scan    status.Scan
-	// launch counts play, seek, pause and skip controls. A seek during playback
-	// can leave every other field as it was, yet the playhead jumped; clients that
-	// interpolate the position need to see that as a change.
-	launch int64
+	fingerprint uint64
+	launch      int64
 }
 
 // Snapshot reads the bot's state for a front end. The queue part is one
@@ -126,6 +119,7 @@ type snapSig struct {
 // control landing in between can make the two disagree for one reading. The next
 // reading shows the settled state, and Version changes with it.
 func (b *Bot) Snapshot() status.Snapshot {
+	launch := b.launchVersion.Load() // before reading state: see snapSig
 	q := b.queue.Snapshot()
 	cur := q.Current()
 
@@ -145,12 +139,9 @@ func (b *Bot) Snapshot() status.Snapshot {
 		Mode:   b.PlaybackMode(),
 	}
 	for i, it := range q.Items {
-		e := status.Entry{ID: q.IDs[i], Title: it.FormatTitle()}
+		e := status.Entry{ID: q.IDs[i], Title: it.FormatTitle(), Duration: audio.LengthOf(it)}
 		if sk, ok := it.(audio.Seekable); ok {
 			e.Seekable = sk.CanSeek()
-		}
-		if fi, ok := it.(*fileitem.FileItem); ok {
-			e.Duration = fi.Duration
 		}
 		s.Queue[i] = e
 	}
@@ -182,10 +173,7 @@ func (b *Bot) Snapshot() status.Snapshot {
 		s.Scan = status.Scan{Available: true, Running: lib.scanner.Running()}
 	}
 
-	s.Version = b.versionFor(snapSig{
-		queue: q.Version, pause: pauseNow, muted: muted,
-		volume: volume, playing: s.Playing, scan: s.Scan, launch: b.launchVersion.Load(),
-	})
+	s.Version = b.versionFor(snapSig{fingerprint: s.Fingerprint(), launch: launch})
 	return s
 }
 

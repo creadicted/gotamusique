@@ -112,3 +112,59 @@ func TestIndexFile_DuringScanSurvivesReconcile(t *testing.T) {
 	}
 	eq(t, f.paths(t), []string{"a.mp3"})
 }
+
+// A failed IndexFile must not keep a stale row alive: the scan's walk missed the
+// file, the old row says it exists, and the index attempt could not read it, so
+// the removal pass still has to remove the row.
+func TestIndexFile_FailedDuringScanDoesNotProtectAStaleRow(t *testing.T) {
+	f := newFixture(t)
+	write(t, f.root, "a.mp3", "x")
+	late := write(t, f.root, "late.mp3", "x")
+	s := f.scanner(Config{})
+	if _, err := s.Scan(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	eq(t, f.paths(t), []string{"a.mp3", "late.mp3"})
+
+	// The file is gone while the next walk runs (so the walk misses it), and comes
+	// back unreadable just before IndexFile looks at it.
+	if err := os.Remove(late); err != nil {
+		t.Fatal(err)
+	}
+	s.afterWalk = func() {
+		write(t, f.root, "late.mp3", "garbage")
+		f.probe.fail = map[string]bool{"late.mp3": true}
+		if _, err := s.IndexFile(context.Background(), "late.mp3"); !errors.Is(err, ErrNotIndexable) {
+			t.Errorf("IndexFile = %v, want ErrNotIndexable", err)
+		}
+	}
+	if _, err := s.Scan(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	eq(t, f.paths(t), []string{"a.mp3"})
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.indexed != nil || s.inflight != nil {
+		t.Error("per-scan protection state must be dropped when the scan ends")
+	}
+}
+
+// A successful index keeps its protection even though other attempts fail.
+func TestIndexFile_FailureDoesNotDropAnEarlierSuccess(t *testing.T) {
+	f := newFixture(t)
+	write(t, f.root, "a.mp3", "x")
+	s := f.scanner(Config{})
+	s.afterWalk = func() {
+		write(t, f.root, "new.mp3", "x")
+		if _, err := s.IndexFile(context.Background(), "new.mp3"); err != nil {
+			t.Error(err)
+		}
+		f.probe.fail = map[string]bool{"new.mp3": true}
+		_, _ = s.IndexFile(context.Background(), "new.mp3") // a later, failing attempt
+	}
+	if _, err := s.Scan(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	eq(t, f.paths(t), []string{"a.mp3", "new.mp3"})
+}
