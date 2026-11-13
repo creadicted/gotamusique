@@ -40,7 +40,10 @@ func handleWeb(bot BotAPI, c *Ctx, cmd, arg string) {
 		return
 	}
 
-	htmlText := "Web UI: <a href=\"" + esc(link) + "\">open</a>"
+	// The address is also the link text. Some servers strip HTML from chat messages (Kallisti
+	// does, href included) and some clients do not render it: the address must still be there,
+	// readable and copyable, when the tags are gone.
+	htmlText := "Web UI: <a href=\"" + esc(link) + "\">" + esc(link) + "</a>"
 	plain := "Web UI: " + link
 	if ttl > 0 {
 		note := fmt.Sprintf(" (one use, valid for %d minutes)", max(1, int(ttl/time.Minute)))

@@ -3,6 +3,8 @@
 A Go rewrite of [botamusique](https://github.com/azlux/botamusique), a Mumble music bot. Single self-contained
 binary, no Python runtime required.
 
+![The gotamusique web interface: now playing, the queue, and the Add panel](docs/images/gotamusique.png)
+
 📖 **Documentation: <https://creadicted.github.io/gotamusique/>**
 
 - [Installation](https://creadicted.github.io/gotamusique/installation/): binary, Docker, requirements

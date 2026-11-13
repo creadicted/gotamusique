@@ -3,6 +3,8 @@
 A Go rewrite of [botamusique](https://github.com/azlux/botamusique), a Mumble music bot.
 One self-contained binary, no Python runtime required. The Docker image is fully static.
 
+![The gotamusique web interface: now playing, the queue, and the Add panel](images/gotamusique.png)
+
 ## Features
 
 - Radio presets, any direct stream URL, HLS streams and [radio-browser.info](https://www.radio-browser.info) search

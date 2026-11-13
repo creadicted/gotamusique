@@ -6,6 +6,8 @@ browse the library and upload music. It works on a phone too. Behind it is an HT
 script, with [interactive documentation](#interactive-documentation-swagger-ui). It is **off by
 default**: nothing listens until you enable it.
 
+![The gotamusique web interface: now playing, the queue, and the Add panel](../images/gotamusique.png)
+
 ## Quick start
 
 Five minutes, on the machine that runs the bot.
@@ -26,7 +28,8 @@ Five minutes, on the machine that runs the bot.
 
 3. **Log in.** In the Mumble channel the bot is in, type `!web`. The bot sends you a **private
    message** with a link that works once and expires after 5 minutes. Open it and you land in the
-   interface. (For a quick local test only, `auth_method = none` skips the login; read
+   interface. Some clients, such as Kallisti, show chat as plain text; the link is written out in
+   full, so copy it into the address bar. (For a quick local test only, `auth_method = none` skips the login; read
    [No login](#no-login-auth_method-none) before using it anywhere else.)
 
 4. **Play something.** The default config has a `jazz` station: open **Radio** and press **Add**.
@@ -36,7 +39,9 @@ Five minutes, on the machine that runs the bot.
 
 **No Mumble server at hand?** From a source checkout, `make ui-demo` starts the interface with a
 fake bot and made-up music, to look around. Nothing is played or stored. `make ui-demo LOGIN=1`
-shows the `!web` login flow instead of skipping it.
+shows the `!web` login flow instead of skipping it. To try the real bot with a real server, run
+`make playground` (or `make playground-kallisti` for a browser as the Mumble client, with nothing to
+install); see `playground/README.md`.
 
 **Reaching it from other machines.** Keep the bot on loopback and put a reverse proxy in front
 (see [Reverse proxy and TLS](#reverse-proxy-and-tls)), then set `access_address` to the proxy's
