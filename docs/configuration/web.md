@@ -6,6 +6,8 @@ browse the library and upload music. It works on a phone too. Behind it is an HT
 script, with [interactive documentation](#interactive-documentation-swagger-ui). It is **off by
 default**: nothing listens until you enable it.
 
+![The gotamusique web interface: now playing, the queue, and the Add panel](../images/gotamusique.png)
+
 ## Quick start
 
 Five minutes, on the machine that runs the bot.
