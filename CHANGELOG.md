@@ -24,6 +24,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   limit, login required unless `allow_upload_without_auth`). New keys `upload_enabled`,
   `max_upload_file_size`, `allow_upload_without_auth`. The browser UI follows. See
   [Web interface](docs/configuration/web.md).
+- **Interactive API documentation.** With the web interface enabled, `/api/docs` serves Swagger UI and
+  `/api/v1/openapi.yaml` the OpenAPI 3 description of the whole API, behind the same login. Swagger UI
+  is built into the binary (it adds about 2 MB) and loads nothing from the internet. The description is
+  tested against the code, so it cannot drift from the real routes, error codes and responses.
 - ffprobe now runs with a 60 second timeout, so a corrupt file cannot hang a library scan.
 - The library scan now skips files that have no audio stream (a video or an image with an audio
   extension) instead of listing them; a track that is already in the library keeps its entry.
