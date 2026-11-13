@@ -1,6 +1,6 @@
 # 3-08 — Web Frontend
 
-**Status:** todo  
+**Status:** done  
 **Depends on:** 3-07  
 **Unlocks:** nothing
 
@@ -23,15 +23,32 @@ adapted.
   when unauthenticated.
 - UI text is English first; i18n is not part of this milestone.
 
+## As built
+
+- Plain ES modules and one stylesheet under `internal/web/ui/` (see its README), served from an
+  explicit file table at `/` and `/ui/...`. The page is public; it asks the API and shows the login
+  steps on a 401. The Archivo font is embedded (OFL).
+- Design: light timetable paper with one dark board for what is playing, amber only on dark
+  surfaces, condensed bold for the board and queue; one animation (the title decoding on a track
+  change), skipped for reduced motion.
+- Polling uses `?since=<version>` (a `304` costs no body); the playhead advances locally between
+  polls; mutations apply the returned state at once. A `404` on an entry refreshes silently.
+- Added `GET /api/v1/radio/presets`, because the interface needs the configured stations.
+- Searching in the Library tab covers the whole library even when a folder is open: the folder is
+  not shown while searching, so limiting it would hide results.
+- `cmd/uidemo` (`make ui-demo`) serves the interface with a fake bot, for development and for
+  trying it without Mumble. It is not part of the release.
+
 ## Thumbnails (deferred from 3-05)
 
-3-05 stores no artwork. Decide here whether to serve any, e.g. extract on demand with
-`file.ExtractThumb` and cache the result as files next to the DB (not inside it), exposed via an
-endpoint added to the API. The UI must work without thumbnails.
+**Decision: not built.** 3-05 stores no artwork, and serving it means extracting art on demand
+(`file.ExtractThumb`), caching it as files next to the DB, and a new endpoint, for something the
+remote-control job does not need. The interface works without it. If wanted later, it fits as an
+endpoint plus an `<img>` in the queue and library rows.
 
 ## Deliverables
 
-- `web/static/` sources and the embed wiring in `internal/web/server.go`
+- `internal/web/ui/` sources and the embed wiring in `internal/web/ui.go`
 - Tests for static serving (index at `/`, correct content types, no directory listing)
 - Docs: how to enable the UI and put it behind a reverse proxy
 

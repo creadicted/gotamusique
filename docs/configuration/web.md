@@ -1,17 +1,14 @@
 # Web interface
 
-The bot can serve an HTTP API (and, in a later release, a web UI) so people in the Mumble
-channel can follow and control playback from a browser. It is **off by default**: nothing
-listens until you enable it.
-
-!!! note "Work in progress"
-    This release ships the login, the state, the control API (playback, volume, mode, queue, adding
-    radio and URLs, library rescan), library browsing and uploads. The browser UI follows.
+The bot can serve a web interface, so people in the Mumble channel can see what plays and control
+it from a browser: pause and skip, change the volume, edit the queue, add radio stations and tracks,
+browse the library and upload music. It works on a phone too. Behind it is an HTTP API you can
+script, with [interactive documentation](#interactive-documentation-swagger-ui). It is **off by
+default**: nothing listens until you enable it.
 
 ## Quick start
 
-Five minutes, on the machine that runs the bot. There is no browser UI yet, so you drive the API
-with `curl` (add `| jq` if you have it).
+Five minutes, on the machine that runs the bot.
 
 1. **Turn it on.** Add this to your `configuration.ini` and restart the bot:
 
@@ -20,51 +17,26 @@ with `curl` (add `| jq` if you have it).
     enabled = True
     ```
 
-    It listens on `127.0.0.1:8181` only and uses the login described in step 3. The bot refuses to
-    start if that port is already taken. Running in Docker? See [Docker](#docker) first: the bot
-    must listen on `0.0.0.0` and the port must be published.
+    It listens on `127.0.0.1:8181` only and asks for a login. The bot refuses to start if that port
+    is already taken. Running in Docker? See [Docker](#docker) first: the bot must listen on
+    `0.0.0.0` and the port must be published.
 
-2. **Check it is up.** Without a login the API answers `401`, which is what you want to see:
-
-    ```sh
-    curl -i http://127.0.0.1:8181/api/v1/state     # HTTP/1.1 401, {"code":"unauthenticated", ...}
-    ```
+2. **Open it.** Go to `http://127.0.0.1:8181/` in a browser on the same machine. Before you log in
+   it shows the steps to do so.
 
 3. **Log in.** In the Mumble channel the bot is in, type `!web`. The bot sends you a **private
-   message** with a link that works once and expires after 5 minutes.
-   Open it in a browser for a session cookie, or let `curl` do the same and keep the cookie:
+   message** with a link that works once and expires after 5 minutes. Open it and you land in the
+   interface. (For a quick local test only, `auth_method = none` skips the login; read
+   [No login](#no-login-auth_method-none) before using it anywhere else.)
 
-    ```sh
-    curl -c cookies.txt -L 'http://127.0.0.1:8181/login?token=PASTE_THE_TOKEN_FROM_THE_LINK'
-    ```
+4. **Play something.** The default config has a `jazz` station: open **Radio** and press **Add**.
+   You hear it in Mumble, so be in the bot's channel. For your own music set `music_folder` (see
+   [Music library](library.md)); it appears under **Library**, and **Upload** adds files from your
+   computer.
 
-    (For a quick local test only, `auth_method = none` skips the login; read
-    [No login](#no-login-auth_method-none) before using it anywhere else.)
-
-4. **Look and steer.** The default config has a `jazz` radio preset:
-
-    ```sh
-    curl -s -b cookies.txt http://127.0.0.1:8181/api/v1/state
-    curl -s -b cookies.txt -X POST http://127.0.0.1:8181/api/v1/queue -d '{"type":"radio","preset":"jazz"}'
-    curl -s -b cookies.txt -X PUT  http://127.0.0.1:8181/api/v1/volume -d '{"volume":0.4}'
-    curl -s -b cookies.txt -X POST http://127.0.0.1:8181/api/v1/playback/pause
-    ```
-
-    Every change answers with the new state, so you can see the effect in the reply. You hear
-    the audio in Mumble, so be in the bot's channel.
-
-5. **Add your own music** (needs `music_folder` set, see [Music library](library.md)):
-
-    ```sh
-    curl -s -b cookies.txt -X POST http://127.0.0.1:8181/api/v1/library/rescan     # scan the folder
-    curl -s -b cookies.txt 'http://127.0.0.1:8181/api/v1/library'                  # list it
-    curl -s -b cookies.txt -F file=@song.mp3 http://127.0.0.1:8181/api/v1/library/upload
-    ```
-
-    Queue a track with `{"type": "library", "path": "<path from the listing>"}`.
-
-**Prefer clicking?** Once you are logged in, open `/api/docs` in the same browser for an interactive
-reference where you can try every call, see [Interactive documentation](#interactive-documentation-swagger-ui).
+**No Mumble server at hand?** From a source checkout, `make ui-demo` starts the interface with a
+fake bot and made-up music, to look around. Nothing is played or stored. `make ui-demo LOGIN=1`
+shows the `!web` login flow instead of skipping it.
 
 **Reaching it from other machines.** Keep the bot on loopback and put a reverse proxy in front
 (see [Reverse proxy and TLS](#reverse-proxy-and-tls)), then set `access_address` to the proxy's
@@ -73,11 +45,82 @@ public URL: the `!web` link is built from it, so with the default it would point
 
 **It does not work?**
 
+- The page says "Log in with the bot": you are not logged in. Type `!web` in Mumble and open the link.
 - The login link answers `401`: it was already used or has expired. Type `!web` again.
-- An API call answers `401 unauthenticated` after you logged in: `curl` needs `-b cookies.txt` on
-  every call (a browser sends the cookie by itself).
+- "Cannot reach the bot" in a red bar: the bot stopped or the network dropped. The page keeps the
+  last queue on screen and recovers by itself.
 - `Connection refused`: the web interface is off or the bot is not running.
 - `421 bad_host` (only without a login): `access_address` does not match the address you use.
+
+## Using the interface
+
+**The board** at the top shows what plays. Drag the position to seek (local files only; a live
+stream shows *Live stream*). The keys pause or resume, skip to the next entry, and stop (back to the
+first entry). Next to them are the volume with a mute button, and the playback mode: *One-shot*,
+*Repeat*, *Random* and *Autoplay* (which needs a music library). When the track changes, the title
+on the board decodes into place; this is skipped if your system asks for reduced motion.
+
+**The queue** lists the entries in play order. The playing one is dark with an amber bar, and
+entries that have finished are dimmed. The play key starts an entry; the **…** key opens *Move up*,
+*Move down* and *Remove*. *Shuffle* mixes what comes next, and *Clear* asks once more before it
+empties the queue. Two people can edit at once: an entry someone else already removed simply
+disappears from your list, with no error.
+
+**Add** has four sources. Every *Add* button has a menu next to it with *Play next* and *Play now*.
+
+- **Library**: browse folders, or search. A search looks at titles, artists and folder names across
+  the whole library, and tag buttons narrow it down. *Rescan* reads the music folder again.
+- **Radio**: the stations from your `[radio]` config, a search on radio-browser.info, or a direct
+  stream address.
+- **Web address**: one track from a web address, through yt-dlp. Best effort, see
+  [URL playback](../commands/index.md#url-playback).
+- **Upload**: choose or drop audio files; they go up one at a time and can be added right away.
+  See [Uploads](#uploads).
+
+**On a phone** the board stays on top and two buttons switch between Queue and Add. The page follows
+your system's light or dark setting, works with the keyboard, and gives screen readers the real
+title (not the animation).
+
+The interface loads nothing from the internet: the font and everything else are built into the bot,
+and the page is served with a strict Content-Security-Policy. It does not show album art, and it
+cannot download files or edit or delete library entries.
+
+## Scripting with curl
+
+The interface is a client of the same API you can call yourself. This is also the quickest way to
+check things from a terminal (add `| jq` if you have it). Without a login the API answers `401`:
+
+```sh
+curl -i http://127.0.0.1:8181/api/v1/state     # HTTP/1.1 401, {"code":"unauthenticated", ...}
+```
+
+Log in with `curl` the same way a browser does, and keep the cookie:
+
+```sh
+curl -c cookies.txt -L 'http://127.0.0.1:8181/login?token=PASTE_THE_TOKEN_FROM_THE_LINK'
+```
+
+Then look and steer:
+
+```sh
+curl -s -b cookies.txt http://127.0.0.1:8181/api/v1/state
+curl -s -b cookies.txt -X POST http://127.0.0.1:8181/api/v1/queue -d '{"type":"radio","preset":"jazz"}'
+curl -s -b cookies.txt -X PUT  http://127.0.0.1:8181/api/v1/volume -d '{"volume":0.4}'
+curl -s -b cookies.txt -X POST http://127.0.0.1:8181/api/v1/playback/pause
+```
+
+Every change answers with the new state. For your own music:
+
+```sh
+curl -s -b cookies.txt -X POST http://127.0.0.1:8181/api/v1/library/rescan     # scan the folder
+curl -s -b cookies.txt 'http://127.0.0.1:8181/api/v1/library'                  # list it
+curl -s -b cookies.txt -F file=@song.mp3 http://127.0.0.1:8181/api/v1/library/upload
+```
+
+Queue a track with `{"type": "library", "path": "<path from the listing>"}`. A call that answers
+`401 unauthenticated` after you logged in is missing `-b cookies.txt` (a browser sends the cookie by
+itself). For the full list of calls open `/api/docs`, see
+[Interactive documentation](#interactive-documentation-swagger-ui).
 
 ## Enable it
 
@@ -250,6 +293,7 @@ and the lookup just before a queued URL plays all share that limit. The checks t
 
 | Request | Effect |
 |---------|--------|
+| `GET /radio/presets` | The stations from the bot's `[radio]` config, by name; add one with `{"type": "radio", "preset": "<name>"}` |
 | `GET /radio/search?q=jazz&limit=10` | Search radio-browser.info (limit 1 to 50); add a result with its `uuid` |
 | `GET /library` | Browse or search the library, see below |
 | `POST /library/upload` | Upload one audio file, see [Uploads](#uploads) |

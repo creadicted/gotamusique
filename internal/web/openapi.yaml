@@ -409,6 +409,23 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         default: { $ref: "#/components/responses/Error" }
 
+  /api/v1/radio/presets:
+    get:
+      tags: [Radio]
+      summary: List the configured radio presets
+      description: |
+        The stations from the bot's `[radio]` config, sorted by name. Add one with `POST /queue` and
+        `{"type": "radio", "preset": "<name>"}`. The stream URLs are not part of the answer.
+      operationId: listRadioPresets
+      responses:
+        "200":
+          description: The presets (possibly none).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RadioPresetsResponse" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        default: { $ref: "#/components/responses/Error" }
+
   /api/v1/radio/search:
     get:
       tags: [Radio]
@@ -824,6 +841,19 @@ components:
               properties:
                 id: { type: integer, format: int64 }
                 title: { type: string }
+
+    RadioPresetsResponse:
+      type: object
+      required: [presets]
+      properties:
+        presets:
+          type: array
+          items:
+            type: object
+            required: [name, comment]
+            properties:
+              name: { type: string, description: "Pass it as `preset` to `POST /queue`.", example: jazz }
+              comment: { type: string, description: "A display name from the config; empty if none.", example: "Jazz Yeah !" }
 
     RadioSearchResponse:
       type: object

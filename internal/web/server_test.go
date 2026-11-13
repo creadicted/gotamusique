@@ -322,25 +322,6 @@ func TestHostGuard_OnlyWithoutLogin(t *testing.T) {
 	}
 }
 
-func TestIndex_EscapesTheName(t *testing.T) {
-	e := newEnv(t, Options{AuthMethod: config.AuthToken})
-	e.login(t, Identity{Subject: "x", Name: `<script>alert(1)</script>`, Roles: []Role{RoleUser}})
-	resp := e.get(t, "/")
-	buf := new(strings.Builder)
-	b := make([]byte, 4096)
-	n, _ := resp.Body.Read(b)
-	buf.Write(b[:n])
-	if strings.Contains(buf.String(), "<script>") {
-		t.Errorf("name was not escaped: %s", buf)
-	}
-	if resp.Header.Get("Content-Security-Policy") == "" {
-		t.Error("missing CSP")
-	}
-	if r := newEnv(t, Options{AuthMethod: config.AuthToken}).get(t, "/"); r.StatusCode != http.StatusUnauthorized {
-		t.Errorf("index without a session = %d, want 401", r.StatusCode)
-	}
-}
-
 func TestUnknownAPIPathIsJSON404(t *testing.T) {
 	e := newEnv(t, Options{AuthMethod: config.AuthToken})
 	resp := e.get(t, "/api/v1/nope")

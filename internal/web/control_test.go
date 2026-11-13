@@ -559,3 +559,24 @@ func TestRoutesDoNotShadowEachOther(t *testing.T) {
 	e.do(t, "DELETE", "/api/v1/queue/7", "")
 	wantCalls(t, e, "shuffle", "remove 7")
 }
+
+func TestRadioPresets(t *testing.T) {
+	e := loggedIn(t)
+	e.bot.presets = []RadioPreset{{Name: "jazz", Comment: "Jazz Yeah !"}, {Name: "rock"}}
+	resp := e.do(t, "GET", "/api/v1/radio/presets", "")
+	raw, _ := io.ReadAll(resp.Body)
+	var out struct{ Presets []presetJSON }
+	if err := json.Unmarshal(raw, &out); err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("= %d %s", resp.StatusCode, raw)
+	}
+	if len(out.Presets) != 2 || out.Presets[0] != (presetJSON{Name: "jazz", Comment: "Jazz Yeah !"}) || out.Presets[1].Comment != "" {
+		t.Errorf("presets = %+v", out.Presets)
+	}
+
+	// No presets configured: an empty list, never null.
+	e.bot.presets = nil
+	raw, _ = io.ReadAll(e.do(t, "GET", "/api/v1/radio/presets", "").Body)
+	if !strings.Contains(string(raw), `"presets":[]`) {
+		t.Errorf("empty = %s, want an empty list", raw)
+	}
+}

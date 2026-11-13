@@ -22,6 +22,7 @@ func (s *Server) routes() []route {
 	}
 	return []route{
 		{"GET", "/{$}", s.handleIndex, true},
+		{"GET", "/ui/{path...}", s.handleUIAsset, true},
 		{"GET", "/login", s.handleLogin, false},
 		{"POST", "/api/v1/auth/logout", s.handleLogout, false},
 
@@ -46,6 +47,7 @@ func (s *Server) routes() []route {
 		{"POST", "/api/v1/queue/{id}/play", user(s.handlePlayEntry), false},
 		{"POST", "/api/v1/queue/{id}/move", user(s.handleMove), false},
 
+		{"GET", "/api/v1/radio/presets", user(s.handleRadioPresets), false},
 		{"GET", "/api/v1/radio/search", user(s.handleRadioSearch), false},
 		{"GET", "/api/v1/library", user(s.handleLibrary), false},
 		{"POST", "/api/v1/library/rescan", user(s.handleRescan), false},
