@@ -79,7 +79,9 @@ check_ports() {
   local p
   for p in "$WEB_PORT" "$MUMBLE_PORT"; do
     if port_busy "$p"; then
-      die "Port $p on 127.0.0.1 is already in use. Stop what uses it (is the playground already running? try: $0 down), or pick other ports: WEB_PORT=8282 MUMBLE_PORT=64739 $0"
+      local who; who=$(ss -ltnp 2>/dev/null | grep -E ":$p\b" | head -1 || true)
+      die "Port $p on 127.0.0.1 is in use by something else${who:+: $who}
+Stop it, or pick other ports: WEB_PORT=8282 MUMBLE_PORT=64739 $0"
     fi
   done
 }
@@ -194,7 +196,10 @@ start_host_bot() {
   # moment before it accepts logins, so start it again until it stays up.
   local attempt i
   for attempt in 1 2 3 4 5 6 7 8; do
-    (cd "$data" && nohup ./gotamusique --config configuration.ini >>"$botlog" 2>&1 & echo $! >"$pidfile")
+    # exec: the subshell becomes the bot, so $! is the bot's own PID. (Without it, `cd && cmd &`
+    # backgrounds the whole list in a helper, $! is the helper, and stopping it leaves the bot running.)
+    (cd "$data" && exec nohup ./gotamusique --config configuration.ini) >>"$botlog" 2>&1 &
+    echo $! >"$pidfile"
     for ((i = 0; i < 16; i++)); do
       sleep 0.5
       bot_alive || break
@@ -206,14 +211,29 @@ start_host_bot() {
   return 1
 }
 
-stop_host_bot() {
-  [ -f "$pidfile" ] || return 0
-  local pid i; pid=$(cat "$pidfile")
-  if kill -0 "$pid" 2>/dev/null; then
-    kill "$pid" 2>/dev/null || true
-    for ((i = 0; i < 20; i++)); do kill -0 "$pid" 2>/dev/null || break; sleep 0.25; done
-    kill -9 "$pid" 2>/dev/null || true
+# Our bots: the one in the pid file, and any other gotamusique process that runs inside our
+# data folder (left behind by an interrupted run). Matched by name and working directory, so
+# nothing unrelated is ever touched, even if a process id was reused.
+playground_bot_pids() {
+  local p
+  if [ -f "$pidfile" ]; then
+    p=$(cat "$pidfile")
+    [ "$(cat "/proc/$p/comm" 2>/dev/null)" = gotamusique ] && echo "$p"
   fi
+  for p in $(pgrep -x gotamusique 2>/dev/null || true); do
+    [ "$(readlink "/proc/$p/cwd" 2>/dev/null)" = "$data" ] && echo "$p"
+  done
+  return 0 # "no bot" is not a failure (set -e and pipefail would end the script)
+}
+
+stop_host_bot() {
+  local pids pid i
+  pids=$(playground_bot_pids | sort -un)
+  for pid in $pids; do kill "$pid" 2>/dev/null || true; done
+  for pid in $pids; do
+    for ((i = 0; i < 20; i++)); do kill -0 "$pid" 2>/dev/null || break; sleep 0.25; done
+    kill -0 "$pid" 2>/dev/null && kill -9 "$pid" 2>/dev/null || true
+  done
   rm -f "$pidfile"
 }
 
@@ -244,6 +264,7 @@ wait_for() { # description, timeout seconds, command...
   return 1
 }
 
+ports_free() { ! port_busy "$WEB_PORT" && ! port_busy "$MUMBLE_PORT"; }
 web_up()    { curl -s -o /dev/null --max-time 2 "$base/api/v1/state"; }
 mumble_up() { port_busy "$MUMBLE_PORT"; }
 # The Mumble server logs "<session:name(id)> Authenticated" when a client has joined.
@@ -255,6 +276,7 @@ start_stack() {
   preflight
   resolve_mode
   step "Bot mode: $MODE"
+  stop_all # a previous run of the playground may still be up; anything left on the ports is not ours
   check_ports
   write_config
   build_bot
@@ -405,6 +427,8 @@ cmd_smoke() {
   check "seeking jumps ahead"                              s_seek
   check "an uploaded file reaches the music folder"        s_upload
   check "stop ends playback"                               s_stop
+  stop_all
+  check "stopping the playground frees the ports"          wait_for ports 10 ports_free
   say ""
   if [ "$fail" -eq 0 ]; then
     printf '%s%s%d checks passed.%s\n' "$green" "$bold" "$pass" "$reset"
