@@ -10,7 +10,7 @@ test music, and hear it in the channel. Ctrl+C stops everything.
 
 Which Mumble client? You have three choices:
 
-- **A browser tab: `SERVER=kallisti make playground`.** Runs [Kallisti](https://kallisti.chat) as the
+- **A browser tab: `make playground-kallisti`** (same as `SERVER=kallisti make playground`). Runs [Kallisti](https://kallisti.chat) as the
   server, a Mumble server with a web client. Open http://localhost:8090, join as a guest, click the
   voice channel **General** (the bot is there) and you hear the music in the tab. Type `!web` in that
   channel's chat for a login link. Nothing to install. (Kallisti shows chat as text, so the link is
@@ -64,6 +64,7 @@ first line of the output says which one it chose.
 ## Commands
 
     make playground            start; shows the bot's log; Ctrl+C stops everything
+    make playground-kallisti   the same with Kallisti, a browser client, as the server
     make playground-down       stop everything (keeps playground/data)
     make playground-reset      stop and delete playground/data (a clean start)
     make playground-logs       follow the bot's log

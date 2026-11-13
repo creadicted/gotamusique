@@ -1,6 +1,6 @@
 BIN := bin/gotamusique
 
-.PHONY: build test run dev ui-demo playground playground-down playground-reset playground-logs playground-login playground-chat playground-listen playground-smoke clean fmt lint docs docs-build tag
+.PHONY: build test run dev ui-demo playground playground-kallisti playground-down playground-reset playground-logs playground-login playground-chat playground-listen playground-smoke clean fmt lint docs docs-build tag
 
 # VERSION comes from the nearest git tag (v0.4.0 -> 0.4.0, or 0.4.0-3-gabc123 after it);
 # empty outside a git checkout, in which case the binary reports "dev (<revision>)".
@@ -27,6 +27,9 @@ ui-demo:
 # `make playground` starts it (Ctrl+C stops it); see playground/README.md.
 playground:
 	./playground/playground.sh up
+
+playground-kallisti:
+	SERVER=kallisti ./playground/playground.sh up
 
 playground-down:
 	./playground/playground.sh down
