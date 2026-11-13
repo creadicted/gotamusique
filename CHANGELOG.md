@@ -9,6 +9,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Playground Mumble client.** `make playground-login`, `-chat` and `-listen` (`cmd/mumbleclient`, a
+  development tool, not part of the release) talk to the bot like a Mumble user, and
+  `SERVER=kallisti make playground` runs [Kallisti](https://kallisti.chat) so a browser tab is the
+  client. The smoke test now logs in through `!web` and checks that a Mumble client hears the audio.
+
 - **Web interface, first part (milestone 3-07).** Off by default. With `[webinterface] enabled = True`
   the bot serves `GET /api/v1/state` (queue with stable entry IDs, position, volume, mode, scan
   status; `ETag` / `?since=` for cheap polling). `!web` sends you a private, one-use login link

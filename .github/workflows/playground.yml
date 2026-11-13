@@ -8,6 +8,7 @@ on:
       - "playground/**"
       - "Dockerfile"
       - "cmd/gotamusique/**"
+      - "cmd/mumbleclient/**"
       - ".github/workflows/playground.yml"
   workflow_dispatch:
 
@@ -21,10 +22,19 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
+      # Go builds the small Mumble client the smoke test talks to the bot with.
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libopus-dev pkg-config
       - run: MODE=docker ./playground/playground.sh smoke
 
   host:
-    name: Bot on the host
+    name: Bot on the host, ${{ matrix.server }} server
+    strategy:
+      fail-fast: false
+      matrix:
+        server: [mumble, kallisti]
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -32,5 +42,5 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
-      - run: MODE=host ./playground/playground.sh smoke
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg libopus-dev pkg-config
+      - run: SERVER=${{ matrix.server }} MODE=host ./playground/playground.sh smoke

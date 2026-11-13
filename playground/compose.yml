@@ -1,10 +1,13 @@
-# A complete local setup for trying gotamusique: a Mumble server and the bot, with the
-# web interface and API. Start it with `make playground` (see README.md); the script
-# writes the bot's configuration and the sample music first.
+# A complete local setup for trying gotamusique: a voice server and the bot, with the web
+# interface and API. Start it with `make playground` (see README.md); the script writes the
+# bot's configuration and the sample music first, and starts the services it needs. Only one
+# of the two servers runs, chosen with SERVER=mumble (default) or SERVER=kallisti.
 name: gotamusique-playground
 
 services:
+  # The standard Mumble server: any Mumble client can join.
   mumble:
+    profiles: ["mumble"]
     image: mumblevoip/mumble-server:latest
     # A fresh, empty server on every start: no volume on purpose.
     environment:
@@ -13,14 +16,39 @@ services:
       - "127.0.0.1:${MUMBLE_PORT:-64738}:64738/tcp"
       - "127.0.0.1:${MUMBLE_PORT:-64738}:64738/udp"
 
+  # Kallisti (https://kallisti.chat): a Mumble server with a web client, so you can join,
+  # chat and hear the bot in a browser tab with nothing to install. Mumble clients can join
+  # it as well. Plain HTTP on localhost is enough (browsers allow the microphone there).
+  # Pinned to a release so the playground does not change under you; the extras that fetch
+  # things from the internet are switched off.
+  kallisti:
+    profiles: ["kallisti"]
+    image: ghcr.io/kallisti-chat/kallisti:${KALLISTI_TAG:-0.14.1}
+    user: "${PLAYGROUND_UID:-1000}:${PLAYGROUND_GID:-1000}"
+    # Fresh on every start, like the Mumble server above.
+    tmpfs:
+      - "/data:uid=${PLAYGROUND_UID:-1000},gid=${PLAYGROUND_GID:-1000}"
+    environment:
+      LISTEN_PORT: "8080"
+      ALLOWED_ORIGINS: "http://localhost:${KALLISTI_PORT:-8090},http://127.0.0.1:${KALLISTI_PORT:-8090}"
+      SERVER_NAME: "gotamusique playground"
+      MUMBLE_WELCOME: "<br>gotamusique playground. Join the voice channel <b>General</b>, where the bot is, and type <b>!web</b> in its chat."
+      TRANSLATION: "0"
+      LINK_PREVIEWS: "0"
+      FEDI_LOGIN: "0"
+      PUSH: "0"
+    ports:
+      - "127.0.0.1:${KALLISTI_PORT:-8090}:8080"
+      - "127.0.0.1:${MUMBLE_PORT:-64738}:64738/tcp"
+      - "127.0.0.1:${MUMBLE_PORT:-64738}:64738/udp"
+
   bot:
+    profiles: ["bot"]
     build:
       context: ..
       args:
         VERSION: playground
     image: gotamusique-playground
-    depends_on:
-      - mumble
     # The bot exits when its first connection fails, and the server needs a few
     # seconds to start, so let it retry.
     restart: on-failure

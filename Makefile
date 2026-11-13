@@ -1,6 +1,6 @@
 BIN := bin/gotamusique
 
-.PHONY: build test run dev ui-demo playground playground-down playground-reset playground-logs playground-smoke clean fmt lint docs docs-build tag
+.PHONY: build test run dev ui-demo playground playground-down playground-reset playground-logs playground-login playground-chat playground-listen playground-smoke clean fmt lint docs docs-build tag
 
 # VERSION comes from the nearest git tag (v0.4.0 -> 0.4.0, or 0.4.0-3-gabc123 after it);
 # empty outside a git checkout, in which case the binary reports "dev (<revision>)".
@@ -38,6 +38,15 @@ playground-logs:
 	./playground/playground.sh logs
 
 # Starts the stack, checks that it works end to end, stops it. Exits 1 if anything fails.
+playground-login:
+	./playground/playground.sh login
+
+playground-chat:
+	./playground/playground.sh chat
+
+playground-listen:
+	./playground/playground.sh listen
+
 playground-smoke:
 	./playground/playground.sh smoke
 
