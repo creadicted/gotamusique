@@ -22,8 +22,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   by words and tags, and `POST /api/v1/library/upload` stores an audio file under
   `<music_folder>/uploads/<name>/` (cleaned-up name, never overwrites, checked with ffprobe, size
   limit, login required unless `allow_upload_without_auth`). New keys `upload_enabled`,
-  `max_upload_file_size`, `allow_upload_without_auth`. The browser UI follows. See
+  `max_upload_file_size`, `allow_upload_without_auth`. See
   [Web interface](docs/configuration/web.md).
+- **Browser interface (milestone 3-08).** With the web interface enabled, `/` is a control panel for
+  the people in the Mumble channel, on a computer or a phone: what plays now (with seeking, volume,
+  mute and the playback mode), the queue (play, move up and down, remove, shuffle, clear), and four
+  ways to add: browse and search the library with tag filters, radio (your stations, a search on
+  radio-browser.info, or a stream address), a web address through yt-dlp, and uploads by choosing or
+  dropping files. Every Add has "Play next" and "Play now". It shows how to log in when you are not,
+  follows your light or dark setting, works with the keyboard and screen readers, respects reduced
+  motion, and recovers by itself when the connection drops. It is plain HTML, CSS and JavaScript
+  built into the binary (no build step, no Node), with the Archivo font embedded (it adds about
+  0.3 MB); it loads nothing from the internet and runs under a strict Content-Security-Policy.
+  New: `GET /api/v1/radio/presets` lists the configured stations. `make ui-demo` runs the interface
+  with a fake bot and made-up music, to look around without a Mumble server.
 - **Interactive API documentation.** With the web interface enabled, `/api/docs` serves Swagger UI and
   `/api/v1/openapi.yaml` the OpenAPI 3 description of the whole API, behind the same login. Swagger UI
   is built into the binary (it adds about 2 MB) and loads nothing from the internet. The description is
