@@ -1,6 +1,7 @@
 package web
 
 import (
+	"bytes"
 	"embed"
 	"net/http"
 )
@@ -29,7 +30,12 @@ const docsCSP = "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe
 func (s *Server) handleSpec(w http.ResponseWriter, r *http.Request, id Identity) {
 	w.Header().Set("Content-Type", "application/yaml; charset=utf-8")
 	w.Header().Set("Cache-Control", "private, no-cache")
-	w.Write(specYAML) //nolint:errcheck // the client went away
+	body := specYAML
+	if s.prefix != "" {
+		// "Try it out" builds its requests from the server address, which has to include the proxy's path.
+		body = bytes.Replace(body, []byte("  - url: /\n"), []byte("  - url: "+s.prefix+"\n"), 1)
+	}
+	w.Write(body) //nolint:errcheck // the client went away
 }
 
 // handleDocs serves the Swagger UI page. It needs a login like the API does, since
@@ -44,6 +50,9 @@ func (s *Server) handleDocs(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal", "internal error")
 		return
+	}
+	if s.prefix != "" {
+		page = bytes.ReplaceAll(page, []byte(`"/api/docs/assets/`), []byte(`"`+s.prefix+`/api/docs/assets/`))
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "private, no-cache")

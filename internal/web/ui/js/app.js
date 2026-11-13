@@ -1,3 +1,4 @@
+import { BASE } from './base.js';
 import { createAdd } from './add.js';
 import { api } from './api.js';
 import { h, icon, render } from './dom.js';
@@ -27,7 +28,7 @@ function buildShell() {
     store.refresh();
   });
 
-  const top = h('header', { class: 'top' }, h('p', { class: 'brand' }, 'gotamusique'), h('span', { class: 'top-gap' }), who, h('a', { class: 'btn ghost', href: '/api/docs', title: 'Interactive API documentation' }, 'API'), logout);
+  const top = h('header', { class: 'top' }, h('p', { class: 'brand' }, 'gotamusique'), h('span', { class: 'top-gap' }), who, h('a', { class: 'btn ghost', href: `${BASE}/api/docs`, title: 'Interactive API documentation' }, 'API'), logout);
 
   // On a narrow screen only one of Queue and Add shows at a time.
   const main = h('main', { class: 'grid', dataset: { view: 'queue' } });

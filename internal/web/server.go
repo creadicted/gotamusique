@@ -46,6 +46,7 @@ type Server struct {
 	uploadSlots chan struct{} // one token per upload in progress
 
 	secureCookie bool
+	prefix       string          // path of the public address ("/music"), "" at the root
 	allowedHosts map[string]bool // only enforced without login, see hostGuard
 	handler      http.Handler
 }
@@ -63,11 +64,56 @@ func NewServer(bot Bot, auth *Auth, o Options) *Server {
 		uploadSlots:  make(chan struct{}, maxConcurrentUploads),
 		secureCookie: strings.HasPrefix(strings.ToLower(o.AccessAddress), "https://"),
 		allowedHosts: allowedHosts(o),
+		prefix:       pathPrefix(o.AccessAddress),
 	}
 
 	mux := s.mux()
-	s.handler = s.guard(mux)
+	s.handler = s.withPrefix(s.guard(mux))
 	return s
+}
+
+// pathPrefix is the path of the public address, "/music" for https://example.org/music/ and
+// "" when the bot is served from the root.
+func pathPrefix(accessAddress string) string {
+	u, err := url.Parse(accessAddress)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimRight(u.Path, "/")
+}
+
+// root is the address of the interface's front page as the browser sees it: "/" or "/music/".
+func (s *Server) root() string { return s.prefix + "/" }
+
+// cookiePath limits the session cookie to the bot's own path, so that other sites on the same
+// domain behind the proxy never receive it.
+func (s *Server) cookiePath() string {
+	if s.prefix == "" {
+		return "/"
+	}
+	return s.prefix
+}
+
+// withPrefix lets the bot sit behind a reverse proxy that serves it under a path. Proxies either
+// strip the path before forwarding (nginx's proxy_pass with a trailing slash) or pass it on
+// (Caddy's reverse_proxy under handle, or proxy_pass without a trailing slash), so both are
+// accepted: a request for /music/api/v1/state is answered like one for /api/v1/state.
+func (s *Server) withPrefix(next http.Handler) http.Handler {
+	if s.prefix == "" {
+		return next
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		p := r.URL.Path
+		if p == s.prefix || strings.HasPrefix(p, s.prefix+"/") {
+			r2 := r.Clone(r.Context())
+			r2.URL.Path = "/" + strings.TrimPrefix(strings.TrimPrefix(p, s.prefix), "/")
+			if r.URL.RawPath != "" {
+				r2.URL.RawPath = ""
+			}
+			r = r2
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // Handler returns the HTTP handler, for tests and for embedding.
