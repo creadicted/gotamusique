@@ -46,6 +46,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- The bot logs `connected to Mumble` (address and username) when a connection succeeds; it logged nothing before.
 - Groundwork for the web API (milestone 3-07, no user-visible change yet): queue entries carry stable
   IDs (remove, play and move by ID), the bot can report a consistent state snapshot and seek, the
   library can index a single file without a full scan, and the library DTOs moved out of the chat

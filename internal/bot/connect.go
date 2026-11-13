@@ -190,6 +190,7 @@ func (b *Bot) connect(cfg *gumble.Config) error {
 	b.mu.Lock()
 	b.client = client
 	b.mu.Unlock()
+	b.log.Info("connected to Mumble", slog.String("addr", addr), slog.String("username", b.cfg.Bot.Username))
 	return nil
 }
 

@@ -1,0 +1,33 @@
+# A complete local setup for trying gotamusique: a Mumble server and the bot, with the
+# web interface and API. Start it with `make playground` (see README.md); the script
+# writes the bot's configuration and the sample music first.
+name: gotamusique-playground
+
+services:
+  mumble:
+    image: mumblevoip/mumble-server:latest
+    # A fresh, empty server on every start: no volume on purpose.
+    environment:
+      MUMBLE_CONFIG_WELCOMETEXT: "<br>gotamusique playground. Type <b>!web</b> in this channel to get a login link for the web interface."
+    ports:
+      - "127.0.0.1:${MUMBLE_PORT:-64738}:64738/tcp"
+      - "127.0.0.1:${MUMBLE_PORT:-64738}:64738/udp"
+
+  bot:
+    build:
+      context: ..
+      args:
+        VERSION: playground
+    image: gotamusique-playground
+    depends_on:
+      - mumble
+    # The bot exits when its first connection fails, and the server needs a few
+    # seconds to start, so let it retry.
+    restart: on-failure
+    # Run as the caller, so the files the bot writes under data/ belong to you.
+    user: "${PLAYGROUND_UID:-1000}:${PLAYGROUND_GID:-1000}"
+    command: ["--config", "data/configuration.ini"]
+    volumes:
+      - ./data:/app/data
+    ports:
+      - "127.0.0.1:${WEB_PORT:-8181}:8181"

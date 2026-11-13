@@ -32,6 +32,7 @@ There is **no build step and no Node toolchain**: edit a file, rebuild the bot.
 
     make ui-demo              # a fake bot with made-up music at http://127.0.0.1:8181
     make ui-demo LOGIN=1      # the same, with the !web login flow
+    make playground           # the real bot with a real Mumble server (see ../../../playground/README.md)
 
 Files are embedded at build time, so restart `make ui-demo` after editing the interface.
 

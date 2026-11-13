@@ -1,6 +1,6 @@
 BIN := bin/gotamusique
 
-.PHONY: build test run dev ui-demo clean fmt lint docs docs-build tag
+.PHONY: build test run dev ui-demo playground playground-down playground-reset playground-logs playground-smoke clean fmt lint docs docs-build tag
 
 # VERSION comes from the nearest git tag (v0.4.0 -> 0.4.0, or 0.4.0-3-gabc123 after it);
 # empty outside a git checkout, in which case the binary reports "dev (<revision>)".
@@ -22,6 +22,24 @@ dev: build
 # Open http://127.0.0.1:8181. Add LOGIN=1 to try the !web login flow instead of skipping it.
 ui-demo:
 	go run ./cmd/uidemo $(if $(LOGIN),-login)
+
+# A complete local setup in Docker: a Mumble server, the bot, the web interface and API.
+# `make playground` starts it (Ctrl+C stops it); see playground/README.md.
+playground:
+	./playground/playground.sh up
+
+playground-down:
+	./playground/playground.sh down
+
+playground-reset:
+	./playground/playground.sh reset
+
+playground-logs:
+	./playground/playground.sh logs
+
+# Starts the stack, checks that it works end to end, stops it. Exits 1 if anything fails.
+playground-smoke:
+	./playground/playground.sh smoke
 
 clean:
 	rm -rf bin/
