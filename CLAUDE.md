@@ -22,6 +22,8 @@ go vet ./...      # must be clean before any commit
 go test ./...     # run all tests
 go test ./internal/audio/...   # run a single package's tests
 make playground  # a Mumble server + the bot + web UI in one command (see playground/README.md)
+make playground-kallisti  # the same, with Kallisti (a browser Mumble client) as the server
+make playground-chat      # a terminal Mumble client for the running playground (also -login, -listen)
 make ui-demo      # the web UI with a fake bot, no Mumble needed
 ```
 
