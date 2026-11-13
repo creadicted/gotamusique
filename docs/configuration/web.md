@@ -76,7 +76,8 @@ disappears from your list, with no error.
 - **Library**: browse folders, or search. A search looks at titles, artists and folder names across
   the whole library, and tag buttons narrow it down. *Rescan* reads the music folder again.
 - **Radio**: the stations from your `[radio]` config, a search on radio-browser.info, or a direct
-  stream address.
+  stream address. The search takes a station name, a **tag** (such as `jazz` or `ambient`), or both;
+  the most voted stations come first and known-broken ones are left out. Each hit shows its tags.
 - **Web address**: one track from a web address, through yt-dlp. Best effort, see
   [URL playback](../commands/index.md#url-playback).
 - **Upload**: choose or drop audio files; they go up one at a time and can be added right away.
@@ -299,7 +300,7 @@ and the lookup just before a queued URL plays all share that limit. The checks t
 | Request | Effect |
 |---------|--------|
 | `GET /radio/presets` | The stations from the bot's `[radio]` config, by name; add one with `{"type": "radio", "preset": "<name>"}` |
-| `GET /radio/search?q=jazz&limit=10` | Search radio-browser.info (limit 1 to 50); add a result with its `uuid` |
+| `GET /radio/search?q=jazz&tag=smooth&limit=10` | Search radio-browser.info by name `q` and/or exact `tag` (at least one; limit 1 to 50), most voted first; add a result with its `uuid` |
 | `GET /library` | Browse or search the library, see below |
 | `POST /library/upload` | Upload one audio file, see [Uploads](#uploads) |
 | `POST /library/rescan` | Start an incremental scan. Answers `202` at once, or `409 scan_running`. The state's `scan` field shows `running`, then `last_result` or `last_error`. There is no `force` option here |

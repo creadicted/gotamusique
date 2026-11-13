@@ -41,7 +41,7 @@ type Bot interface {
 	// for the network checks (stream reachable, yt-dlp metadata) until ctx ends.
 	Add(ctx context.Context, src Source, pos queue.Position) (Added, error)
 
-	SearchRadio(ctx context.Context, query string, limit int) ([]radio.Station, error)
+	SearchRadio(ctx context.Context, query, tag string, limit int) ([]radio.Station, error)
 	// RadioPresets lists the stations configured under [radio], sorted by name.
 	RadioPresets() []RadioPreset
 	// Library lists what the scan found: a folder's contents, or search results.
