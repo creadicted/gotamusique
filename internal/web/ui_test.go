@@ -81,7 +81,11 @@ func TestUI_EveryReferencedFileIsServed(t *testing.T) {
 			}
 		case ".css":
 			for _, m := range regexp.MustCompile(`url\(([^)]+)\)`).FindAllStringSubmatch(src, -1) {
-				visit(strings.Trim(m[1], `"'`))
+				ref := strings.Trim(m[1], `"'`)
+				if !strings.HasPrefix(ref, "/") { // relative to the stylesheet, as the browser reads it
+					ref = path.Join(path.Dir(url), ref)
+				}
+				visit(ref)
 			}
 		}
 	}

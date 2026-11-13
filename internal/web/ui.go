@@ -1,6 +1,7 @@
 package web
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"embed"
 	"encoding/hex"
@@ -83,6 +84,14 @@ func serveUI(w http.ResponseWriter, r *http.Request, f uiFile) {
 	w.Write(f.body) //nolint:errcheck // the client went away
 }
 
+// withPrefix returns f with every `"<from>` replaced by `"<prefix><from>`, and a matching ETag.
+func withPrefix(f uiFile, from, prefix string) uiFile {
+	f.body = bytes.ReplaceAll(f.body, []byte(`"`+from), []byte(`"`+prefix+from))
+	sum := sha256.Sum256(f.body)
+	f.etag = `"` + hex.EncodeToString(sum[:12]) + `"`
+	return f
+}
+
 // handleIndex serves the interface. It is public: the page holds nothing private, and
 // asks the API itself, showing how to log in when the API answers 401.
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
@@ -90,6 +99,10 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		http.NotFound(w, r)
 		return
+	}
+	if s.prefix != "" {
+		// The page names its files by absolute path; put the proxy's path in front of them.
+		f = withPrefix(f, "/ui/", s.prefix)
 	}
 	w.Header().Set("Content-Security-Policy", uiCSP)
 	serveUI(w, r, f)

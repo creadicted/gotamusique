@@ -46,7 +46,7 @@ func (s *Server) require(role Role, h func(http.ResponseWriter, *http.Request, I
 
 func (s *Server) setSessionCookie(w http.ResponseWriter, value string, maxAge time.Duration) {
 	http.SetCookie(w, &http.Cookie{
-		Name: SessionCookie, Value: value, Path: "/",
+		Name: SessionCookie, Value: value, Path: s.cookiePath(),
 		MaxAge:   int(maxAge / time.Second),
 		HttpOnly: true, Secure: s.secureCookie, SameSite: http.SameSiteLaxMode,
 	})
@@ -56,7 +56,7 @@ func (s *Server) setSessionCookie(w http.ResponseWriter, value string, maxAge ti
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	if s.opts.AuthMethod == config.AuthNone {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+		http.Redirect(w, r, s.root(), http.StatusSeeOther)
 		return
 	}
 	token := r.URL.Query().Get("token")
@@ -71,7 +71,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	s.setSessionCookie(w, sessionID, DefaultSessionMax)
 	s.log.Info("web login", slog.String("user", id.Name), slog.String("subject", id.Subject))
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	http.Redirect(w, r, s.root(), http.StatusSeeOther)
 }
 
 func (s *Server) loginFailed(w http.ResponseWriter, r *http.Request, why string) {

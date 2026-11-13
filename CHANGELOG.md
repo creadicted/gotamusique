@@ -9,6 +9,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **The web interface under a path.** With `access_address = https://example.org/music`, the interface, API,
+  API documentation, login link and session cookie all live under `/music`, behind a reverse proxy that either
+  strips or keeps the path. `go run ./cmd/uidemo -public https://example.org/music` previews it.
+
 - **Radio search by tag** in the web interface and API: `GET /api/v1/radio/search?tag=jazz`, alone or with
   `q`. Results are sorted by votes, broken stations are left out, and each hit lists its tags. The chat
   command `!rbquery` is unchanged.

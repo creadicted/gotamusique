@@ -1,6 +1,8 @@
 // The only place that talks to the server. Every call is same-origin, so the session
 // cookie from the !web login travels with it.
 
+import { BASE } from './base.js';
+
 export class ApiError extends Error {
   constructor(status, code, message) {
     super(message);
@@ -18,7 +20,7 @@ async function call(method, path, body) {
   }
   let resp;
   try {
-    resp = await fetch(path, init);
+    resp = await fetch(BASE + path, init);
   } catch (e) {
     throw new ApiError(0, 'network', 'Cannot reach the bot.');
   }
@@ -42,7 +44,7 @@ export const api = {
   async state(since) {
     let resp;
     try {
-      resp = await fetch(`/api/v1/state${since ? `?since=${enc(since)}` : ''}`, { credentials: 'same-origin', cache: 'no-store' });
+      resp = await fetch(`${BASE}/api/v1/state${since ? `?since=${enc(since)}` : ''}`, { credentials: 'same-origin', cache: 'no-store' });
     } catch (e) {
       throw new ApiError(0, 'network', 'Cannot reach the bot.');
     }
@@ -79,7 +81,7 @@ export const api = {
 export function uploadFile(file, onProgress) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', '/api/v1/library/upload');
+    xhr.open('POST', `${BASE}/api/v1/library/upload`);
     xhr.withCredentials = true;
     xhr.upload.addEventListener('progress', (e) => {
       if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total);

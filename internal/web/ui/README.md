@@ -35,6 +35,12 @@ There is **no build step and no Node toolchain**: edit a file, rebuild the bot.
     make playground           # the real bot with a real Mumble server (see ../../../playground/README.md)
     make playground-kallisti  # the same, with a Mumble client in your browser tab
 
+The bot can be served under a path behind a reverse proxy (`access_address` with a path), so the
+interface must never name a file or an API call by an absolute path of its own: JavaScript builds
+addresses from `js/base.js`, stylesheets use paths relative to themselves, and the server puts the path
+in front of the few absolute ones in `index.html`. A test fails when a stylesheet or module breaks
+this. Try it with `go run ./cmd/uidemo -public http://127.0.0.1:19000/music` behind a proxy.
+
 Files are embedded at build time, so restart `make ui-demo` after editing the interface.
 
 ## Tests
