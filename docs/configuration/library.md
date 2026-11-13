@@ -3,7 +3,9 @@
 With `music_folder` set, `!rescan` scans it into a SQLite database (`music_database_path`).
 The first scan runs `ffprobe` on every audio file and can take a while; later scans only probe new
 or changed files and remove rows for files that are gone. Scanned extensions: `mp3, flac, ogg, oga,
-opus, m4a, aac, wav, wma, ape, aiff`. Directory symlinks are not followed.
+opus, m4a, aac, wav, wma, ape, aiff`. Directory symlinks are not followed. A file that `ffprobe`
+cannot read, or that has no audio stream (a video or an image with an audio extension), is skipped
+and not listed; a track that is already in the library keeps its entry.
 
 The scan never wipes the library because the folder is unavailable: if `music_folder` is not a
 readable directory, or no audio files are found while the library has entries (e.g. an unmounted

@@ -47,6 +47,8 @@ var (
 	ErrNotInLibrary = errors.New("file is not in the library, run !rescan")
 	// ErrScanRunning is returned when a scan is already in progress.
 	ErrScanRunning = errors.New("scan already running")
+	// errNoAudioStream is why a file ffprobe could read is still not indexed.
+	errNoAudioStream = errors.New("no audio stream")
 	// ErrNotIndexable means IndexFile was given something that is not a regular
 	// audio file inside the music folder (or that ffprobe could not read).
 	ErrNotIndexable = errors.New("not an indexable audio file")
@@ -344,8 +346,13 @@ func (s *Scanner) reconcile(ctx context.Context, files []found, existing []datab
 		}
 
 		meta, err := s.probe(f.abs)
+		if err == nil && meta.NoAudio {
+			// A video or image with an audio extension is not a track; treat it like a
+			// file that cannot be read, as IndexFile (uploads) does.
+			err = errNoAudioStream
+		}
 		if err != nil {
-			s.log.Warn("scan: ffprobe failed, skipping", slog.String("path", f.rel), slog.String("err", err.Error()))
+			s.log.Warn("scan: cannot index, skipping", slog.String("path", f.rel), slog.String("err", err.Error()))
 			res.Skipped++
 			// A previously-good row for a now-unreadable file keeps its tags and tag text, but
 			// its size/mtime are refreshed so it is not re-probed on every scan
@@ -546,6 +553,9 @@ func (s *Scanner) IndexFile(ctx context.Context, rel string) (*database.MusicRec
 	meta, err := s.probe(target)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %q: %v", ErrNotIndexable, rel, err)
+	}
+	if meta.NoAudio {
+		return nil, fmt.Errorf("%w: %q: %v", ErrNotIndexable, rel, errNoAudioStream)
 	}
 	if err := s.db.UpsertProbed(buildRecord(id, f, meta)); err != nil {
 		return nil, fmt.Errorf("writing %s: %w", clean, err)

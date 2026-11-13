@@ -29,6 +29,11 @@ type Options struct {
 	// AuthMethod is config.AuthToken or config.AuthNone.
 	AuthMethod string
 	Log        *slog.Logger
+
+	// Uploads. MaxUploadBytes is the limit for one file (0 = 30 MiB).
+	UploadEnabled          bool
+	MaxUploadBytes         int64
+	AllowUploadWithoutAuth bool
 }
 
 // Server is the HTTP front end.
@@ -37,6 +42,8 @@ type Server struct {
 	auth *Auth
 	opts Options
 	log  *slog.Logger
+
+	uploadSlots chan struct{} // one token per upload in progress
 
 	secureCookie bool
 	allowedHosts map[string]bool // only enforced without login, see hostGuard
@@ -53,6 +60,7 @@ func NewServer(bot Bot, auth *Auth, o Options) *Server {
 	}
 	s := &Server{
 		bot: bot, auth: auth, opts: o, log: o.Log,
+		uploadSlots:  make(chan struct{}, maxConcurrentUploads),
 		secureCookie: strings.HasPrefix(strings.ToLower(o.AccessAddress), "https://"),
 		allowedHosts: allowedHosts(o),
 	}
@@ -79,7 +87,9 @@ func NewServer(bot Bot, auth *Auth, o Options) *Server {
 	mux.HandleFunc("POST /api/v1/queue/{id}/move", s.require(RoleUser, s.handleMove))
 
 	mux.HandleFunc("GET /api/v1/radio/search", s.require(RoleUser, s.handleRadioSearch))
+	mux.HandleFunc("GET /api/v1/library", s.require(RoleUser, s.handleLibrary))
 	mux.HandleFunc("POST /api/v1/library/rescan", s.require(RoleUser, s.handleRescan))
+	mux.HandleFunc("POST /api/v1/library/upload", s.require(RoleUser, s.handleUpload))
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "no such endpoint")
 	})
