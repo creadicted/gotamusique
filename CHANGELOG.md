@@ -9,6 +9,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Radio search by tag** in the web interface and API: `GET /api/v1/radio/search?tag=jazz`, alone or with
+  `q`. Results are sorted by votes, broken stations are left out, and each hit lists its tags. The chat
+  command `!rbquery` is unchanged.
+
 - **Playground Mumble client.** `make playground-login`, `-chat` and `-listen` (`cmd/mumbleclient`, a
   development tool, not part of the release) talk to the bot like a Mumble user, and
   `SERVER=kallisti make playground` runs [Kallisti](https://kallisti.chat) so a browser tab is the

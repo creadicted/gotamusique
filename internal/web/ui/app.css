@@ -229,6 +229,7 @@ h1, h2, .brand, .entry-no, .entry-title, .board-title { font-stretch: 68%; font-
 .search-row .field { padding-left: 2.4rem; }
 .inline-form { display: flex; gap: 0.5rem; align-items: center; }
 .inline-form .field { flex: 1; min-width: 0; }
+.inline-form .field.narrow { flex: 0 1 10rem; }
 .scan-row { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
 .tags { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .chip {

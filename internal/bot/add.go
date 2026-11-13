@@ -170,9 +170,9 @@ func (b *Bot) radioBrowser() *radio.RadioBrowser {
 	return b.rb
 }
 
-// SearchRadio queries radio-browser.info for stations matching query.
-func (b *Bot) SearchRadio(ctx context.Context, query string, limit int) ([]radio.Station, error) {
-	return withContext(ctx, func() ([]radio.Station, error) { return b.radioBrowser().Search(query, limit) })
+// SearchRadio queries radio-browser.info for stations matching a name and/or a tag.
+func (b *Bot) SearchRadio(ctx context.Context, query, tag string, limit int) ([]radio.Station, error) {
+	return withContext(ctx, func() ([]radio.Station, error) { return b.radioBrowser().SearchBy(query, tag, limit) })
 }
 
 // RadioPresets lists the stations configured under [radio], sorted by name.
