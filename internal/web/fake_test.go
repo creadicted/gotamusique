@@ -27,6 +27,7 @@ type fakeBot struct {
 	addSrc      Source
 	addPos      queue.Position
 	addDeadline bool
+	presets     []RadioPreset
 	stations    []radio.Station
 	searchQ     string
 	searchLimit int
@@ -121,3 +122,5 @@ func (f *fakeBot) Upload(ctx context.Context, id Identity, filename string, r io
 	}
 	return f.uploadTrack, f.uploadErr
 }
+
+func (f *fakeBot) RadioPresets() []RadioPreset { f.rec("presets"); return f.presets }

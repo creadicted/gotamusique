@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 
@@ -172,6 +173,16 @@ func (b *Bot) radioBrowser() *radio.RadioBrowser {
 // SearchRadio queries radio-browser.info for stations matching query.
 func (b *Bot) SearchRadio(ctx context.Context, query string, limit int) ([]radio.Station, error) {
 	return withContext(ctx, func() ([]radio.Station, error) { return b.radioBrowser().Search(query, limit) })
+}
+
+// RadioPresets lists the stations configured under [radio], sorted by name.
+func (b *Bot) RadioPresets() []web.RadioPreset {
+	out := make([]web.RadioPreset, 0, len(b.cfg.Radio))
+	for name, p := range b.cfg.Radio {
+		out = append(out, web.RadioPreset{Name: name, Comment: p.Comment})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
 }
 
 // rescanTimeout bounds one background scan; a first scan of a big library is slow.
