@@ -8,6 +8,74 @@ listens until you enable it.
     This release ships the login, the state, the control API (playback, volume, mode, queue, adding
     radio and URLs, library rescan), library browsing and uploads. The browser UI follows.
 
+## Quick start
+
+Five minutes, on the machine that runs the bot. There is no browser UI yet, so you drive the API
+with `curl` (add `| jq` if you have it).
+
+1. **Turn it on.** Add this to your `configuration.ini` and restart the bot:
+
+    ```ini
+    [webinterface]
+    enabled = True
+    ```
+
+    It listens on `127.0.0.1:8181` only and uses the login described in step 3. The bot refuses to
+    start if that port is already taken. Running in Docker? See [Docker](#docker) first: the bot
+    must listen on `0.0.0.0` and the port must be published.
+
+2. **Check it is up.** Without a login the API answers `401`, which is what you want to see:
+
+    ```sh
+    curl -i http://127.0.0.1:8181/api/v1/state     # HTTP/1.1 401, {"code":"unauthenticated", ...}
+    ```
+
+3. **Log in.** In the Mumble channel the bot is in, type `!web`. The bot sends you a **private
+   message** with a link that works once and expires after 5 minutes.
+   Open it in a browser for a session cookie, or let `curl` do the same and keep the cookie:
+
+    ```sh
+    curl -c cookies.txt -L 'http://127.0.0.1:8181/login?token=PASTE_THE_TOKEN_FROM_THE_LINK'
+    ```
+
+    (For a quick local test only, `auth_method = none` skips the login; read
+    [No login](#no-login-auth_method-none) before using it anywhere else.)
+
+4. **Look and steer.** The default config has a `jazz` radio preset:
+
+    ```sh
+    curl -s -b cookies.txt http://127.0.0.1:8181/api/v1/state
+    curl -s -b cookies.txt -X POST http://127.0.0.1:8181/api/v1/queue -d '{"type":"radio","preset":"jazz"}'
+    curl -s -b cookies.txt -X PUT  http://127.0.0.1:8181/api/v1/volume -d '{"volume":0.4}'
+    curl -s -b cookies.txt -X POST http://127.0.0.1:8181/api/v1/playback/pause
+    ```
+
+    Every change answers with the new state, so you can see the effect in the reply. You hear
+    the audio in Mumble, so be in the bot's channel.
+
+5. **Add your own music** (needs `music_folder` set, see [Music library](library.md)):
+
+    ```sh
+    curl -s -b cookies.txt -X POST http://127.0.0.1:8181/api/v1/library/rescan     # scan the folder
+    curl -s -b cookies.txt 'http://127.0.0.1:8181/api/v1/library'                  # list it
+    curl -s -b cookies.txt -F file=@song.mp3 http://127.0.0.1:8181/api/v1/library/upload
+    ```
+
+    Queue a track with `{"type": "library", "path": "<path from the listing>"}`.
+
+**Reaching it from other machines.** Keep the bot on loopback and put a reverse proxy in front
+(see [Reverse proxy and TLS](#reverse-proxy-and-tls)), then set `access_address` to the proxy's
+public URL: the `!web` link is built from it, so with the default it would point at
+`127.0.0.1`, which only works on the bot's own machine.
+
+**It does not work?**
+
+- The login link answers `401`: it was already used or has expired. Type `!web` again.
+- An API call answers `401 unauthenticated` after you logged in: `curl` needs `-b cookies.txt` on
+  every call (a browser sends the cookie by itself).
+- `Connection refused`: the web interface is off or the bot is not running.
+- `421 bad_host` (only without a login): `access_address` does not match the address you use.
+
 ## Enable it
 
 ```ini
