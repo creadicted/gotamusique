@@ -42,6 +42,8 @@ type Bot interface {
 	Add(ctx context.Context, src Source, pos queue.Position) (Added, error)
 
 	SearchRadio(ctx context.Context, query string, limit int) ([]radio.Station, error)
+	// RadioPresets lists the stations configured under [radio], sorted by name.
+	RadioPresets() []RadioPreset
 	// Library lists what the scan found: a folder's contents, or search results.
 	Library(q LibraryQuery) (LibraryPage, error)
 	// Upload saves r as a new audio file for id, adds it to the library and returns
@@ -98,6 +100,13 @@ type LibraryPage struct {
 	Tracks []library.Track
 	Total  int
 	Tags   []string // every tag in use, for a filter menu
+}
+
+// RadioPreset is a station from the bot's [radio] config. The stream URL is not
+// exposed: clients add a preset by name.
+type RadioPreset struct {
+	Name    string
+	Comment string
 }
 
 // Added is the queue entry a successful Add created.

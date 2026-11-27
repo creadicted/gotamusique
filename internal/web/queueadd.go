@@ -122,3 +122,21 @@ func (s *Server) handleRadioSearch(w http.ResponseWriter, r *http.Request, id Id
 		Stations []stationJSON `json:"stations"`
 	}{out})
 }
+
+type presetJSON struct {
+	Name    string `json:"name"`
+	Comment string `json:"comment"`
+}
+
+// handleRadioPresets lists the stations from the bot's [radio] config. Add one with
+// {"type":"radio","preset":<name>}. The stream URLs are not part of the answer.
+func (s *Server) handleRadioPresets(w http.ResponseWriter, r *http.Request, id Identity) {
+	presets := s.bot.RadioPresets()
+	out := make([]presetJSON, len(presets))
+	for i, p := range presets {
+		out[i] = presetJSON{Name: p.Name, Comment: p.Comment}
+	}
+	writeJSON(w, http.StatusOK, struct {
+		Presets []presetJSON `json:"presets"`
+	}{out})
+}

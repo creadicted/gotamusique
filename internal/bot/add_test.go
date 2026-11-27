@@ -383,3 +383,23 @@ func TestStartRescan_RefusesWhileAScanRuns(t *testing.T) {
 		t.Errorf("after the scan: %+v", sc)
 	}
 }
+
+func TestRadioPresets_SortedAndWithoutURLs(t *testing.T) {
+	cfg := defaultCfg()
+	cfg.Radio = map[string]config.RadioPreset{
+		"rock": {URL: "http://secret.example/rock"},
+		"jazz": {URL: "http://secret.example/jazz", Comment: "Jazz Yeah !"},
+		"blue": {URL: "http://secret.example/blue", Comment: "Blues"},
+	}
+	b, _ := New(cfg)
+	got := b.RadioPresets()
+	if len(got) != 3 || got[0].Name != "blue" || got[1].Name != "jazz" || got[2].Name != "rock" {
+		t.Fatalf("presets = %+v, want blue, jazz, rock", got)
+	}
+	if got[1].Comment != "Jazz Yeah !" || got[2].Comment != "" {
+		t.Errorf("comments = %+v", got)
+	}
+	if empty, _ := New(defaultCfg()); empty.RadioPresets() == nil {
+		t.Error("no presets must be an empty slice, not nil")
+	}
+}

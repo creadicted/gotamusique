@@ -1,6 +1,6 @@
 BIN := bin/gotamusique
 
-.PHONY: e2e build test run dev clean fmt lint docs docs-build tag
+.PHONY: e2e build test run dev ui-demo clean fmt lint docs docs-build tag
 
 # VERSION comes from the nearest git tag (v0.4.0 -> 0.4.0, or 0.4.0-3-gabc123 after it);
 # empty outside a git checkout, in which case the binary reports "dev (<revision>)".
@@ -21,6 +21,11 @@ run: build
 
 dev: build
 	-./$(BIN) --config bin/configuration.ini
+
+# The web interface with a fake bot (made-up music, nothing played), no Mumble server needed.
+# Open http://127.0.0.1:8181. Add LOGIN=1 to try the !web login flow instead of skipping it.
+ui-demo:
+	go run ./cmd/uidemo $(if $(LOGIN),-login)
 
 clean:
 	rm -rf bin/

@@ -90,18 +90,6 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// handleIndex is a placeholder until the UI lands; it confirms who is logged in.
-func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
-	id, ok := s.identify(r)
-	if !ok {
-		writePage(w, http.StatusUnauthorized, "gotamusique",
-			"You are not logged in. Type the web command in Mumble to get a login link.")
-		return
-	}
-	writePage(w, http.StatusOK, "gotamusique",
-		"Logged in as "+html.EscapeString(id.Name)+". The web UI is not available yet; the API is at /api/v1/state.")
-}
-
 func writePage(w http.ResponseWriter, code int, title, body string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")

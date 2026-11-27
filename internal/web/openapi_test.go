@@ -377,6 +377,8 @@ func TestOpenAPI_SuccessResponsesMatchTheSchemas(t *testing.T) {
 		x.json(post("/api/v1/queue/{id}/move"), "/api/v1/queue/5/move", ex, 200)
 	}
 
+	e.bot.presets = []RadioPreset{{Name: "jazz", Comment: "Jazz Yeah !"}, {Name: "rock"}}
+	x.json(get("/api/v1/radio/presets"), "/api/v1/radio/presets", nil, 200)
 	x.json(get("/api/v1/radio/search"), "/api/v1/radio/search?q=jazz&limit=5", nil, 200)
 	x.json(get("/api/v1/library"), "/api/v1/library?dir=rock&q=a&tag=x&tag=y,z&limit=10&offset=0", nil, 200)
 	x.json(get("/api/v1/library"), "/api/v1/library", nil, 200)
