@@ -9,6 +9,7 @@ import (
 
 	"github.com/konradk/gotamusique/internal/audio"
 	"github.com/konradk/gotamusique/internal/config"
+	"github.com/konradk/gotamusique/internal/library"
 	"layeh.com/gumble/gumble"
 )
 
@@ -39,10 +40,10 @@ type mockBot struct {
 	setModeCalls   []string
 	hasLibrary     bool
 	rescanCalls    int
-	libTracks      []LibraryTrack
+	libTracks      []library.Track
 	libErr         error
 	findTags       []string
-	lookup         FileLookup
+	lookup         library.FileLookup
 	lookupArg      string
 	lastCalls      int
 	randomizeCalls int
@@ -102,15 +103,15 @@ func (m *mockBot) Rescan(ctx context.Context, force bool) (string, error) {
 	}
 	return m.rescanResult, m.rescanErr
 }
-func (m *mockBot) ListLibrary(re *regexp.Regexp) ([]LibraryTrack, error) {
+func (m *mockBot) ListLibrary(re *regexp.Regexp) ([]library.Track, error) {
 	m.listRE = re
 	return m.libTracks, m.libErr
 }
-func (m *mockBot) SearchLibrary(kw []string) ([]LibraryTrack, error) {
+func (m *mockBot) SearchLibrary(kw []string) ([]library.Track, error) {
 	m.searchKW = kw
 	return m.libTracks, m.libErr
 }
-func (m *mockBot) LookupFile(arg string) (FileLookup, error) {
+func (m *mockBot) LookupFile(arg string) (library.FileLookup, error) {
 	m.lookupArg = arg
 	return m.lookup, m.libErr
 }
@@ -126,7 +127,7 @@ func (m *mockBot) RepeatCurrent(n int) (audio.MediaItem, bool) {
 	}
 	return m.currentItem, true
 }
-func (m *mockBot) FindTagged(tags []string) ([]LibraryTrack, error) {
+func (m *mockBot) FindTagged(tags []string) ([]library.Track, error) {
 	m.findTags = tags
 	return m.libTracks, m.libErr
 }

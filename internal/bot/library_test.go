@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/konradk/gotamusique/internal/audio"
-	"github.com/konradk/gotamusique/internal/command"
 	"github.com/konradk/gotamusique/internal/config"
 	"github.com/konradk/gotamusique/internal/database"
 	"github.com/konradk/gotamusique/internal/library"
@@ -803,7 +802,7 @@ func TestAutoplayCap_FollowsAutoplayLengthWithDefault(t *testing.T) {
 	}
 }
 
-func trackPaths(ts []command.LibraryTrack) []string {
+func trackPaths(ts []library.Track) []string {
 	var out []string
 	for _, t := range ts {
 		out = append(out, t.Path)
@@ -920,15 +919,15 @@ func TestLookupFile_ExactFolderPartial(t *testing.T) {
 	}
 	cases := []struct {
 		arg  string
-		kind command.LookupKind
+		kind library.LookupKind
 		want string
 	}{
-		{"jazz/Blue Train.mp3", command.LookupExact, "jazz/Blue Train.mp3"},
-		{"rock", command.LookupFolder, "rock/a.mp3,rock/b.mp3"}, // not rockabilly/
-		{"rock/", command.LookupFolder, "rock/a.mp3,rock/b.mp3"},
-		{"BLUE tr", command.LookupPartial, "jazz/Blue Train.mp3"},
-		{"a.mp3", command.LookupPartial, "rock/a.mp3"},
-		{"nothing", command.LookupPartial, ""},
+		{"jazz/Blue Train.mp3", library.LookupExact, "jazz/Blue Train.mp3"},
+		{"rock", library.LookupFolder, "rock/a.mp3,rock/b.mp3"}, // not rockabilly/
+		{"rock/", library.LookupFolder, "rock/a.mp3,rock/b.mp3"},
+		{"BLUE tr", library.LookupPartial, "jazz/Blue Train.mp3"},
+		{"a.mp3", library.LookupPartial, "rock/a.mp3"},
+		{"nothing", library.LookupPartial, ""},
 	}
 	for _, c := range cases {
 		got, err := lb.LookupFile(c.arg)
@@ -980,13 +979,13 @@ func TestLookupFile_ExactWinsOverFolderAndPartial(t *testing.T) {
 		lb.addTrack(t, p, false)
 	}
 	got, err := lb.LookupFile("a.mp3")
-	if err != nil || got.Kind != command.LookupExact || strings.Join(trackPaths(got.Tracks), ",") != "a.mp3" {
+	if err != nil || got.Kind != library.LookupExact || strings.Join(trackPaths(got.Tracks), ",") != "a.mp3" {
 		t.Errorf("got kind %v %v err %v, want exact a.mp3", got.Kind, trackPaths(got.Tracks), err)
 	}
 	// An exact id match that is not a library file row is ignored.
 	lb.libraryRef().db.Insert(database.MusicRecord{ID: file.IDFromPath("http://x"), Type: "url", Path: "http://x", Title: "u"})
 	got, _ = lb.LookupFile("http://x")
-	if got.Kind == command.LookupExact {
+	if got.Kind == library.LookupExact {
 		t.Error("a url row must not satisfy !file")
 	}
 }

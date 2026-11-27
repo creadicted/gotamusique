@@ -7,6 +7,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- Groundwork for the web API (milestone 3-07, no user-visible change yet): queue entries carry stable
+  IDs (remove, play and move by ID), the bot can report a consistent state snapshot and seek, the
+  library can index a single file without a full scan, and the library DTOs moved out of the chat
+  command package.
+
 ---
 
 ## [0.6.3] — 2026-11-10

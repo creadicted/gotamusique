@@ -101,6 +101,9 @@ func (f *FileItem) StreamURL() string { return f.effectivePath() }
 // CanSeek implements audio.Seekable: a local file can be restarted part-way in.
 func (f *FileItem) CanSeek() bool { return true }
 
+// Length returns the track length read by ffprobe, or 0 if unknown.
+func (f *FileItem) Length() time.Duration { return f.Duration }
+
 // FormatTitle implements audio.MediaItem.
 // Preference: "Artist - Title" > "Title" > bare filename without extension.
 func (f *FileItem) FormatTitle() string {

@@ -166,6 +166,16 @@ func (r *resumePoint) set(item audio.MediaItem, at time.Duration) {
 
 func (r *resumePoint) clear() { r.set(nil, 0) }
 
+// peek returns the saved position if it belongs to item, without consuming it.
+func (r *resumePoint) peek(item audio.MediaItem) (time.Duration, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.item == nil || r.item != item || r.at <= 0 {
+		return 0, false
+	}
+	return r.at, true
+}
+
 // take returns the saved position if it belongs to item, and always clears it.
 func (r *resumePoint) take(item audio.MediaItem) (time.Duration, bool) {
 	r.mu.Lock()

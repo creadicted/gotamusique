@@ -10,6 +10,7 @@ import (
 
 	"github.com/konradk/gotamusique/internal/audio"
 	"github.com/konradk/gotamusique/internal/config"
+	"github.com/konradk/gotamusique/internal/library"
 	"layeh.com/gumble/gumble"
 )
 
@@ -45,11 +46,11 @@ type BotAPI interface {
 	Rescan(ctx context.Context, force bool) (string, error)
 	// ListLibrary returns library tracks ordered by path, optionally only those
 	// whose path or title match re (nil = all).
-	ListLibrary(re *regexp.Regexp) ([]LibraryTrack, error)
+	ListLibrary(re *regexp.Regexp) ([]library.Track, error)
 	// SearchLibrary returns tracks whose keywords contain every keyword.
-	SearchLibrary(keywords []string) ([]LibraryTrack, error)
+	SearchLibrary(keywords []string) ([]library.Track, error)
 	// LookupFile resolves a !file argument: exact path, else folder, else partial match.
-	LookupFile(arg string) (FileLookup, error)
+	LookupFile(arg string) (library.FileLookup, error)
 	// Last jumps to and plays the final queue item; false when the queue is empty.
 	Last() bool
 	// RandomizeQueue shuffles the upcoming queue items without interrupting playback.
@@ -57,34 +58,10 @@ type BotAPI interface {
 	// RepeatCurrent queues n more plays of the current item right after it.
 	RepeatCurrent(n int) (audio.MediaItem, bool)
 	// FindTagged returns tracks carrying every given tag (whole tag, case-insensitive).
-	FindTagged(tags []string) ([]LibraryTrack, error)
+	FindTagged(tags []string) ([]library.Track, error)
 	// UpdateTags rewrites the tags of the library row id with fn. Returns
 	// library.ErrNotInLibrary when there is no such row.
 	UpdateTags(id string, fn func(tags []string) []string) error
-}
-
-// LibraryTrack is one scanned library entry as shown in chat.
-type LibraryTrack struct {
-	Path     string // relative to music_folder; usable with !file
-	Title    string
-	Artist   string
-	Tags     []string
-	Duration time.Duration
-}
-
-// LookupKind says how a !file argument matched the library.
-type LookupKind int
-
-const (
-	LookupExact   LookupKind = iota // the argument is a library path
-	LookupFolder                    // the argument is a folder: Tracks are all below it
-	LookupPartial                   // case-insensitive substring match on paths (may be empty)
-)
-
-// FileLookup is the result of LookupFile.
-type FileLookup struct {
-	Kind   LookupKind
-	Tracks []LibraryTrack
 }
 
 // HandlerFunc is the signature every command handler must implement.

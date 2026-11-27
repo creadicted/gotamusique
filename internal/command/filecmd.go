@@ -1,6 +1,7 @@
 package command
 
 import (
+	"github.com/konradk/gotamusique/internal/library"
 	"regexp"
 	"strconv"
 	"strings"
@@ -26,9 +27,9 @@ func makeFileHandler(sl *shortlist) HandlerFunc {
 			return
 		}
 		switch {
-		case res.Kind == LookupExact:
+		case res.Kind == library.LookupExact:
 			enqueueTracks(bot, cfg, c, res.Tracks, "")
-		case res.Kind == LookupFolder:
+		case res.Kind == library.LookupFolder:
 			enqueueTracks(bot, cfg, c, res.Tracks, " from "+arg)
 		case len(res.Tracks) == 1:
 			enqueueTracks(bot, cfg, c, res.Tracks, "")
