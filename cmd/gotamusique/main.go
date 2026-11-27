@@ -49,6 +49,13 @@ func run() int {
 
 	slog.Info("gotamusique starting", slog.String("version", version.Get()))
 
+	// Listen before connecting: a busy port or a bad address is a configuration
+	// error and should stop the start, not surface later in the background.
+	if err := b.StartWeb(ctx); err != nil {
+		fmt.Fprintf(os.Stderr, "gotamusique: %v\n", err)
+		return 1
+	}
+
 	if err := b.Run(ctx); err != nil {
 		fmt.Fprintf(os.Stderr, "gotamusique: %v\n", err)
 		return 1

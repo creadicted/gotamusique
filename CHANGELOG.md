@@ -7,6 +7,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Web interface, first part (milestone 3-07).** Off by default. With `[webinterface] enabled = True`
+  the bot serves `GET /api/v1/state` (queue with stable entry IDs, position, volume, mode, scan
+  status; `ETag` / `?since=` for cheap polling). `!web` sends you a private, one-use login link
+  (5 minutes) that starts a cookie session; `auth_method = none` is available for trusted networks.
+  Playback control, the library, uploads and the browser UI follow. See
+  [Web interface](docs/configuration/web.md).
+
 ### Changed
 
 - Groundwork for the web API (milestone 3-07, no user-visible change yet): queue entries carry stable

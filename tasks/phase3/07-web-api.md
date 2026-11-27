@@ -1,6 +1,6 @@
 # 3-07 — Web REST API
 
-**Status:** todo  
+**Status:** in progress — PR 1 (#41) and PR 2 done  
 **Depends on:** 3-04, 3-05  
 **Unlocks:** 3-08
 
@@ -29,17 +29,19 @@ The botamusique wire format (`/post`, `/playlist`, form-encoded actions) is **no
 
 ## Configuration
 
-New keys (names indicative, finalise in PR 2). Defaults are safe: nothing listens after an upgrade.
+The `[webinterface]` section and key names are botamusique's, so existing files load; its other
+keys are accepted and ignored. Defaults are safe: nothing listens after an upgrade.
 
 | Key | Default | Notes |
 |---|---|---|
-| `web_enabled` | `false` | Off by default. |
-| `web_bind` | `127.0.0.1:<port>` | Docker/compose binds `0.0.0.0` explicitly. |
-| `web_base_url` | empty | Public URL used to build the `!web` link. The cookie `Secure` flag is derived from it being `https://` (never from `X-Forwarded-*`). |
-| `auth_method` | `token` | `none` or `token`. `none` logs a startup warning when the bind address is not loopback. |
-| `web_admins` | empty | Mumble names or cert hashes that get the `admin` role (used from 3-11). |
-| `allow_upload_without_auth` | `false` | Upload is refused under `auth_method = none` unless set. |
-| upload dir / max size | `uploads/`, set a limit | Under the music root. |
+| `enabled` | `False` | Off by default. |
+| `listening_addr` / `listening_port` | `127.0.0.1` / `8181` | Docker binds `0.0.0.0` explicitly. A busy port stops the start. |
+| `access_address` | `http://127.0.0.1:8181` | Public URL; the `!web` link is built from it. The cookie `Secure` flag is derived from it being `https://` (never from `X-Forwarded-*`). |
+| `auth_method` | `token` | `token` or `none`. Anything else, including botamusique's `password`, is a startup error. `none` logs a warning when listening beyond loopback and enforces the `Host` check (DNS rebinding). |
+
+Admins reuse `[bot] admin`; the web `admin` role additionally requires a registered Mumble
+account, because the list matches names only. Upload keys (`upload_enabled`,
+`max_upload_file_size`, upload dir) arrive with PR 4; `allow_upload_without_auth` is decided there.
 
 TLS is not terminated by the bot; the admin puts a reverse proxy in front.
 
@@ -51,11 +53,11 @@ TLS is not terminated by the bot; the admin puts a reverse proxy in front.
 
 1. A user in the bot's channel types `!web`.
 2. The bot creates a random single-use token with a short expiry and replies privately with
-   `<web_base_url>/login?token=…`.
+   `<access_address>/login?token=…`.
 3. Opening the link consumes the token and sets a session cookie (HttpOnly, SameSite=Lax,
-   Secure when `web_base_url` is https).
+   Secure when `access_address` is https).
 4. The session subject is the cert hash when the user is registered, otherwise the name.
-   Everyone gets `user`; `admin` comes from `web_admins`.
+   Everyone gets `user`; `admin` comes from `[bot] admin` (registered accounts only).
 
 Sessions live in memory with a sliding 12 h TTL and are not tied to Mumble presence. 3-11 can
 revoke a user's sessions on ban. A restart logs everyone out.
@@ -123,8 +125,9 @@ The milestone is done after PR 4. Each PR ships with tests and updated docs/CHAN
 
 ## Deliverables
 
-- `internal/web/server.go`, `internal/web/auth.go`, `internal/web/handlers/` (one file per
-  endpoint group), `web.Bot` interface in `internal/web`.
+- `internal/web/` (flat package): `server.go`, `auth.go`, `login.go`, one file per endpoint
+  group (`state.go`, ...), and the narrow `web.Bot` interface. Handlers are not split into a
+  sub-package because they share the session and error helpers.
 - Tests: every handler against a mock `web.Bot` with `httptest`; upload validation and
   path-traversal cases; session and token expiry/single-use; queue ID concurrency.
 - Docs: configuration reference, `!web`, reverse-proxy note (TLS, timeouts).
@@ -139,4 +142,4 @@ The milestone is done after PR 4. Each PR ships with tests and updated docs/CHAN
   the state.
 - An uploaded valid audio file appears in the library and can be queued immediately; invalid
   files and traversal attempts are rejected and leave nothing on disk.
-- With `web_enabled = false` the bot opens no port.
+- With `enabled = False` the bot opens no port.

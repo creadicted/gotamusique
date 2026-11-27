@@ -13,9 +13,9 @@ gotamusique is a clean rewrite, not a drop-in replacement.
 
 !!! warning "Remove these keys before starting"
     gotamusique rejects unknown keys in the sections it knows (`[server]`, `[bot]`, `[youtube_dl]`,
-    `[files]`, `[debug]`) and exits at startup with `unknown key "..." in section [...]`. Delete
-    every key below from your `configuration.ini` before migrating. Unknown *sections*, such as
-    `[webinterface]`, are ignored.
+    `[files]`, `[debug]`, `[webinterface]`) and exits at startup with `unknown key "..." in section [...]`.
+    Delete every key below from your `configuration.ini` before migrating. Unknown *sections* are
+    ignored.
 
 | Key | Status | Notes |
 |-----|--------|-------|
@@ -33,7 +33,12 @@ gotamusique is a clean rewrite, not a drop-in replacement.
 | `tmp_folder` / `tmp_folder_max_size` | deferred | |
 | `when_nobody_in_channel` | deferred | |
 
-The `[webinterface]` section is not implemented yet and is skipped.
+The `[webinterface]` section is read, but off by default and only partly implemented (see
+[Web interface](configuration/web.md)). All its original keys are accepted; `user`, `password`,
+`max_attempts`, `flask_secret`, `is_web_proxified`, `max_upload_file_size`, `upload_enabled` and
+`web_logfile` are ignored. `auth_method = password` is not supported and stops the bot at startup;
+use `token` (the default here) or `none`. Note the default differs from botamusique, which used
+`none`. The `!web` command is new.
 
 ## New keys
 
