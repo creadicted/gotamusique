@@ -1,0 +1,46 @@
+name: Playground
+
+# Runs the playground's smoke test: a real Mumble server and the bot, driven through the
+# web API (see playground/README.md). Both ways of running the bot are exercised.
+on:
+  pull_request:
+    paths:
+      - "playground/**"
+      - "Dockerfile"
+      - "cmd/gotamusique/**"
+      - "cmd/mumbleclient/**"
+      - ".github/workflows/playground.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  docker:
+    name: Bot in a container
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      # Go builds the small Mumble client the smoke test talks to the bot with.
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libopus-dev pkg-config
+      - run: MODE=docker ./playground/playground.sh smoke
+
+  host:
+    name: Bot on the host, ${{ matrix.server }} server
+    strategy:
+      fail-fast: false
+      matrix:
+        server: [mumble, kallisti]
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg libopus-dev pkg-config
+      - run: SERVER=${{ matrix.server }} MODE=host ./playground/playground.sh smoke
