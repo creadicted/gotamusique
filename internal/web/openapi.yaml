@@ -1,0 +1,893 @@
+openapi: 3.0.3
+info:
+  title: gotamusique web API
+  version: 1.0.0
+  description: |
+    Control a gotamusique Mumble music bot over HTTP: follow what plays, steer playback, edit the
+    queue, add radio stations and URLs, browse the library and upload music.
+
+    **Logging in.** With `auth_method = token` (the default), type `!web` in the Mumble channel. The
+    bot sends you a private link; opening it sets the `gotamusique_session` cookie that every call
+    below needs. In this page, log in first, then use *Try it out*: the browser sends the cookie by
+    itself. With `auth_method = none` no login is needed.
+
+    **Responses.** Every call that changes something answers with the new state (`State`), so a
+    client can apply the answer instead of polling again. Errors are always
+    `{"error": "<text for people>", "code": "<stable slug>"}`; match on `code`, not on the text.
+
+    **Cross-site requests.** State-changing requests that the browser marks as cross-site, or whose
+    `Origin` differs from the `Host` it was sent to, are refused with `403 cross_origin`. Behind a
+    reverse proxy, forward the original `Host` header.
+
+    **Queue entries** are addressed by a stable `id` from the state, never by position, so two people
+    editing at once cannot hit the wrong track. An entry that is already gone is `404 not_found`;
+    treat that as "already done" and refresh.
+  license:
+    name: See the project repository
+    url: https://github.com/creadicted/gotamusique
+servers:
+  - url: /
+    description: This bot
+
+tags:
+  - name: Auth
+    description: Logging in and out
+  - name: State
+    description: Everything a client renders, in one response
+  - name: Playback
+    description: Pause, resume, stop, skip, seek, volume and mode
+  - name: Queue
+    description: Add, remove, move and play queue entries
+  - name: Library
+    description: Browse, search, rescan and upload
+  - name: Radio
+    description: Find radio stations
+
+security:
+  - sessionCookie: []
+
+paths:
+  /login:
+    get:
+      tags: [Auth]
+      summary: Redeem a login link
+      description: |
+        The link from `!web` points here. It works **once** and expires after 5 minutes; a second
+        use answers 401. On success the session cookie is set and the browser is redirected to `/`.
+        Without a login (`auth_method = none`) this just redirects.
+      operationId: login
+      security: []
+      parameters:
+        - name: token
+          in: query
+          required: true
+          description: The one-time token from the `!web` link.
+          schema:
+            type: string
+      responses:
+        "303":
+          description: Logged in; the session cookie is set.
+          headers:
+            Location:
+              schema: { type: string, example: / }
+            Set-Cookie:
+              description: The `gotamusique_session` cookie (HttpOnly, SameSite=Lax; Secure when `access_address` is https).
+              schema: { type: string }
+        "401":
+          description: The link is invalid, expired or already used (an HTML page, not JSON).
+          content:
+            text/html:
+              schema: { type: string }
+
+  /api/v1/auth/logout:
+    post:
+      tags: [Auth]
+      summary: End the session
+      description: Always succeeds, also without a session.
+      operationId: logout
+      security: []
+      responses:
+        "204":
+          description: Logged out; the cookie is cleared.
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/openapi.yaml:
+    get:
+      tags: [Auth]
+      summary: This description
+      description: The OpenAPI document that this page is rendered from.
+      operationId: getOpenAPI
+      responses:
+        "200":
+          description: The OpenAPI document.
+          content:
+            application/yaml:
+              schema: { type: string }
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+
+  /api/v1/state:
+    get:
+      tags: [State]
+      summary: The whole state
+      description: |
+        Queue, current position, volume, mode and scan status in one response. `version` changes
+        exactly when something other than the playhead position changed, and is also sent as the
+        `ETag`: poll with `If-None-Match: "<version>"` (or `?since=<version>`) and an unchanged state
+        costs a `304` with no body. The response is `private` (it names the caller).
+      operationId: getState
+      parameters:
+        - name: since
+          in: query
+          required: false
+          description: The `version` you last saw; answers 304 while it is still current.
+          schema: { type: string, example: "42" }
+        - name: If-None-Match
+          in: header
+          required: false
+          description: The `ETag` you last saw (the version in quotes); answers 304 while it is still current.
+          schema: { type: string, example: '"42"' }
+      responses:
+        "200":
+          description: The state.
+          headers:
+            ETag:
+              schema: { type: string, example: '"42"' }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/State" }
+        "304":
+          description: Nothing changed since the given version.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/playback/pause:
+    post:
+      tags: [Playback]
+      summary: Pause
+      description: Halts playback and keeps the queue position. Pausing twice is fine.
+      operationId: pause
+      responses:
+        "200": { $ref: "#/components/responses/State" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/playback/resume:
+    post:
+      tags: [Playback]
+      summary: Resume
+      description: |
+        Continues after a pause. A local file continues where it stopped; a live stream rejoins the
+        broadcast. Resuming a bot that is not paused is fine.
+      operationId: resume
+      responses:
+        "200": { $ref: "#/components/responses/State" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/playback/stop:
+    post:
+      tags: [Playback]
+      summary: Stop
+      description: Stops playback and resets the queue position to the first entry. The queue is kept.
+      operationId: stop
+      responses:
+        "200": { $ref: "#/components/responses/State" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/playback/next:
+    post:
+      tags: [Playback]
+      summary: Skip to the next entry
+      operationId: next
+      responses:
+        "200": { $ref: "#/components/responses/State" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/playback/seek:
+    post:
+      tags: [Playback]
+      summary: Seek in the current track
+      description: |
+        Restarts the current track at the given position. Only local files can seek; a live stream
+        answers `409 not_seekable`. While paused it only moves the resume point.
+      operationId: seek
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SeekRequest" }
+            example: { position_ms: 90000 }
+      responses:
+        "200": { $ref: "#/components/responses/State" }
+        "400":
+          description: "`bad_json`, `bad_request` (position_ms missing) or `seek_range` (negative or past the end)."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "409":
+          description: "`nothing_playing` or `not_seekable`."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/volume:
+    put:
+      tags: [Playback]
+      summary: Set the volume and/or mute
+      description: |
+        Give `volume`, `muted` or both. Setting a volume ends a mute; with both, the mute is applied
+        last. The volume is capped at the bot's `max_volume`, so read the state to see what was set.
+      operationId: setVolume
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/VolumeRequest" }
+            example: { volume: 0.4 }
+      responses:
+        "200": { $ref: "#/components/responses/State" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/mode:
+    put:
+      tags: [Playback]
+      summary: Set the playback mode
+      description: |
+        `autoplay` needs a music library (`409 library_unavailable`, or `library_empty` when it has no
+        tracks) and starts playing at once.
+      operationId: setMode
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ModeRequest" }
+            example: { mode: repeat }
+      responses:
+        "200": { $ref: "#/components/responses/State" }
+        "400":
+          description: "`bad_json` or `invalid_mode`."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/queue:
+    post:
+      tags: [Queue]
+      summary: Add something to the queue
+      description: |
+        Adds a library file, a radio station or a single yt-dlp track, validating it first (the stream
+        must be reachable, the file must exist). The checks can take up to 25 seconds.
+
+        | `type` | Give | Meaning |
+        |---|---|---|
+        | `library` | `path` | A file from the library, by its path |
+        | `radio` | exactly one of `preset`, `url`, `uuid` | A configured preset, a direct stream URL, or a radio-browser.info station (from `/radio/search`) |
+        | `url` | `url` | One track resolved through yt-dlp, best effort. Playlists are refused |
+
+        `position` is `end` (default), `next` (play it after the current track) or `now` (play it at
+        once). At most three yt-dlp processes run at once in the whole bot; beyond that you get `503 busy`.
+      operationId: addToQueue
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AddRequest" }
+            examples:
+              radioPreset:
+                summary: A radio preset, played next
+                value: { type: radio, preset: jazz, position: next }
+              libraryFile:
+                summary: A library file at the end
+                value: { type: library, path: "rock/song.mp3" }
+              url:
+                summary: A URL via yt-dlp
+                value: { type: url, url: "https://example.com/track" }
+      responses:
+        "201":
+          description: Added. The state plus the new entry.
+          headers:
+            ETag:
+              schema: { type: string, example: '"42"' }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AddResponse" }
+        "400":
+          description: "`bad_json` or `bad_request` (unknown `position`)."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404":
+          description: "`not_in_library`: no such file in the library."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: "`library_unavailable`: no music library is configured."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "`invalid_source`: the source cannot be queued; `error` says why (unknown preset, unreachable stream, a playlist, too long, ...)."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503":
+          description: "`busy` (every yt-dlp slot is taken) or `unavailable` (yt-dlp is not installed on the server)."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "504":
+          description: "`timeout`: the checks took too long."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [Queue]
+      summary: Clear the queue
+      description: Stops playback and empties the queue.
+      operationId: clearQueue
+      responses:
+        "200": { $ref: "#/components/responses/State" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/queue/shuffle:
+    post:
+      tags: [Queue]
+      summary: Shuffle the upcoming entries
+      description: The current entry and everything before it stay where they are. Playback is not interrupted.
+      operationId: shuffleQueue
+      responses:
+        "200": { $ref: "#/components/responses/State" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/queue/{id}:
+    delete:
+      tags: [Queue]
+      summary: Remove an entry
+      description: |
+        Removing a track that is not playing leaves playback alone. Removing the playing one behaves
+        like a skip (in `repeat` and `random` mode the queue wraps if it was the last).
+      operationId: removeEntry
+      parameters:
+        - $ref: "#/components/parameters/EntryId"
+      responses:
+        "200": { $ref: "#/components/responses/State" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/queue/{id}/play:
+    post:
+      tags: [Queue]
+      summary: Jump to an entry and play it
+      operationId: playEntry
+      parameters:
+        - $ref: "#/components/parameters/EntryId"
+      responses:
+        "200": { $ref: "#/components/responses/State" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/queue/{id}/move:
+    post:
+      tags: [Queue]
+      summary: Move an entry
+      description: |
+        Puts the entry directly after another one (`after` is that entry's id), or at the front with
+        `after: 0`. The playing track keeps playing. Both entries must still exist.
+      operationId: moveEntry
+      parameters:
+        - $ref: "#/components/parameters/EntryId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MoveRequest" }
+            example: { after: 7 }
+      responses:
+        "200": { $ref: "#/components/responses/State" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/radio/search:
+    get:
+      tags: [Radio]
+      summary: Search radio-browser.info
+      description: 'Add a hit with `POST /queue` and `{"type": "radio", "uuid": "<uuid>"}`. Times out after 10 seconds.'
+      operationId: searchRadio
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: Station name to search for.
+          schema: { type: string, minLength: 1, maxLength: 100, example: jazz }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 50, default: 10 }
+      responses:
+        "200":
+          description: Matching stations (possibly none).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RadioSearchResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "504":
+          description: "`timeout`: radio-browser.info did not answer in time."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/library:
+    get:
+      tags: [Library]
+      summary: Browse or search the library
+      description: |
+        Without `q` and `tag` this **browses** `dir` (the root by default): `dirs` are its sub-folders
+        with the number of tracks below each, `tracks` are the files directly in it, and `total` counts
+        those files.
+
+        With `q` and/or `tag` it **searches** every track below `dir`: all words of `q` must occur in
+        the title, artist or path (any case), and a track must carry every `tag` (whole tags, any
+        case). `dirs` is empty then. Results are ordered by path and paged with `limit` and `offset`.
+
+        Queue a result with `POST /queue` and `{"type": "library", "path": "<path>"}`.
+      operationId: getLibrary
+      parameters:
+        - name: dir
+          in: query
+          required: false
+          description: Folder to browse or search below, relative to the music folder.
+          schema: { type: string, maxLength: 200, example: rock }
+        - name: q
+          in: query
+          required: false
+          description: Words to search for.
+          schema: { type: string, maxLength: 200 }
+        - name: tag
+          in: query
+          required: false
+          description: A tag the track must carry. Repeat the parameter, or separate tags with commas (at most 10).
+          style: form
+          explode: true
+          schema:
+            type: array
+            maxItems: 10
+            items: { type: string, maxLength: 100 }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 500, default: 100 }
+        - name: offset
+          in: query
+          required: false
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        "200":
+          description: One page of the library.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LibraryPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/library/rescan:
+    post:
+      tags: [Library]
+      summary: Start a library scan
+      description: |
+        Starts an incremental scan in the background and answers at once with `202`. The state's
+        `scan` field shows `running`, then `last_result` or `last_error`. A scan that is already
+        running is `409 scan_running`. There is deliberately no `force` option here.
+      operationId: rescanLibrary
+      responses:
+        "202":
+          description: The scan started. The state already shows it as running.
+          headers:
+            ETag:
+              schema: { type: string, example: '"42"' }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/State" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "409":
+          description: "`scan_running` or `library_unavailable`."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/library/upload:
+    post:
+      tags: [Library]
+      summary: Upload an audio file
+      description: |
+        One audio file as `multipart/form-data` in the field `file`. It is stored as
+        `<music_folder>/uploads/<your name>/<file name>` and added to the library at once; queue it
+        afterwards with `POST /queue`.
+
+        The name is cleaned up (only the last path component is used, control characters are removed,
+        reserved characters become `_`, hidden names lose their dot) and must end in a known audio
+        extension (`.mp3 .flac .ogg .oga .opus .m4a .aac .wav .wma .ape .aiff`). An existing file is
+        never overwritten: the new one becomes `name (1).mp3`. The file must be readable by ffprobe and
+        contain an audio stream, otherwise it is deleted again (`422 invalid_file`).
+
+        Needs a login unless the server sets `allow_upload_without_auth`. At most four uploads run at
+        once. The size limit is the server's `max_upload_file_size`.
+      operationId: uploadFile
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The audio file.
+      responses:
+        "201":
+          description: Stored and indexed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UploadResponse" }
+        "400":
+          description: "`bad_request`: not multipart, or no `file` part."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403":
+          description: "`upload_disabled`, `upload_requires_login` (no login configured and `allow_upload_without_auth` is off) or `cross_origin`."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: "`library_unavailable`: no music library, or the music folder is not available."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "413":
+          description: "`too_large`: over the size limit."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "`invalid_file`: not an audio file we accept; `error` says why."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503":
+          description: "`busy`: too many uploads in progress."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: gotamusique_session
+      description: |
+        The session cookie set by the `!web` login link. Not needed when the server runs with
+        `auth_method = none`. Log in in the same browser, then use *Try it out* on this page.
+
+  parameters:
+    EntryId:
+      name: id
+      in: path
+      required: true
+      description: A queue entry's stable id, from `State.queue[].id`.
+      schema: { type: integer, format: int64, minimum: 1 }
+
+  responses:
+    State:
+      description: The new state.
+      headers:
+        ETag:
+          schema: { type: string, example: '"42"' }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/State" }
+    Unauthenticated:
+      description: "`unauthenticated`: no valid session. Type `!web` in Mumble and open the link."
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    BadRequest:
+      description: "`bad_json` (not a JSON object, unknown field, trailing data) or `bad_request` (a value is missing or out of range)."
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: "`not_found`: that queue entry no longer exists (or the id is malformed). Treat it as already done."
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Conflict:
+      description: "`library_unavailable` (no music library is configured) or `library_empty`."
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Error:
+      description: |
+        Any other error: `forbidden`, `cross_origin` (403), `bad_host` (421, only without a login),
+        `too_large` (413), `canceled`, `internal` (500) and the others listed under `Error.code`.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Error:
+      type: object
+      required: [error, code]
+      properties:
+        error:
+          type: string
+          description: Human-readable text. It may change; do not parse it.
+        code:
+          type: string
+          description: Stable slug to match on.
+          enum:
+            - bad_host
+            - bad_json
+            - bad_request
+            - busy
+            - canceled
+            - cross_origin
+            - forbidden
+            - internal
+            - invalid_file
+            - invalid_mode
+            - invalid_source
+            - library_empty
+            - library_unavailable
+            - not_found
+            - not_in_library
+            - not_seekable
+            - nothing_playing
+            - scan_running
+            - seek_range
+            - timeout
+            - too_large
+            - unauthenticated
+            - unavailable
+            - upload_disabled
+            - upload_requires_login
+      example: { error: that queue entry no longer exists, code: not_found }
+
+    State:
+      type: object
+      required: [version, me, queue, index, playing, pause, position_ms, volume, muted, mode, scan]
+      properties:
+        version:
+          type: string
+          description: Opaque. Changes exactly when something other than the playhead position changed; compare for equality only. Also the `ETag`.
+          example: "42"
+        me:
+          type: object
+          description: Who the session belongs to.
+          required: [name, roles]
+          properties:
+            name: { type: string, example: alice }
+            roles:
+              type: array
+              items: { type: string, enum: [user, admin] }
+        queue:
+          type: array
+          description: In play order.
+          items: { $ref: "#/components/schemas/Entry" }
+        index:
+          type: integer
+          description: Position of the current entry in `queue`; equals the queue length when idle.
+        playing:
+          type: boolean
+          description: Audio is being sent right now.
+        pause:
+          type: string
+          enum: ["", manual, auto]
+          description: "`manual` after a pause request, `auto` when the bot paused itself because it was alone, empty when not paused."
+        position_ms:
+          type: integer
+          format: int64
+          nullable: true
+          description: How far into the current track, in milliseconds. `null` for live streams and when nothing plays. It advances while `playing`; interpolate it on the client between polls.
+        volume:
+          type: number
+          minimum: 0
+          maximum: 1
+        muted:
+          type: boolean
+        mode:
+          type: string
+          enum: [one-shot, repeat, random, autoplay]
+        scan:
+          $ref: "#/components/schemas/Scan"
+
+    Entry:
+      type: object
+      required: [id, title, duration_ms, seekable]
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Stable for the life of the entry; use it to address the entry.
+        title: { type: string, example: "[Radio] Jazz" }
+        duration_ms:
+          type: integer
+          format: int64
+          description: Length in milliseconds; 0 when unknown (live streams, a URL not resolved yet).
+        seekable:
+          type: boolean
+
+    Scan:
+      type: object
+      required: [available, running, last_result, last_error]
+      properties:
+        available:
+          type: boolean
+          description: A music library is open.
+        running: { type: boolean }
+        last_result:
+          type: string
+          description: Summary of the last finished scan, for example `3 added, 0 updated, 1 removed`; empty until one finished.
+        last_error:
+          type: string
+          description: Why the last scan failed; empty otherwise.
+
+    SeekRequest:
+      type: object
+      additionalProperties: false
+      required: [position_ms]
+      properties:
+        position_ms: { type: integer, format: int64, minimum: 0 }
+
+    VolumeRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        volume: { type: number, minimum: 0, maximum: 1 }
+        muted: { type: boolean }
+
+    ModeRequest:
+      type: object
+      additionalProperties: false
+      required: [mode]
+      properties:
+        mode: { type: string, enum: [one-shot, repeat, random, autoplay] }
+
+    MoveRequest:
+      type: object
+      additionalProperties: false
+      required: [after]
+      properties:
+        after:
+          type: integer
+          format: int64
+          minimum: 0
+          description: The entry to place it after; 0 for the front.
+
+    AddRequest:
+      type: object
+      additionalProperties: false
+      required: [type]
+      properties:
+        type: { type: string, enum: [library, radio, url] }
+        path: { type: string, description: "For `library`: a path from the library listing." }
+        preset: { type: string, description: "For `radio`: a name from the bot's `[radio]` config." }
+        url: { type: string, description: "For `radio`: a direct stream URL. For `url`: a page yt-dlp understands." }
+        uuid: { type: string, description: "For `radio`: a radio-browser.info station uuid." }
+        position:
+          type: string
+          enum: [end, next, now]
+          default: end
+
+    AddResponse:
+      description: The state, plus the entry that was just created.
+      allOf:
+        - $ref: "#/components/schemas/State"
+        - type: object
+          required: [added]
+          properties:
+            added:
+              type: object
+              required: [id, title]
+              properties:
+                id: { type: integer, format: int64 }
+                title: { type: string }
+
+    RadioSearchResponse:
+      type: object
+      required: [stations]
+      properties:
+        stations:
+          type: array
+          items: { $ref: "#/components/schemas/Station" }
+
+    Station:
+      type: object
+      required: [uuid, name, codec, bitrate, country, tags]
+      properties:
+        uuid: { type: string, description: "Pass it as `uuid` to `POST /queue`." }
+        name: { type: string }
+        codec: { type: string, example: MP3 }
+        bitrate: { type: integer, description: "kbit/s, 0 when unknown" }
+        country: { type: string, description: "Country code", example: DE }
+        tags: { type: string, description: "Comma-separated tags from radio-browser.info" }
+
+    Track:
+      type: object
+      required: [path, title, artist, tags, duration_ms]
+      properties:
+        path: { type: string, description: "Relative to the music folder; use it as `path` for `POST /queue`.", example: "rock/song.mp3" }
+        title: { type: string }
+        artist: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+        duration_ms: { type: integer, format: int64, description: "0 when unknown" }
+
+    LibraryDir:
+      type: object
+      required: [name, path, tracks]
+      properties:
+        name: { type: string, example: metal }
+        path: { type: string, description: "Use as `dir` to open it.", example: "rock/metal" }
+        tracks: { type: integer, description: "Tracks below it, at any depth" }
+
+    LibraryPage:
+      type: object
+      required: [dir, dirs, tracks, total, offset, limit, tags]
+      properties:
+        dir: { type: string, description: "The folder that was browsed or searched; empty for the root." }
+        dirs:
+          type: array
+          description: Sub-folders. Empty for a search.
+          items: { $ref: "#/components/schemas/LibraryDir" }
+        tracks:
+          type: array
+          items: { $ref: "#/components/schemas/Track" }
+        total:
+          type: integer
+          description: Tracks the query matched before paging (when browsing, the files directly in `dir`).
+        offset: { type: integer }
+        limit: { type: integer }
+        tags:
+          type: array
+          description: Every tag in use, for a filter menu.
+          items: { type: string }
+
+    UploadResponse:
+      type: object
+      required: [track]
+      properties:
+        track: { $ref: "#/components/schemas/Track" }

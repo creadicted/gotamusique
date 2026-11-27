@@ -63,6 +63,9 @@ with `curl` (add `| jq` if you have it).
 
     Queue a track with `{"type": "library", "path": "<path from the listing>"}`.
 
+**Prefer clicking?** Once you are logged in, open `/api/docs` in the same browser for an interactive
+reference where you can try every call, see [Interactive documentation](#interactive-documentation-swagger-ui).
+
 **Reaching it from other machines.** Keep the bot on loopback and put a reverse proxy in front
 (see [Reverse proxy and TLS](#reverse-proxy-and-tls)), then set `access_address` to the proxy's
 public URL: the `!web` link is built from it, so with the default it would point at
@@ -162,6 +165,32 @@ services:
     ports:
       - "127.0.0.1:8181:8181"   # drop the 127.0.0.1: to expose it to the network
 ```
+
+## Interactive documentation (Swagger UI)
+
+The bot describes its API in an [OpenAPI 3](https://spec.openapis.org/oas/v3.0.3) document and
+serves an interactive page for it, so you can read every endpoint and call it from the browser:
+
+| Address | What |
+|---------|------|
+| `/api/docs` | Swagger UI: every endpoint with its parameters, examples and error codes, and a **Try it out** button |
+| `/api/v1/openapi.yaml` | The OpenAPI document itself, for code generators, Postman, Insomnia and similar tools |
+
+With `auth_method = token`, both need the login: type `!web`, open the link **in your browser**, then
+open `/api/docs` in the same browser. Calls made from the page use your session cookie, so
+*Try it out* works against your own bot straight away. Without a login (`auth_method = none`) no
+login is needed.
+
+The page loads nothing from the internet: Swagger UI is built into the bot, and the page is served
+with a strict Content-Security-Policy that allows only the bot's own scripts. No call is made on
+page load except fetching the description; *Try it out* only sends what you execute, and it really
+changes things (queueing, volume, uploads).
+
+To use the description with your own tools, download it while logged in
+(`curl -b cookies.txt http://127.0.0.1:8181/api/v1/openapi.yaml -o openapi.yaml`), or take
+[`internal/web/openapi.yaml`](https://github.com/creadicted/gotamusique/blob/master/internal/web/openapi.yaml)
+from the repository. The document is written by hand and tested against the code: a test fails if
+a route, an error code or a response shape differs from it.
 
 ## API
 

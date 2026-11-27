@@ -65,34 +65,7 @@ func NewServer(bot Bot, auth *Auth, o Options) *Server {
 		allowedHosts: allowedHosts(o),
 	}
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /{$}", s.handleIndex)
-	mux.HandleFunc("GET /login", s.handleLogin)
-	mux.HandleFunc("POST /api/v1/auth/logout", s.handleLogout)
-	mux.HandleFunc("GET /api/v1/state", s.require(RoleUser, s.handleState))
-
-	mux.HandleFunc("POST /api/v1/playback/pause", s.userAction(func() { s.bot.Pause() }))
-	mux.HandleFunc("POST /api/v1/playback/resume", s.userAction(func() { s.bot.Resume() }))
-	mux.HandleFunc("POST /api/v1/playback/stop", s.userAction(s.bot.Stop))
-	mux.HandleFunc("POST /api/v1/playback/next", s.userAction(s.bot.Skip))
-	mux.HandleFunc("POST /api/v1/playback/seek", s.require(RoleUser, s.handleSeek))
-	mux.HandleFunc("PUT /api/v1/volume", s.require(RoleUser, s.handleVolume))
-	mux.HandleFunc("PUT /api/v1/mode", s.require(RoleUser, s.handleMode))
-
-	mux.HandleFunc("POST /api/v1/queue", s.require(RoleUser, s.handleAdd))
-	mux.HandleFunc("DELETE /api/v1/queue", s.userAction(s.bot.Clear))
-	mux.HandleFunc("POST /api/v1/queue/shuffle", s.userAction(s.bot.RandomizeQueue))
-	mux.HandleFunc("DELETE /api/v1/queue/{id}", s.require(RoleUser, s.handleRemove))
-	mux.HandleFunc("POST /api/v1/queue/{id}/play", s.require(RoleUser, s.handlePlayEntry))
-	mux.HandleFunc("POST /api/v1/queue/{id}/move", s.require(RoleUser, s.handleMove))
-
-	mux.HandleFunc("GET /api/v1/radio/search", s.require(RoleUser, s.handleRadioSearch))
-	mux.HandleFunc("GET /api/v1/library", s.require(RoleUser, s.handleLibrary))
-	mux.HandleFunc("POST /api/v1/library/rescan", s.require(RoleUser, s.handleRescan))
-	mux.HandleFunc("POST /api/v1/library/upload", s.require(RoleUser, s.handleUpload))
-	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
-		writeError(w, http.StatusNotFound, "not_found", "no such endpoint")
-	})
+	mux := s.mux()
 	s.handler = s.guard(mux)
 	return s
 }
