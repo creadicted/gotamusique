@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -115,6 +116,29 @@ func (rb *RadioBrowser) Search(name string, limit int) ([]Station, error) {
 	path := fmt.Sprintf("/stations/byname/%s?limit=%d", url.PathEscape(name), limit)
 	var stations []Station
 	if err := rb.get(path, &stations); err != nil {
+		return nil, err
+	}
+	return stations, nil
+}
+
+// SearchBy returns up to limit stations that match a name and/or a tag, the most voted first
+// and without stations that radio-browser.info knows to be broken. Either of name and tag may
+// be empty, not both. A tag is matched exactly ("jazz" does not find "nu jazz").
+func (rb *RadioBrowser) SearchBy(name, tag string, limit int) ([]Station, error) {
+	v := url.Values{}
+	if name != "" {
+		v.Set("name", name)
+	}
+	if tag != "" {
+		v.Set("tag", tag)
+		v.Set("tagExact", "true")
+	}
+	v.Set("hidebroken", "true")
+	v.Set("order", "votes")
+	v.Set("reverse", "true")
+	v.Set("limit", strconv.Itoa(limit))
+	var stations []Station
+	if err := rb.get("/stations/search?"+v.Encode(), &stations); err != nil {
 		return nil, err
 	}
 	return stations, nil

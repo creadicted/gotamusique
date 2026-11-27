@@ -2,6 +2,7 @@ package command
 
 import (
 	"errors"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -165,5 +166,20 @@ func TestChatCtx_PrivateReportsAFailedSend(t *testing.T) {
 	c := chatCtx(makeMsgFrom("alice", "!web"))
 	if err := c.Private("hello"); err == nil {
 		t.Error("a send that panicked must come back as an error")
+	}
+}
+
+// Some servers strip HTML from chat messages, href included (Kallisti does), and some clients do not
+// render it. The login link must still be in the message when the tags are gone.
+func TestWeb_TheLinkSurvivesStrippedHTML(t *testing.T) {
+	bot, d, c, _, private := webSetup(&gumble.User{Name: "alice"})
+	bot.cfg.Bot.FormattedReplies = true
+	d.Run(bot, c, "!web")
+	if len(private.list) != 1 {
+		t.Fatalf("private = %v", private.list)
+	}
+	stripped := regexp.MustCompile(`<[^>]*>`).ReplaceAllString(private.list[0], "")
+	if !strings.Contains(stripped, bot.webLink) {
+		t.Errorf("without its tags the message is %q, which lacks the link %q", stripped, bot.webLink)
 	}
 }

@@ -429,6 +429,28 @@ func TestRadioSearch(t *testing.T) {
 	}
 }
 
+func TestRadioSearch_ByTag(t *testing.T) {
+	e := loggedIn(t)
+	e.bot.stations = []radio.Station{{UUID: "u1", Name: "Smooth", Tags: "jazz"}}
+	for _, c := range []struct{ query, wantQ, wantTag string }{
+		{"tag=jazz", "", "jazz"},
+		{"tag=+jazz+&q=smooth", "smooth", "jazz"},
+		{"q=smooth", "smooth", ""},
+	} {
+		if resp := e.do(t, "GET", "/api/v1/radio/search?"+c.query, ""); resp.StatusCode != http.StatusOK {
+			t.Fatalf("?%s = %d", c.query, resp.StatusCode)
+		}
+		if e.bot.searchQ != c.wantQ || e.bot.searchTag != c.wantTag {
+			t.Errorf("?%s searched q=%q tag=%q, want q=%q tag=%q", c.query, e.bot.searchQ, e.bot.searchTag, c.wantQ, c.wantTag)
+		}
+	}
+	for _, q := range []string{"tag=", "tag=%20", "tag=" + strings.Repeat("a", 101)} {
+		if resp := e.do(t, "GET", "/api/v1/radio/search?"+q, ""); resp.StatusCode != http.StatusBadRequest {
+			t.Errorf("?%s = %d, want 400", q, resp.StatusCode)
+		}
+	}
+}
+
 func TestRadioSearch_Rejections(t *testing.T) {
 	e := loggedIn(t)
 	for _, q := range []string{"", "q=", "q=%20%20", "q=" + strings.Repeat("a", 101), "q=x&limit=0", "q=x&limit=-3", "q=x&limit=abc"} {

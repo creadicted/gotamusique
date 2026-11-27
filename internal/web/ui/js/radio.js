@@ -11,6 +11,7 @@ export function createRadio() {
   const found = h('ul', { class: 'results' });
   const foundNote = h('p', { class: 'empty' });
   const query = h('input', { type: 'search', class: 'field', placeholder: 'Station name', 'aria-label': 'Search for radio stations', autocomplete: 'off' });
+  const tag = h('input', { type: 'search', class: 'field narrow', placeholder: 'Tag, such as jazz', 'aria-label': 'Only stations with this tag', autocomplete: 'off' });
   const url = h('input', { type: 'url', class: 'field', placeholder: 'https://example.com/stream.mp3', 'aria-label': 'Stream address', autocomplete: 'off', inputmode: 'url' });
   let loaded = false;
   let ticket = 0;
@@ -35,23 +36,25 @@ export function createRadio() {
   async function doSearch(ev) {
     ev.preventDefault();
     const text = query.value.trim();
-    if (!text) return;
+    const wanted = tag.value.trim();
+    if (!text && !wanted) return;
     const mine = ++ticket;
     foundNote.textContent = 'Searching';
     found.replaceChildren();
     try {
-      const { stations } = await api.radioSearch(text);
+      const { stations } = await api.radioSearch(text, wanted);
       if (mine !== ticket) return;
       found.replaceChildren(
         ...stations.map((s) => {
           const detail = [s.codec, s.bitrate > 0 ? `${s.bitrate} kbit/s` : '', s.country].filter(Boolean).join(', ');
+          const tags = (s.tags || '').split(',').map((t) => t.trim()).filter(Boolean).slice(0, 4).join(', ');
           return h('li', { class: 'result' },
-            h('div', { class: 'result-main' }, h('span', { class: 'result-text' }, h('span', { class: 'result-title' }, s.name), detail ? h('span', { class: 'result-sub' }, detail) : null)),
+            h('div', { class: 'result-main' }, h('span', { class: 'result-text' }, h('span', { class: 'result-title' }, s.name), detail ? h('span', { class: 'result-sub' }, detail) : null, tags ? h('span', { class: 'result-sub' }, tags) : null)),
             addMenu(() => ({ type: 'radio', uuid: s.uuid })),
           );
         }),
       );
-      foundNote.textContent = stations.length ? '' : 'No stations found. Try a shorter name.';
+      foundNote.textContent = stations.length ? '' : 'No stations found. Try a shorter name, or another tag.';
     } catch (e) {
       if (mine !== ticket) return;
       foundNote.textContent = '';
@@ -66,7 +69,7 @@ export function createRadio() {
     presets,
     presetsNote,
     h('h3', {}, 'Find stations'),
-    h('form', { class: 'inline-form', onsubmit: doSearch }, query, h('button', { type: 'submit', class: 'btn key' }, 'Search')),
+    h('form', { class: 'inline-form', onsubmit: doSearch }, query, tag, h('button', { type: 'submit', class: 'btn key' }, 'Search')),
     found,
     foundNote,
     h('h3', {}, 'Stream address'),

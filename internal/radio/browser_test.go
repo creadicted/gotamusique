@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -405,5 +406,49 @@ func TestByUUID_integration(t *testing.T) {
 	}
 	if got.UUID != uuid {
 		t.Errorf("UUID mismatch: got %q, want %q", got.UUID, uuid)
+	}
+}
+
+func TestSearchBy_asksForTaggedStationsMostVotedFirst(t *testing.T) {
+	var got url.Values
+	var path string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path, got = r.URL.Path, r.URL.Query()
+		json.NewEncoder(w).Encode([]Station{{UUID: "u1", Name: "Smooth"}}) //nolint:errcheck
+	}))
+	defer ts.Close()
+
+	rb := newRadioBrowserWithClient(&http.Client{}, ts.URL)
+	stations, err := rb.SearchBy("smooth & co", "nu jazz", 7)
+	if err != nil || len(stations) != 1 {
+		t.Fatalf("SearchBy = %v, %v", stations, err)
+	}
+	if path != "/stations/search" {
+		t.Errorf("path = %q", path)
+	}
+	want := map[string]string{"name": "smooth & co", "tag": "nu jazz", "tagExact": "true", "hidebroken": "true", "order": "votes", "reverse": "true", "limit": "7"}
+	for k, v := range want {
+		if got.Get(k) != v {
+			t.Errorf("%s = %q, want %q", k, got.Get(k), v)
+		}
+	}
+}
+
+func TestSearchBy_leavesOutWhatIsEmpty(t *testing.T) {
+	var got url.Values
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.URL.Query()
+		json.NewEncoder(w).Encode([]Station{}) //nolint:errcheck
+	}))
+	defer ts.Close()
+
+	rb := newRadioBrowserWithClient(&http.Client{}, ts.URL)
+	rb.SearchBy("", "jazz", 5) //nolint:errcheck
+	if got.Has("name") || got.Get("tag") != "jazz" {
+		t.Errorf("by tag only: %v", got)
+	}
+	rb.SearchBy("jazz", "", 5) //nolint:errcheck
+	if got.Has("tag") || got.Has("tagExact") || got.Get("name") != "jazz" {
+		t.Errorf("by name only: %v", got)
 	}
 }

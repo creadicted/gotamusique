@@ -89,12 +89,13 @@ const (
 	searchTimeout      = 10 * time.Second
 )
 
-// handleRadioSearch looks stations up on radio-browser.info. Add a result with
+// handleRadioSearch looks stations up on radio-browser.info by name, tag or both, most voted first. Add a result with
 // {"type":"radio","uuid":...}.
 func (s *Server) handleRadioSearch(w http.ResponseWriter, r *http.Request, id Identity) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
-	if q == "" || len(q) > maxSearchQuery {
-		writeError(w, http.StatusBadRequest, "bad_request", "q is required (at most 100 characters)")
+	tag := strings.TrimSpace(r.URL.Query().Get("tag"))
+	if (q == "" && tag == "") || len(q) > maxSearchQuery || len(tag) > maxSearchQuery {
+		writeError(w, http.StatusBadRequest, "bad_request", "q or tag is required (at most 100 characters each)")
 		return
 	}
 	limit := defaultSearchLimit
@@ -109,7 +110,7 @@ func (s *Server) handleRadioSearch(w http.ResponseWriter, r *http.Request, id Id
 
 	ctx, cancel := context.WithTimeout(r.Context(), searchTimeout)
 	defer cancel()
-	stations, err := s.bot.SearchRadio(ctx, q, limit)
+	stations, err := s.bot.SearchRadio(ctx, q, tag, limit)
 	if err != nil {
 		s.fail(w, r, err)
 		return

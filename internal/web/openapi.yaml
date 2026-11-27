@@ -430,13 +430,18 @@ paths:
     get:
       tags: [Radio]
       summary: Search radio-browser.info
-      description: 'Add a hit with `POST /queue` and `{"type": "radio", "uuid": "<uuid>"}`. Times out after 10 seconds.'
+      description: 'Results are sorted by votes, and stations known to be broken are left out. Add a hit with `POST /queue` and `{"type": "radio", "uuid": "<uuid>"}`. Times out after 10 seconds.'
       operationId: searchRadio
       parameters:
         - name: q
           in: query
-          required: true
-          description: Station name to search for.
+          required: false
+          description: Station name to search for. At least one of `q` and `tag` is required.
+          schema: { type: string, minLength: 1, maxLength: 100, example: jazz }
+        - name: tag
+          in: query
+          required: false
+          description: Only stations with this tag, matched exactly (`jazz` does not find `nu jazz`). Combine with `q` to narrow the search. Each hit lists its tags.
           schema: { type: string, minLength: 1, maxLength: 100, example: jazz }
         - name: limit
           in: query

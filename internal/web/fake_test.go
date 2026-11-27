@@ -30,6 +30,7 @@ type fakeBot struct {
 	presets     []RadioPreset
 	stations    []radio.Station
 	searchQ     string
+	searchTag   string
 	searchLimit int
 
 	libPage  LibraryPage
@@ -88,9 +89,9 @@ func (f *fakeBot) Add(ctx context.Context, src Source, pos queue.Position) (Adde
 	return f.added, f.addErr
 }
 
-func (f *fakeBot) SearchRadio(ctx context.Context, q string, limit int) ([]radio.Station, error) {
+func (f *fakeBot) SearchRadio(ctx context.Context, q, tag string, limit int) ([]radio.Station, error) {
 	f.mu.Lock()
-	f.searchQ, f.searchLimit = q, limit
+	f.searchQ, f.searchTag, f.searchLimit = q, tag, limit
 	f.mu.Unlock()
 	f.rec("search")
 	return f.stations, f.searchErr

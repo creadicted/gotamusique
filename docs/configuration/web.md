@@ -6,6 +6,8 @@ browse the library and upload music. It works on a phone too. Behind it is an HT
 script, with [interactive documentation](#interactive-documentation-swagger-ui). It is **off by
 default**: nothing listens until you enable it.
 
+![The gotamusique web interface: now playing, the queue, and the Add panel](../images/gotamusique.png)
+
 ## Quick start
 
 Five minutes, on the machine that runs the bot.
@@ -26,7 +28,8 @@ Five minutes, on the machine that runs the bot.
 
 3. **Log in.** In the Mumble channel the bot is in, type `!web`. The bot sends you a **private
    message** with a link that works once and expires after 5 minutes. Open it and you land in the
-   interface. (For a quick local test only, `auth_method = none` skips the login; read
+   interface. Some clients, such as Kallisti, show chat as plain text; the link is written out in
+   full, so copy it into the address bar. (For a quick local test only, `auth_method = none` skips the login; read
    [No login](#no-login-auth_method-none) before using it anywhere else.)
 
 4. **Play something.** The default config has a `jazz` station: open **Radio** and press **Add**.
@@ -36,7 +39,9 @@ Five minutes, on the machine that runs the bot.
 
 **No Mumble server at hand?** From a source checkout, `make ui-demo` starts the interface with a
 fake bot and made-up music, to look around. Nothing is played or stored. `make ui-demo LOGIN=1`
-shows the `!web` login flow instead of skipping it.
+shows the `!web` login flow instead of skipping it. To try the real bot with a real server, run
+`make playground` (or `make playground-kallisti` for a browser as the Mumble client, with nothing to
+install); see `playground/README.md`.
 
 **Reaching it from other machines.** Keep the bot on loopback and put a reverse proxy in front
 (see [Reverse proxy and TLS](#reverse-proxy-and-tls)), then set `access_address` to the proxy's
@@ -71,7 +76,8 @@ disappears from your list, with no error.
 - **Library**: browse folders, or search. A search looks at titles, artists and folder names across
   the whole library, and tag buttons narrow it down. *Rescan* reads the music folder again.
 - **Radio**: the stations from your `[radio]` config, a search on radio-browser.info, or a direct
-  stream address.
+  stream address. The search takes a station name, a **tag** (such as `jazz` or `ambient`), or both;
+  the most voted stations come first and known-broken ones are left out. Each hit shows its tags.
 - **Web address**: one track from a web address, through yt-dlp. Best effort, see
   [URL playback](../commands/index.md#url-playback).
 - **Upload**: choose or drop audio files; they go up one at a time and can be added right away.
@@ -294,7 +300,7 @@ and the lookup just before a queued URL plays all share that limit. The checks t
 | Request | Effect |
 |---------|--------|
 | `GET /radio/presets` | The stations from the bot's `[radio]` config, by name; add one with `{"type": "radio", "preset": "<name>"}` |
-| `GET /radio/search?q=jazz&limit=10` | Search radio-browser.info (limit 1 to 50); add a result with its `uuid` |
+| `GET /radio/search?q=jazz&tag=smooth&limit=10` | Search radio-browser.info by name `q` and/or exact `tag` (at least one; limit 1 to 50), most voted first; add a result with its `uuid` |
 | `GET /library` | Browse or search the library, see below |
 | `POST /library/upload` | Upload one audio file, see [Uploads](#uploads) |
 | `POST /library/rescan` | Start an incremental scan. Answers `202` at once, or `409 scan_running`. The state's `scan` field shows `running`, then `last_result` or `last_error`. There is no `force` option here |

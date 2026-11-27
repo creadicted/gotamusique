@@ -70,7 +70,7 @@ export const api = {
   move: (id, after) => call('POST', `/api/v1/queue/${id}/move`, { after }),
 
   radioPresets: () => call('GET', '/api/v1/radio/presets'),
-  radioSearch: (q, limit = 20) => call('GET', `/api/v1/radio/search?q=${enc(q)}&limit=${limit}`),
+  radioSearch: (q, tag = '', limit = 20) => call('GET', `/api/v1/radio/search?${q ? `q=${enc(q)}&` : ''}${tag ? `tag=${enc(tag)}&` : ''}limit=${limit}`),
   library: (query) => call('GET', `/api/v1/library${query}`),
   rescan: () => call('POST', '/api/v1/library/rescan'),
 };

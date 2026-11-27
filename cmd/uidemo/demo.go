@@ -317,10 +317,16 @@ func (d *demoBot) Add(ctx context.Context, src web.Source, pos queue.Position) (
 	d.touch()
 	return web.Added{ID: id, Title: e.title}, nil
 }
-func (d *demoBot) SearchRadio(ctx context.Context, q string, limit int) ([]radio.Station, error) {
+func (d *demoBot) SearchRadio(ctx context.Context, q, tag string, limit int) ([]radio.Station, error) {
 	time.Sleep(300 * time.Millisecond)
-	if strings.Contains(q, "none") {
+	if strings.Contains(q, "none") || strings.Contains(tag, "none") {
 		return nil, nil
+	}
+	if q == "" { // a search by tag alone
+		return []radio.Station{
+			{UUID: "u-1", Name: "Best of " + tag, Codec: "MP3", Bitrate: 128, Country: "DE", Tags: tag + ",popular"},
+			{UUID: "u-2", Name: tag + " Lounge", Codec: "AAC", Bitrate: 64, Country: "GB", Tags: tag},
+		}, nil
 	}
 	return []radio.Station{
 		{UUID: "u-1", Name: q + " FM", Codec: "MP3", Bitrate: 128, Country: "DE"},
