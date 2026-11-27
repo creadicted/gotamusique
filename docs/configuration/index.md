@@ -35,6 +35,7 @@ Missing keys fall back to the embedded defaults.
 | `max_track_playlist`       | `20`              | Max tracks added by one `!playlist` |
 | `playback_mode`            | `one-shot`        | `one-shot`, `repeat`, `random` or `autoplay` |
 | `music_database_path`      | `music.db`        | Library database; opened only when `music_folder` is set |
+| `settings_database_path`   | `settings.db`     | Where settings changed from chat are saved so they survive a restart. The file is created when the first such setting is saved, not at startup. Empty = nothing is saved. In Docker put it on the mounted volume, e.g. `data/settings.db` |
 | `refresh_cache_on_startup` | `False`           | Scan the music folder at startup |
 | `autoplay_length`          | `5`               | Tracks added per autoplay refill |
 | `auto_pause_when_alone`    | `False`           | Pause when the last other user leaves the bot's channel. See [Auto-pause](../commands/index.md#auto-pause) |

@@ -54,6 +54,7 @@ type BotConfig struct {
 	MaxTrackPlaylist     int    // max entries added by the playlist command
 	PlaybackMode         string // startup playback mode: one-shot | repeat | random | autoplay
 	MusicDatabasePath    string // music library database file
+	SettingsDatabasePath string // settings database file; created on the first saved setting; empty = nothing is persisted
 	RefreshCacheOnStart  bool   // run a library scan at startup
 	AutoplayLength       int    // tracks added per autoplay refill
 	AutoPauseWhenAlone   bool   // pause when the last other user leaves the bot's channel
@@ -135,6 +136,7 @@ var sectionAllowlists = map[string]map[string]bool{
 		"max_track_playlist":       true,
 		"playback_mode":            true,
 		"music_database_path":      true,
+		"settings_database_path":   true,
 		"refresh_cache_on_startup": true,
 		"autoplay_length":          true,
 		"auto_pause_when_alone":    true,
@@ -256,6 +258,7 @@ func build(f *ini.File) (*Config, error) {
 			MaxTrackPlaylist:     b.Key("max_track_playlist").MustInt(20),
 			PlaybackMode:         b.Key("playback_mode").MustString("one-shot"),
 			MusicDatabasePath:    b.Key("music_database_path").MustString("music.db"),
+			SettingsDatabasePath: b.Key("settings_database_path").MustString("settings.db"),
 			RefreshCacheOnStart:  b.Key("refresh_cache_on_startup").MustBool(false),
 			AutoplayLength:       b.Key("autoplay_length").MustInt(5),
 			AutoPauseWhenAlone:   b.Key("auto_pause_when_alone").MustBool(false),

@@ -11,6 +11,7 @@ import (
 	"github.com/konradk/gotamusique/internal/audio"
 	"github.com/konradk/gotamusique/internal/command"
 	"github.com/konradk/gotamusique/internal/config"
+	"github.com/konradk/gotamusique/internal/database"
 	"github.com/konradk/gotamusique/internal/queue"
 	"github.com/konradk/gotamusique/internal/radio"
 	"github.com/konradk/gotamusique/internal/web"
@@ -52,9 +53,10 @@ type Bot struct {
 	// Music library (nil when music_folder is unset or the database failed to open).
 	libMu          sync.Mutex
 	lib            *musicLibrary
-	autoplayActive atomic.Bool     // autoplay is running (cleared when it stops itself)
-	autoFails      atomic.Int64    // consecutive failed tracks in autoplay with none played between
-	life           context.Context // cancelled by Shutdown; stops in-flight scans
+	settings       *database.LazySettings // persisted chat-changed settings; created on first write
+	autoplayActive atomic.Bool            // autoplay is running (cleared when it stops itself)
+	autoFails      atomic.Int64           // consecutive failed tracks in autoplay with none played between
+	life           context.Context        // cancelled by Shutdown; stops in-flight scans
 	lifeCancel     context.CancelFunc
 	cancel         func() // cancels the top-level Run context (set by main)
 	dispatcher     *command.Dispatcher
@@ -93,6 +95,7 @@ func New(cfg *config.Config) (*Bot, error) {
 		b.webAuth = web.NewAuth(web.AuthOptions{})
 	}
 	b.last = loadLastPlayed(cfg.Bot.LastPlayedPath, log)
+	b.settings = database.NewLazySettings(cfg.Bot.SettingsDatabasePath)
 	b.lib = openLibrary(b)
 	b.queue.SetMode(startupMode(cfg, log, b.lib != nil))
 	b.autoplayActive.Store(b.queue.Mode() == queue.ModeAutoplay)
@@ -111,6 +114,7 @@ func (b *Bot) Shutdown() {
 	b.saveOnShutdown()
 	b.lifeCancel()
 	defer b.closeLibrary()
+	defer b.settings.Close() //nolint:errcheck
 	b.mu.Lock()
 	defer b.mu.Unlock()
 

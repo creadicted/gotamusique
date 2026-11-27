@@ -9,6 +9,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **A settings database for chat-changed settings** (`[bot] settings_database_path`, default `settings.db`).
+  It is created when the first such setting is saved, so nothing new appears for users who never change one.
+  Nothing uses it yet; it is the groundwork for persisting `!duck` and later settings.
+
 - **The web interface under a path.** With `access_address = https://example.org/music`, the interface, API,
   API documentation, login link and session cookie all live under `/music`, behind a reverse proxy that either
   strips or keeps the path. `go run ./cmd/uidemo -public https://example.org/music` previews it.
