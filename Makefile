@@ -1,6 +1,6 @@
 BIN := bin/gotamusique
 
-.PHONY: build test run dev ui-demo playground playground-kallisti playground-down playground-reset playground-logs playground-login playground-chat playground-listen playground-smoke clean fmt lint docs docs-build tag
+.PHONY: e2e build test run dev ui-demo playground playground-kallisti playground-down playground-reset playground-logs playground-login playground-chat playground-listen playground-smoke clean fmt lint docs docs-build tag
 
 # VERSION comes from the nearest git tag (v0.4.0 -> 0.4.0, or 0.4.0-3-gabc123 after it);
 # empty outside a git checkout, in which case the binary reports "dev (<revision>)".
@@ -11,6 +11,10 @@ build:
 
 test:
 	go test ./...
+
+# Real Mumble server in Docker; see internal/e2e. Needs Docker (and ffmpeg for audio tests).
+e2e:
+	go test -tags e2e -count=1 -v ./internal/e2e/...
 
 run: build
 	./$(BIN)
