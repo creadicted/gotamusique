@@ -144,7 +144,7 @@ auth_method = token
 | `enabled`        | `False`                 | Start the web interface |
 | `listening_addr` | `127.0.0.1`             | Address to listen on. Loopback only by default; use `0.0.0.0` in Docker and publish the port |
 | `listening_port` | `8181`                  | Port to listen on. The bot exits at startup if it is already taken |
-| `access_address` | `http://127.0.0.1:8181` | The public URL people open, an absolute `http://` or `https://` URL with a host (a path is fine, credentials and a query are not). The link from `!web` is built from it. An `https://` URL marks the session cookie *Secure*. The bot refuses to start with `enabled = True` and a missing or malformed value |
+| `access_address` | `http://127.0.0.1:8181` | The public URL people open, an absolute `http://` or `https://` URL with a host (a path such as `/music` is for a reverse proxy that serves the bot under it, see [Under a path](#under-a-path-httpsexampleorgmusic); credentials and a query are not). The link from `!web` is built from it. An `https://` URL marks the session cookie *Secure*. The bot refuses to start with `enabled = True` and a missing or malformed value |
 | `auth_method`    | `token`                 | `token` or `none` (see below) |
 | `upload_enabled` | `True`                  | Let logged-in users upload audio (see [Uploads](#uploads)) |
 | `max_upload_file_size` | `30M`             | Size limit of one uploaded file: a number with an optional `K`, `M` or `G`, at most `1024G` |
@@ -191,6 +191,30 @@ server {
     }
 }
 ```
+
+### Under a path (`https://example.org/music/`)
+
+To share a domain, serve the bot under a path and put the path in `access_address`:
+
+```ini
+[webinterface]
+listening_addr = 127.0.0.1
+access_address = https://example.org/music
+```
+
+The interface, its files, the API, the API documentation and the `!web` link all use that path. The
+session cookie is limited to it, so other sites on the same domain never receive it. The proxy may
+either **strip** the path or **keep** it; the bot answers both:
+
+```nginx
+location /music/ {
+    proxy_pass http://127.0.0.1:8181/;   # with the trailing slash the path is stripped; without it, kept
+    proxy_set_header Host $host;
+}
+```
+
+Open `https://example.org/music/` (a request for `/music` works as well). With a path, the
+`Host` check and the `Origin` check still compare host names only.
 
 Forward the original `Host` header (as above). To allow uploads, also raise the proxy's body limit
 to at least `max_upload_file_size` (nginx: `client_max_body_size 31m;`, its default is only 1 MB)

@@ -3,7 +3,8 @@
 // scripts. Requests are same-origin, so the browser sends the session cookie from
 // the !web login and "Try it out" works against the running bot.
 window.ui = SwaggerUIBundle({
-  url: "/api/v1/openapi.yaml",
+  // This script is at <base>/api/docs/assets/init.js, so the description is two levels up.
+  url: new URL("../../v1/openapi.yaml", document.currentScript.src).pathname,
   dom_id: "#swagger-ui",
   deepLinking: true,
   presets: [SwaggerUIBundle.presets.apis],

@@ -14,6 +14,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/konradk/gotamusique/internal/config"
@@ -27,6 +28,7 @@ func main() {
 func run() int {
 	addr := flag.String("addr", "127.0.0.1:8181", "address to listen on")
 	login := flag.Bool("login", false, "require a login: prints the one-time link instead of skipping the login")
+	publicFlag := flag.String("public", "", "the address people open when a reverse proxy is in front, with its path if it has one (default: the -addr address)")
 	flag.Parse()
 
 	auth := web.NewAuth(web.AuthOptions{})
@@ -40,6 +42,9 @@ func run() int {
 		return 2
 	}
 	public := "http://" + net.JoinHostPort(host, port)
+	if *publicFlag != "" {
+		public = strings.TrimRight(*publicFlag, "/")
+	}
 	srv := web.NewServer(newDemo(), auth, web.Options{
 		Addr:                   *addr,
 		AccessAddress:          public,
