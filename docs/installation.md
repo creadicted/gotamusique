@@ -62,7 +62,8 @@ services:
 
 Only put keys you want to override in `configuration.ini`; defaults are baked into the image.
 If you use the [music library](configuration/library.md), set `music_database_path = data/music.db`
-so the database lands on the mounted volume.
+so the database lands on the mounted volume. Likewise set `settings_database_path = data/settings.db`
+so settings changed from chat survive recreating the container.
 To use another config path:
 
 ```sh

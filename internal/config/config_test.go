@@ -104,6 +104,9 @@ func TestLoad_LibraryDefaults(t *testing.T) {
 	if cfg.Bot.MusicDatabasePath != "music.db" {
 		t.Errorf("MusicDatabasePath = %q", cfg.Bot.MusicDatabasePath)
 	}
+	if cfg.Bot.SettingsDatabasePath != "settings.db" {
+		t.Errorf("SettingsDatabasePath = %q, want settings.db", cfg.Bot.SettingsDatabasePath)
+	}
 	if cfg.Bot.RefreshCacheOnStart {
 		t.Error("refresh_cache_on_startup must default to false")
 	}

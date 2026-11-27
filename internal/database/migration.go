@@ -51,6 +51,20 @@ func MigrateMusic(musicPath string) error {
 	return nil
 }
 
+// MigrateSettings opens (creating if needed) only the settings database at
+// settingsPath and upgrades it to the current schema.
+func MigrateSettings(settingsPath string) error {
+	sdb, err := openSQLite(settingsPath)
+	if err != nil {
+		return fmt.Errorf("migration: open settings db: %w", err)
+	}
+	defer sdb.Close()
+	if err := migrateSettings(sdb); err != nil {
+		return fmt.Errorf("migration: settings: %w", err)
+	}
+	return nil
+}
+
 // --- settings migration ---
 
 func migrateSettings(db *sql.DB) error {
