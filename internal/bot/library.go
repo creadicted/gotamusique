@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/konradk/gotamusique/internal/audio"
@@ -19,6 +20,7 @@ import (
 	"github.com/konradk/gotamusique/internal/library"
 	"github.com/konradk/gotamusique/internal/media/file"
 	"github.com/konradk/gotamusique/internal/queue"
+	"github.com/konradk/gotamusique/internal/status"
 )
 
 // musicLibrary is the bot's handle on the music database and scanner. It is nil
@@ -28,6 +30,14 @@ type musicLibrary struct {
 	scanner *library.Scanner
 	folder  string
 	scans   sync.WaitGroup // in-flight Rescan calls; close waits for them
+
+	// bgScan is set from the moment StartRescan accepts a request until its scan
+	// ends, so the snapshot shows "running" immediately and two requests cannot
+	// both start one.
+	bgScan atomic.Bool
+
+	// How the last finished scan ended (guarded by Bot.libMu); see Bot.Rescan.
+	lastResult, lastError string
 }
 
 // openLibrary opens the music database when [files] music_folder is set. Any
@@ -114,11 +124,38 @@ func (b *Bot) Rescan(ctx context.Context, force bool) (string, error) {
 	}
 	res, err := scan(ctx)
 	if err != nil {
+		// A scan that never ran because another one is in progress is not an outcome.
+		if !errors.Is(err, library.ErrScanRunning) {
+			b.recordScan(lib, "", err.Error())
+		}
 		return "", err
 	}
+	b.recordScan(lib, res.String(), "")
 	b.log.Info("library scan finished", slog.String("result", res.String()),
 		slog.Int("unchanged", res.Unchanged), slog.Int("skipped", res.Skipped))
 	return res.String(), nil
+}
+
+// recordScan remembers how the last scan ended, for the state snapshot.
+func (b *Bot) recordScan(lib *musicLibrary, result, errText string) {
+	b.libMu.Lock()
+	lib.lastResult, lib.lastError = result, errText
+	b.libMu.Unlock()
+}
+
+// scanStatus reports the library scan state for the snapshot.
+func (b *Bot) scanStatus() status.Scan {
+	b.libMu.Lock()
+	lib := b.lib
+	var s status.Scan
+	if lib != nil {
+		s = status.Scan{Available: true, LastResult: lib.lastResult, LastError: lib.lastError}
+	}
+	b.libMu.Unlock()
+	if lib != nil {
+		s.Running = lib.scanner.Running() || lib.bgScan.Load()
+	}
+	return s
 }
 
 // ListLibrary returns the scanned tracks ordered by path. A non-nil re keeps only

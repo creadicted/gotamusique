@@ -107,19 +107,41 @@ func (q *Queue) reshuffleLocked(last int) {
 	q.items = out
 }
 
+// Position says where Add puts a new item.
+type Position int
+
+const (
+	// AtEnd appends. In random mode the item lands at a random slot after the
+	// current one (never before it), like Append.
+	AtEnd Position = iota
+	// AfterCurrent puts the item directly after the current one, so it plays next.
+	// On an idle queue it is simply appended.
+	AfterCurrent
+)
+
 // Append adds item to the queue. In random mode the item lands at a random
 // position after the current one (never before it); when the queue is idle it
 // is simply appended and becomes the current item.
-func (q *Queue) Append(item audio.MediaItem) {
+func (q *Queue) Append(item audio.MediaItem) { q.Add(item, AtEnd) }
+
+// Add puts item at pos and returns the ID of its new entry. The position is
+// decided under the queue's lock, so a concurrent change cannot move it.
+func (q *Queue) Add(item audio.MediaItem, pos Position) uint64 {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	q.version++
-	if q.mode == ModeRandom && q.currentIndex < len(q.items) {
-		pos := q.currentIndex + 1 + rand.IntN(len(q.items)-q.currentIndex)
-		q.items = slices.Insert(q.items, pos, q.newEntryLocked(item))
-		return
+	e := q.newEntryLocked(item)
+	playing := q.currentIndex < len(q.items)
+	switch {
+	case pos == AfterCurrent && playing:
+		q.items = slices.Insert(q.items, q.currentIndex+1, e)
+	case q.mode == ModeRandom && playing:
+		at := q.currentIndex + 1 + rand.IntN(len(q.items)-q.currentIndex)
+		q.items = slices.Insert(q.items, at, e)
+	default:
+		q.items = append(q.items, e)
 	}
-	q.items = append(q.items, q.newEntryLocked(item))
+	return e.id
 }
 
 // Insert adds item at index, shifting later items right.

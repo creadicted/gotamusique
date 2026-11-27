@@ -23,6 +23,11 @@ type Entry struct {
 type Scan struct {
 	Available bool // a music library is open
 	Running   bool
+	// LastResult is the summary of the last finished scan ("3 added, 0 updated,
+	// 1 removed"); LastError is why it failed. At most one is set; both are empty
+	// until a scan has finished.
+	LastResult string
+	LastError  string
 }
 
 // Snapshot is one reading of the bot's state.
@@ -91,5 +96,7 @@ func (s Snapshot) Fingerprint() uint64 {
 	str(s.Mode)
 	flag(s.Scan.Available)
 	flag(s.Scan.Running)
+	str(s.Scan.LastResult)
+	str(s.Scan.LastError)
 	return h.Sum64()
 }

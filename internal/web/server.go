@@ -17,13 +17,7 @@ import (
 	"time"
 
 	"github.com/konradk/gotamusique/internal/config"
-	"github.com/konradk/gotamusique/internal/status"
 )
-
-// Bot is what the web layer needs from the bot.
-type Bot interface {
-	Snapshot() status.Snapshot
-}
 
 // Options configure a Server.
 type Options struct {
@@ -68,6 +62,24 @@ func NewServer(bot Bot, auth *Auth, o Options) *Server {
 	mux.HandleFunc("GET /login", s.handleLogin)
 	mux.HandleFunc("POST /api/v1/auth/logout", s.handleLogout)
 	mux.HandleFunc("GET /api/v1/state", s.require(RoleUser, s.handleState))
+
+	mux.HandleFunc("POST /api/v1/playback/pause", s.userAction(func() { s.bot.Pause() }))
+	mux.HandleFunc("POST /api/v1/playback/resume", s.userAction(func() { s.bot.Resume() }))
+	mux.HandleFunc("POST /api/v1/playback/stop", s.userAction(s.bot.Stop))
+	mux.HandleFunc("POST /api/v1/playback/next", s.userAction(s.bot.Skip))
+	mux.HandleFunc("POST /api/v1/playback/seek", s.require(RoleUser, s.handleSeek))
+	mux.HandleFunc("PUT /api/v1/volume", s.require(RoleUser, s.handleVolume))
+	mux.HandleFunc("PUT /api/v1/mode", s.require(RoleUser, s.handleMode))
+
+	mux.HandleFunc("POST /api/v1/queue", s.require(RoleUser, s.handleAdd))
+	mux.HandleFunc("DELETE /api/v1/queue", s.userAction(s.bot.Clear))
+	mux.HandleFunc("POST /api/v1/queue/shuffle", s.userAction(s.bot.RandomizeQueue))
+	mux.HandleFunc("DELETE /api/v1/queue/{id}", s.require(RoleUser, s.handleRemove))
+	mux.HandleFunc("POST /api/v1/queue/{id}/play", s.require(RoleUser, s.handlePlayEntry))
+	mux.HandleFunc("POST /api/v1/queue/{id}/move", s.require(RoleUser, s.handleMove))
+
+	mux.HandleFunc("GET /api/v1/radio/search", s.require(RoleUser, s.handleRadioSearch))
+	mux.HandleFunc("POST /api/v1/library/rescan", s.require(RoleUser, s.handleRescan))
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "no such endpoint")
 	})
@@ -94,7 +106,7 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 	srv := &http.Server{
 		Handler:           s.handler,
 		ReadHeaderTimeout: 10 * time.Second,
-		WriteTimeout:      30 * time.Second,
+		WriteTimeout:      45 * time.Second, // above addTimeout, so a slow check is answered, not dropped
 		IdleTimeout:       2 * time.Minute,
 	}
 	s.log.Info("web interface listening", slog.String("addr", ln.Addr().String()),
@@ -146,8 +158,47 @@ func (s *Server) guard(next http.Handler) http.Handler {
 				"unexpected Host header; set access_address to the address you use")
 			return
 		}
+		if !safeMethod(r.Method) && !s.sameOrigin(r) {
+			writeError(w, http.StatusForbidden, "cross_origin", "cross-site requests are not allowed")
+			return
+		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func safeMethod(m string) bool {
+	return m == http.MethodGet || m == http.MethodHead || m == http.MethodOptions
+}
+
+// sameOrigin refuses state-changing requests that a browser sends on behalf of
+// another site. Without a login (and so without a cookie to tie a request to
+// this site) any page the user visits could otherwise POST to a bot on their
+// own machine or network; with token auth SameSite=Lax already withholds the
+// cookie, and this is a second line. Browsers always send Origin and
+// Sec-Fetch-Site on such requests; command-line clients send neither and pass.
+// Behind a reverse proxy it needs the original Host header to be forwarded.
+func (s *Server) sameOrigin(r *http.Request) bool {
+	switch r.Header.Get("Sec-Fetch-Site") {
+	case "", "same-origin", "none":
+	default:
+		return false
+	}
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true
+	}
+	u, err := url.Parse(origin)
+	if err != nil || u.Host == "" {
+		return false // "null" and malformed origins
+	}
+	host := strings.ToLower(u.Host)
+	if host == strings.ToLower(r.Host) {
+		return true
+	}
+	if pub, err := url.Parse(s.opts.AccessAddress); err == nil && pub.Host != "" && host == strings.ToLower(pub.Host) {
+		return true
+	}
+	return false
 }
 
 // hostAllowed defends the login-less mode against DNS rebinding: a hostile page

@@ -242,17 +242,6 @@ func truncateRunes(s string, n int) string {
 
 // ---- queueing library tracks ----
 
-// trackItem builds a playable file item from a library track without running
-// ffprobe: the scan already stored title, artist and duration.
-func trackItem(t library.Track, musicFolder string) (*fileitem.FileItem, error) {
-	it := fileitem.New(t.Path, musicFolder)
-	if err := it.Validate(); err != nil {
-		return nil, err
-	}
-	it.Title, it.Artist, it.Duration, it.Tags = t.Title, t.Artist, t.Duration, t.Tags
-	return it, nil
-}
-
 // maxBulkAdd is the most tracks one command queues at once (!filematch, !file <folder>,
 // !tag, !shortlist *), so a careless pattern cannot flood the queue. Also the largest
 // !repeat count.
@@ -272,7 +261,7 @@ func enqueueTracks(bot BotAPI, cfg *config.Config, c *Ctx, tracks []library.Trac
 	queued, missing := 0, 0
 	var last string
 	for _, t := range tracks {
-		it, err := trackItem(t, cfg.Files.MusicFolder)
+		it, err := library.NewItem(t, cfg.Files.MusicFolder)
 		if err != nil {
 			missing++
 			continue

@@ -14,10 +14,6 @@ import (
 	"github.com/konradk/gotamusique/internal/status"
 )
 
-type fakeBot struct{ snap status.Snapshot }
-
-func (f *fakeBot) Snapshot() status.Snapshot { return f.snap }
-
 func playingSnap() status.Snapshot {
 	return status.Snapshot{
 		Version: 7,

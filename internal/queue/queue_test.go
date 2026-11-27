@@ -420,6 +420,7 @@ func TestConcurrentNextAndAppend(t *testing.T) {
 func TestVersion_EveryMutatorBumps(t *testing.T) {
 	mutators := map[string]func(q *Queue){
 		"Append":    func(q *Queue) { q.Append(item("n")) },
+		"Add":       func(q *Queue) { q.Add(item("n"), AfterCurrent) },
 		"Insert":    func(q *Queue) { _ = q.Insert(0, item("n")) },
 		"Remove":    func(q *Queue) { _ = q.Remove(0) },
 		"Next":      func(q *Queue) { q.Next() },
@@ -860,5 +861,74 @@ func TestSnapshot_IndexOf(t *testing.T) {
 	s := q.Snapshot()
 	if s.IndexOf(s.IDs[1]) != 1 || s.IndexOf(12345) != -1 {
 		t.Error("IndexOf wrong")
+	}
+}
+
+// --- Add ---
+
+func TestAdd_ReturnsTheNewEntryID(t *testing.T) {
+	q := NewQueue()
+	a := q.Add(item("a"), AtEnd)
+	b := q.Add(item("b"), AfterCurrent)
+	s := q.Snapshot()
+	if s.IndexOf(a) != 0 || s.IndexOf(b) != 1 || a == b {
+		t.Errorf("ids %d, %d in %v", a, b, s.IDs)
+	}
+}
+
+func TestAdd_AfterCurrentPlaysNext(t *testing.T) {
+	q := NewQueue()
+	for _, n := range []string{"a", "b", "c"} {
+		q.Append(item(n))
+	}
+	_ = q.JumpTo(1)
+	q.Add(item("x"), AfterCurrent)
+	if got := titles(q); got[0] != "a" || got[1] != "b" || got[2] != "x" || got[3] != "c" {
+		t.Errorf("order = %v, want a b x c", got)
+	}
+	if q.Index() != 1 || q.Current().(*testItem).id != "b" {
+		t.Error("adding after the current item must not move it")
+	}
+}
+
+func TestAdd_AfterCurrentOnAnIdleQueueAppends(t *testing.T) {
+	q := NewQueue()
+	q.Append(item("a"))
+	q.Next() // past the end
+	q.Add(item("x"), AfterCurrent)
+	if q.Current() == nil || q.Current().(*testItem).id != "x" {
+		t.Errorf("an item added to an idle queue should become current, got %v", q.Current())
+	}
+}
+
+func TestAdd_AfterCurrentBeatsRandomPlacement(t *testing.T) {
+	q := NewQueue()
+	for _, n := range []string{"a", "b", "c", "d"} {
+		q.Append(item(n))
+	}
+	q.SetMode(ModeRandom)
+	for i := 0; i < 30; i++ {
+		id := q.Add(item("x"), AfterCurrent)
+		s := q.Snapshot()
+		if s.IndexOf(id) != q.Index()+1 {
+			t.Fatalf("round %d: next-up placement ignored in random mode (at %d, current %d)", i, s.IndexOf(id), q.Index())
+		}
+		_, _ = q.RemoveByID(id)
+	}
+}
+
+func TestAdd_AtEndInRandomModeNeverLandsBeforeCurrent(t *testing.T) {
+	q := NewQueue()
+	for _, n := range []string{"a", "b", "c"} {
+		q.Append(item(n))
+	}
+	q.SetMode(ModeRandom)
+	_ = q.JumpTo(1)
+	for i := 0; i < 50; i++ {
+		id := q.Add(item("x"), AtEnd)
+		if q.Snapshot().IndexOf(id) <= q.Index() {
+			t.Fatal("a random-mode append landed at or before the current item")
+		}
+		_, _ = q.RemoveByID(id)
 	}
 }

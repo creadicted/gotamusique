@@ -38,8 +38,10 @@ type entryJSON struct {
 }
 
 type scanJSON struct {
-	Available bool `json:"available"`
-	Running   bool `json:"running"`
+	Available  bool   `json:"available"`
+	Running    bool   `json:"running"`
+	LastResult string `json:"last_result"` // summary of the last finished scan, or ""
+	LastError  string `json:"last_error"`  // why it failed, or ""
 }
 
 func toStateJSON(s status.Snapshot, id Identity) stateJSON {
@@ -49,7 +51,8 @@ func toStateJSON(s status.Snapshot, id Identity) stateJSON {
 		Queue:   make([]entryJSON, len(s.Queue)),
 		Index:   s.Index, Playing: s.Playing, Pause: s.Pause,
 		Volume: s.Volume, Muted: s.Muted, Mode: s.Mode,
-		Scan: scanJSON{Available: s.Scan.Available, Running: s.Scan.Running},
+		Scan: scanJSON{Available: s.Scan.Available, Running: s.Scan.Running,
+			LastResult: s.Scan.LastResult, LastError: s.Scan.LastError},
 	}
 	for i, r := range id.Roles {
 		out.Me.Roles[i] = string(r)
