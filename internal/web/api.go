@@ -75,6 +75,12 @@ func (s *Server) fail(w http.ResponseWriter, r *http.Request, err error) {
 		writeError(w, http.StatusConflict, "library_empty", err.Error())
 	case errors.Is(err, library.ErrNotInLibrary):
 		writeError(w, http.StatusNotFound, "not_in_library", "that file is not in the library")
+	case errors.Is(err, library.ErrNotIndexable):
+		writeError(w, http.StatusUnprocessableEntity, "invalid_file", err.Error())
+	case errors.Is(err, library.ErrTooLarge), isTooBig(err):
+		writeError(w, http.StatusRequestEntityTooLarge, "too_large", "the file is too large")
+	case errors.Is(err, library.ErrFolderUnavailable):
+		writeError(w, http.StatusConflict, "library_unavailable", "the music folder is not available")
 	case errors.Is(err, library.ErrScanRunning):
 		writeError(w, http.StatusConflict, "scan_running", "a scan is already running")
 	case errors.Is(err, urlitem.ErrBinaryMissing):
@@ -100,3 +106,9 @@ func entryID(r *http.Request) (uint64, bool) {
 }
 
 func isNotFound(err error) bool { return errors.Is(err, queue.ErrNotFound) }
+
+// isTooBig reports whether err comes from http.MaxBytesReader.
+func isTooBig(err error) bool {
+	var tooBig *http.MaxBytesError
+	return errors.As(err, &tooBig)
+}

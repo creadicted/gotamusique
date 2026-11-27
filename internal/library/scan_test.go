@@ -1132,3 +1132,75 @@ func TestScan_ReprobeKeepsUserTags(t *testing.T) {
 		t.Errorf("tags = %v, want fav kept after re-probe", rec.Tags)
 	}
 }
+
+// ---------- files without an audio stream ----------
+
+// A video or image with an audio extension is not a track. The scan must refuse it
+// just like IndexFile does, or a rescan would index what an upload rejected.
+func TestScan_SkipsFilesWithoutAnAudioStream(t *testing.T) {
+	f := newFixture(t)
+	write(t, f.root, "song.mp3", "x")
+	write(t, f.root, "movie.mp3", "x")
+	probe := func(abs string) (file.Metadata, error) {
+		m, err := f.probe.probe(abs)
+		m.NoAudio = filepath.Base(abs) == "movie.mp3"
+		return m, err
+	}
+	s := NewScanner(f.db, Config{MusicFolder: f.root, Probe: probe})
+
+	res, err := s.Scan(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	eq(t, f.paths(t), []string{"song.mp3"})
+	if res.Added != 1 || res.Skipped != 1 {
+		t.Errorf("result = %+v, want 1 added and 1 skipped", res)
+	}
+}
+
+// If a known track is replaced by a file without audio, the row is kept as for any
+// unreadable file (with its tags), and is not probed again until the file changes.
+func TestScan_ARowWhoseFileLostItsAudioIsKeptAndNotReprobedForever(t *testing.T) {
+	f := newFixture(t)
+	p := write(t, f.root, "a.mp3", "audio")
+	noAudio := false
+	probes := 0
+	probe := func(abs string) (file.Metadata, error) {
+		probes++
+		m, err := f.probe.probe(abs)
+		m.NoAudio = noAudio
+		return m, err
+	}
+	s := NewScanner(f.db, Config{MusicFolder: f.root, Probe: probe})
+	if _, err := s.Scan(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.db.UpdateTags(file.IDFromPath("a.mp3"), func([]string) []string { return []string{"keep"} }); err != nil {
+		t.Fatal(err)
+	}
+
+	noAudio = true
+	if err := os.WriteFile(p, []byte("now a video, and longer"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	os.Chtimes(p, time.Now().Add(time.Minute), time.Now().Add(time.Minute))
+	res, err := s.Scan(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Skipped != 1 || res.Removed != 0 {
+		t.Errorf("result = %+v, want the file skipped and its row kept", res)
+	}
+	eq(t, f.paths(t), []string{"a.mp3"})
+	if rec, _ := f.db.QueryByID(file.IDFromPath("a.mp3")); rec == nil || len(rec.Tags) != 1 || rec.Tags[0] != "keep" {
+		t.Errorf("row after the skip = %+v, want it kept with its tags", rec)
+	}
+
+	before := probes
+	if _, err := s.Scan(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if probes != before {
+		t.Errorf("an unchanged no-audio file was probed again (%d -> %d)", before, probes)
+	}
+}

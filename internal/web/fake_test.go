@@ -3,9 +3,11 @@ package web
 import (
 	"context"
 	"fmt"
+	"io"
 	"sync"
 	"time"
 
+	"github.com/konradk/gotamusique/internal/library"
 	"github.com/konradk/gotamusique/internal/queue"
 	"github.com/konradk/gotamusique/internal/radio"
 	"github.com/konradk/gotamusique/internal/status"
@@ -28,6 +30,17 @@ type fakeBot struct {
 	stations    []radio.Station
 	searchQ     string
 	searchLimit int
+
+	libPage  LibraryPage
+	libErr   error
+	libQuery LibraryQuery
+
+	uploadErr   error
+	uploadTrack library.Track
+	uploadName  string
+	uploadBody  string
+	uploadWho   Identity
+	uploadRead  bool // read the body (false: reject without reading, like a bad name)
 }
 
 func (f *fakeBot) rec(format string, a ...any) {
@@ -83,3 +96,28 @@ func (f *fakeBot) SearchRadio(ctx context.Context, q string, limit int) ([]radio
 }
 
 func (f *fakeBot) StartRescan() error { f.rec("rescan"); return f.rescanErr }
+
+func (f *fakeBot) Library(q LibraryQuery) (LibraryPage, error) {
+	f.mu.Lock()
+	f.libQuery = q
+	f.mu.Unlock()
+	f.rec("library")
+	return f.libPage, f.libErr
+}
+
+func (f *fakeBot) Upload(ctx context.Context, id Identity, filename string, r io.Reader) (library.Track, error) {
+	f.rec("upload")
+	f.mu.Lock()
+	f.uploadName, f.uploadWho = filename, id
+	f.mu.Unlock()
+	if f.uploadRead {
+		b, err := io.ReadAll(r)
+		f.mu.Lock()
+		f.uploadBody = string(b)
+		f.mu.Unlock()
+		if err != nil {
+			return library.Track{}, fmt.Errorf("receiving the file: %w", err)
+		}
+	}
+	return f.uploadTrack, f.uploadErr
+}

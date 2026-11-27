@@ -1,6 +1,6 @@
 # 3-07 — Web REST API
 
-**Status:** in progress — PRs 1 (#41), 2 (#42) and 3 done  
+**Status:** done — PRs 1 (#41), 2 (#42), 3 (#43) and 4 (library browse and upload)  
 **Depends on:** 3-04, 3-05  
 **Unlocks:** 3-08
 
@@ -62,7 +62,7 @@ TLS is not terminated by the bot; the admin puts a reverse proxy in front.
 Sessions live in memory with a sliding 12 h TTL and are not tied to Mumble presence. 3-11 can
 revoke a user's sessions on ban. A restart logs everyone out.
 
-## API (PRs 2 and 3 final; library browse and upload are PR 4)
+## API (final)
 
 | Method | Path | Description |
 |---|---|---|
@@ -78,9 +78,9 @@ revoke a user's sessions on ban. A restart logs everyone out.
 | POST | `/api/v1/queue/{id}/play` | Jump to an entry. |
 | POST | `/api/v1/queue/{id}/move` | Move after another entry ID. |
 | GET | `/api/v1/radio/search` | radio-browser.info query (synchronous, 10 s timeout); add a hit by `uuid`. |
-| GET | `/api/v1/library` | Browse/search files, tags, dirs. |
+| GET | `/api/v1/library` | Browse a folder (`dir`: sub-folders with counts, files directly in it) or search (`q` words, `tag`s, below `dir`); paged (`limit` 1–500, `offset`); lists all tags. |
 | POST | `/api/v1/library/rescan` | `202` / `409`; no `force`. The state's `scan` shows `running`, then `last_result` / `last_error`. |
-| POST | `/api/v1/library/upload` | Upload an audio file. |
+| POST | `/api/v1/library/upload` | One audio file as multipart `file`; `201` with the new entry. |
 | POST | `/api/v1/auth/logout` | End the session. |
 | GET | `/login` | Consume a token, set the cookie, redirect to `/`. |
 
@@ -103,6 +103,12 @@ another website from driving a bot on the user's own network.
 - The file is indexed immediately via a new `Scanner.IndexFile(ctx, path)` (reuses `buildRecord`
   and the ffprobe step; the scan path is unchanged). The response returns the new library item.
 - Permission: role `user`; under `auth_method = none` only with `allow_upload_without_auth`.
+- Added while building it: the destination is resolved and must lie inside the music folder
+  *before* anything is written (a symlinked `uploads/` cannot redirect it); the final name is
+  reserved with `O_EXCL`; the body goes to a hidden temp file and is renamed into place; a file
+  without an audio stream is refused; ffprobe runs with a 60 s timeout; errors shown to the user
+  are generic (ffprobe's text contains server paths and only goes to the log). Keys reuse
+  botamusique's `upload_enabled` and `max_upload_file_size`.
 
 ## Delivery: four PRs
 

@@ -7,7 +7,7 @@ One self-contained binary, no Python runtime required. The Docker image is fully
 
 - Radio presets, any direct stream URL, HLS streams and [radio-browser.info](https://www.radio-browser.info) search
 - Local music library with scan, search, tags, shortlists and bulk queueing (`!file` folders, `!filematch`)
-- `!url` / `!playlist` via yt-dlp
+- `!url` / `!playlist` via yt-dlp (best effort: many sites work, YouTube often needs a current yt-dlp and cookies, see [URL playback](commands/index.md#url-playback))
 - Playback modes: one-shot, repeat, random, autoplay
 - `!pause` / `!resume`, and optional auto-pause when the bot is alone in its channel
 - Configuration compatible with botamusique's INI schema

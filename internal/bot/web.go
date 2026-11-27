@@ -56,6 +56,8 @@ func (b *Bot) StartWeb(ctx context.Context) error {
 	}
 	srv := web.NewServer(b, b.webAuth, web.Options{
 		Addr: addr, AccessAddress: w.AccessAddress, AuthMethod: w.AuthMethod, Log: b.log,
+		UploadEnabled: w.UploadEnabled, MaxUploadBytes: w.MaxUploadBytes,
+		AllowUploadWithoutAuth: w.AllowUploadWithoutAuth,
 	})
 	go func() {
 		if err := srv.Serve(ctx, ln); err != nil {

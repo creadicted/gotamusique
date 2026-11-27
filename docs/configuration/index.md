@@ -43,10 +43,13 @@ Missing keys fall back to the embedded defaults.
 
 ## `[youtube_dl]`
 
+Settings for `!url` and `!playlist`. How well they work is up to the site; see
+[URL playback](../commands/index.md#url-playback) for what to try when they do not.
+
 | Key              | Default   | Description |
 |------------------|-----------|-------------|
 | `binary`         | *(empty)* | Path to yt-dlp; empty = from `PATH` |
-| `cookiefile`     | *(empty)* | Cookies file |
+| `cookiefile`     | *(empty)* | Netscape-format cookies file passed to yt-dlp (`--cookies`). YouTube often needs one from a logged-in browser; use an account you can afford to lose |
 | `source_address` | *(empty)* | Local IP to bind to |
 | `user_agent`     | *(empty)* | Override the HTTP user agent |
 

@@ -1,6 +1,7 @@
 package file
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -17,6 +18,10 @@ type Metadata struct {
 	Artist   string
 	Duration time.Duration
 	Thumb    string // base64-encoded PNG, or "" if none
+	// NoAudio is set when ffprobe listed the file's streams and none is audio
+	// (a video-only or image file with an audio extension). It stays false when
+	// the streams are unknown, so a prober that does not report them is unaffected.
+	NoAudio bool
 }
 
 type ffprobeOutput struct {
@@ -24,7 +29,14 @@ type ffprobeOutput struct {
 		Duration string            `json:"duration"`
 		Tags     map[string]string `json:"tags"`
 	} `json:"format"`
+	Streams []struct {
+		CodecType string `json:"codec_type"`
+	} `json:"streams"`
 }
+
+// probeTimeout bounds one ffprobe run, so a crafted file cannot hang a scan or an
+// upload forever.
+const probeTimeout = 60 * time.Second
 
 // ExtractMetadata runs ffprobe on absPath and returns the parsed metadata,
 // including embedded album art (which costs an extra ffmpeg run).
@@ -40,16 +52,24 @@ func ExtractMetadata(absPath string) (Metadata, error) {
 // ExtractTags runs ffprobe only and returns title, artist and duration. It does
 // not extract artwork, so it is cheap enough to run over a whole library.
 func ExtractTags(absPath string) (Metadata, error) {
-	out, err := exec.Command(
-		"ffprobe", "-v", "quiet",
+	ctx, cancel := context.WithTimeout(context.Background(), probeTimeout)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "ffprobe", "-v", "quiet",
 		"-print_format", "json",
 		"-show_format", "-show_streams",
 		absPath,
 	).Output()
 	if err != nil {
+		if ctx.Err() != nil {
+			return Metadata{}, fmt.Errorf("ffprobe %q: timed out after %v", absPath, probeTimeout)
+		}
 		return Metadata{}, fmt.Errorf("ffprobe %q: %w", absPath, err)
 	}
+	return parseProbe(out)
+}
 
+// parseProbe turns ffprobe's JSON output into Metadata.
+func parseProbe(out []byte) (Metadata, error) {
 	var fp ffprobeOutput
 	if err := json.Unmarshal(out, &fp); err != nil {
 		return Metadata{}, fmt.Errorf("ffprobe parse: %w", err)
@@ -72,10 +92,18 @@ func ExtractTags(absPath string) (Metadata, error) {
 		}
 	}
 
+	hasAudio := false
+	for _, st := range fp.Streams {
+		if st.CodecType == "audio" {
+			hasAudio = true
+		}
+	}
+
 	return Metadata{
 		Title:    get("title"),
 		Artist:   get("artist"),
 		Duration: dur,
+		NoAudio:  len(fp.Streams) > 0 && !hasAudio,
 	}, nil
 }
 

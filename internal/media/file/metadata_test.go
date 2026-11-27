@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestExtractTags_ErrorsOnMissingFile(t *testing.T) {
@@ -63,5 +64,36 @@ func TestExtractThumb_MissingFileReturnsEmpty(t *testing.T) {
 	}
 	if got := ExtractThumb(filepath.Join(t.TempDir(), "nope.mp3")); got != "" {
 		t.Errorf("ExtractThumb = %q, want empty", got)
+	}
+}
+
+func TestParseProbe(t *testing.T) {
+	audio := `{"streams":[{"codec_type":"audio"}],"format":{"duration":"12.5","tags":{"TITLE":"Song","artist":"Band"}}}`
+	m, err := parseProbe([]byte(audio))
+	if err != nil || m.Title != "Song" || m.Artist != "Band" || m.Duration != 12500*time.Millisecond || m.NoAudio {
+		t.Errorf("audio file = %+v, %v", m, err)
+	}
+
+	// Cover art is a video stream next to the audio one; that is still audio.
+	withArt := `{"streams":[{"codec_type":"audio"},{"codec_type":"video"}],"format":{"duration":"3"}}`
+	if m, _ := parseProbe([]byte(withArt)); m.NoAudio {
+		t.Error("an audio file with embedded cover art was taken for a video")
+	}
+
+	for name, js := range map[string]string{
+		"video only": `{"streams":[{"codec_type":"video"}],"format":{"duration":"3"}}`,
+		"data only":  `{"streams":[{"codec_type":"data"},{"codec_type":"subtitle"}],"format":{}}`,
+	} {
+		if m, err := parseProbe([]byte(js)); err != nil || !m.NoAudio {
+			t.Errorf("%s: %+v, %v; want NoAudio", name, m, err)
+		}
+	}
+
+	// No stream list (older output, a fake prober): unknown, so not flagged.
+	if m, _ := parseProbe([]byte(`{"format":{"duration":"3"}}`)); m.NoAudio {
+		t.Error("a missing stream list must not count as 'no audio'")
+	}
+	if _, err := parseProbe([]byte("not json")); err == nil {
+		t.Error("garbage output must be an error")
 	}
 }
